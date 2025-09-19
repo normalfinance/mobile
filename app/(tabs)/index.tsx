@@ -15,6 +15,7 @@ export default function HomeScreen() {
     <SafeAreaView>
       <ThemedView>
         <ThemedText>Home</ThemedText>
+        <SignOutButton />
       </ThemedView>
     </SafeAreaView>
   );

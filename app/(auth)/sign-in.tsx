@@ -1,7 +1,8 @@
-import { useSignIn } from "@clerk/clerk-expo";
+import { useOAuth, useSignIn } from "@clerk/clerk-expo";
 import { Link, useRouter } from "expo-router";
-import { Text, TextInput, TouchableOpacity, View } from "react-native";
-import React from "react";
+import { Alert, Text, TextInput, TouchableOpacity, View } from "react-native";
+import * as WebBrowser from "expo-web-browser";
+import React, { useEffect } from "react";
 
 export default function Page() {
   const { signIn, setActive, isLoaded } = useSignIn();
@@ -10,33 +11,36 @@ export default function Page() {
   const [emailAddress, setEmailAddress] = React.useState("");
   const [password, setPassword] = React.useState("");
 
-  // Handle the submission of the sign-in form
-  const onSignInPress = async () => {
-    if (!isLoaded) return;
+  const { startOAuthFlow } = useOAuth({ strategy: "oauth_google" });
 
-    // Start the sign-in process using the email and password provided
+  const useWarmUpBrowser = () => {
+    useEffect(() => {
+      console.log("useWarmUpBrowser");
+      void WebBrowser.warmUpAsync();
+      return () => {
+        console.log("useWarmUpBrowser coolDownAsync");
+        void WebBrowser.coolDownAsync();
+      };
+    }, []);
+  };
+
+  useWarmUpBrowser();
+
+  const onSignInPress = React.useCallback(async () => {
+    console.log("onSignInPress");
     try {
-      const signInAttempt = await signIn.create({
-        identifier: emailAddress,
-        password
-      });
+      const { createdSessionId, setActive } = await startOAuthFlow({});
 
-      // If sign-in process is complete, set the created session as active
-      // and redirect the user
-      if (signInAttempt.status === "complete") {
-        await setActive({ session: signInAttempt.createdSessionId });
+      if (createdSessionId) {
+        console.log("createdSessionId", createdSessionId);
+        setActive!({ session: createdSessionId });
         router.replace("/");
-      } else {
-        // If the status isn't complete, check why. User might need to
-        // complete further steps.
-        console.error(JSON.stringify(signInAttempt, null, 2));
       }
     } catch (err) {
-      // See https://clerk.com/docs/custom-flows/error-handling
-      // for more info on error handling
-      console.error(JSON.stringify(err, null, 2));
+      console.error("OAuth error", err);
+      Alert.alert("Error", "Failed to sign in with Google");
     }
-  };
+  }, []);
 
   return (
     <View>
