@@ -21,6 +21,9 @@ export default function HomeScreen() {
         <ThemedText type="title">Welcome!</ThemedText>
         <HelloWave />
       </ThemedView>
+      <Link href='/sign-in'>
+        <ThemedText>Sign in</ThemedText>
+      </Link>
       <ThemedView style={styles.stepContainer}>
         <ThemedText type="subtitle">Step 1: Try it</ThemedText>
         <ThemedText>
