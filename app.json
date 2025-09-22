@@ -1,8 +1,10 @@
 {
   "expo": {
-    "name": "normal-app",
-    "slug": "normal-app",
+    "name": "normal",
+    "slug": "normal",
     "version": "1.0.0",
+    "projectId": "3526d985-d1a6-4a57-ba43-4f585c763244",
+    "owner": "normalfi",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "normalapp",
@@ -31,6 +33,17 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "3526d985-d1a6-4a57-ba43-4f585c763244"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/3526d985-d1a6-4a57-ba43-4f585c763244"
     }
   }
 }

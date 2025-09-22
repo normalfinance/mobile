@@ -1,9 +1,10 @@
 import { useOAuth, useSignIn } from "@clerk/clerk-expo";
 import { Link, useRouter } from "expo-router";
-import { Alert, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Alert, TextInput } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import React, { useEffect } from "react";
 import MagicLinkSignIn from "@/components/magic-link-signin";
+import { Button, View, Text, H4, H3 } from "tamagui";
 
 export default function Page() {
   const { signIn, setActive, isLoaded } = useSignIn();
@@ -66,22 +67,13 @@ export default function Page() {
 
   return (
     <View style={{ flex: 1, padding: 20, backgroundColor: "white" }}>
-      <Text
-        style={{
-          fontSize: 28,
-          fontWeight: "bold",
-          marginBottom: 30,
-          textAlign: "center"
-        }}
-      >
-        Auth boilerplates
-      </Text>
+      <H3>Auth boilerplates</H3>
 
       {/* Password sign-in */}
       <View style={{ marginBottom: 30 }}>
-        <Text style={{ fontSize: 18, fontWeight: "bold", marginBottom: 15 }}>
+        <H4 style={{ fontSize: 18, fontWeight: "bold", marginBottom: 15 }}>
           Sign in with Email & Password
-        </Text>
+        </H4>
         <TextInput
           style={{
             borderWidth: 1,
@@ -111,10 +103,10 @@ export default function Page() {
           secureTextEntry={true}
           onChangeText={setPassword}
         />
-        <TouchableOpacity
+        <Button
           style={{
             backgroundColor: emailAddress && password ? "#007AFF" : "#ccc",
-            padding: 15,
+            padding: 5,
             borderRadius: 8,
             alignItems: "center"
           }}
@@ -124,7 +116,7 @@ export default function Page() {
           <Text style={{ color: "white", fontSize: 16, fontWeight: "bold" }}>
             Sign In
           </Text>
-        </TouchableOpacity>
+        </Button>
       </View>
 
       {/* OR Separator */}
@@ -164,13 +156,13 @@ export default function Page() {
 
       {/* OAuth sign-in */}
       <View style={{ marginBottom: 30 }}>
-        <Text style={{ fontSize: 18, fontWeight: "bold", marginBottom: 15 }}>
+        <H4 style={{ fontSize: 18, fontWeight: "bold", marginBottom: 15 }}>
           Continue with Google
-        </Text>
-        <TouchableOpacity
+        </H4>
+        <Button
           style={{
             backgroundColor: "#007AFF",
-            padding: 15,
+            padding: 5,
             borderRadius: 8,
             alignItems: "center",
             flexDirection: "row",
@@ -181,7 +173,7 @@ export default function Page() {
           <Text style={{ color: "white", fontSize: 16, fontWeight: "bold" }}>
             Continue with Google
           </Text>
-        </TouchableOpacity>
+        </Button>
       </View>
 
       {/* Sign up link */}
