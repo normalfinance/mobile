@@ -90,7 +90,7 @@ export default function MagicLinkSignIn({
   };
 
   return (
-    <View style={{ padding: 20 }}>
+    <View style={{ paddingHorizontal: 0, paddingVertical: 10 }}>
       <Text style={{ fontSize: 18, fontWeight: "bold", marginBottom: 20 }}>
         Sign in with Magic Link
       </Text>
