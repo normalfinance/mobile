@@ -1,10 +1,20 @@
 import { useOAuth, useSignIn } from "@clerk/clerk-expo";
 import { Link, useRouter } from "expo-router";
-import { Alert, TextInput } from "react-native";
+import { Alert } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import React, { useEffect } from "react";
 import MagicLinkSignIn from "@/components/magic-link-signin";
-import { Button, View, Text, H4, H3 } from "tamagui";
+import {
+  Button,
+  Text,
+  H6,
+  H3,
+  H4,
+  Input,
+  XStack,
+  YStack,
+  Separator
+} from "tamagui";
 
 export default function Page() {
   const { signIn, setActive, isLoaded } = useSignIn();
@@ -66,130 +76,76 @@ export default function Page() {
   }, [startOAuthFlow, router]);
 
   return (
-    <View style={{ flex: 1, padding: 20, backgroundColor: "white" }}>
-      <H3>Auth boilerplates</H3>
-
+    <YStack flex={1} px='$4'>
+      <H3 my='$3'>Auth boilerplates</H3>
       {/* Password sign-in */}
-      <View style={{ marginBottom: 30 }}>
-        <H4 style={{ fontSize: 18, fontWeight: "bold", marginBottom: 15 }}>
-          Sign in with Email & Password
-        </H4>
-        <TextInput
-          style={{
-            borderWidth: 1,
-            borderColor: "#ddd",
-            borderRadius: 8,
-            padding: 12,
-            marginBottom: 15,
-            fontSize: 16
-          }}
+      <YStack>
+        <H6 mb='$3'>Sign in with Email & Password</H6>
+        <Input
+          size='$4'
+          mb='$3'
+          borderWidth={1}
+          borderColor='$borderColor'
           autoCapitalize='none'
           value={emailAddress}
           placeholder='Enter email'
           keyboardType='email-address'
           onChangeText={setEmailAddress}
         />
-        <TextInput
-          style={{
-            borderWidth: 1,
-            borderColor: "#ddd",
-            borderRadius: 8,
-            padding: 12,
-            marginBottom: 20,
-            fontSize: 16
-          }}
+        <Input
+          size='$4'
+          mb='$3'
+          borderWidth={1}
+          borderColor='$borderColor'
           value={password}
           placeholder='Enter password'
           secureTextEntry={true}
           onChangeText={setPassword}
         />
         <Button
-          style={{
-            backgroundColor: emailAddress && password ? "#007AFF" : "#ccc",
-            padding: 5,
-            borderRadius: 8,
-            alignItems: "center"
-          }}
+          theme={emailAddress && password ? "blue" : null}
+          size='$4'
+          mb='$3'
           onPress={onPasswordSignInPress}
           disabled={!emailAddress || !password}
         >
-          <Text style={{ color: "white", fontSize: 16, fontWeight: "bold" }}>
-            Sign In
-          </Text>
+          Sign In
         </Button>
-      </View>
-
+      </YStack>
       {/* OR Separator */}
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          marginVertical: 5
-        }}
-      >
-        <View style={{ flex: 1, height: 1, backgroundColor: "#ddd" }} />
-        <Text style={{ marginHorizontal: 15, color: "#666", fontSize: 16 }}>
-          OR
-        </Text>
-        <View style={{ flex: 1, height: 1, backgroundColor: "#ddd" }} />
-      </View>
-
+      {/* @ts-ignore */}
+      <XStack justify='center' alignItems='center' justifyContent='center' my='$3'>
+        <Separator flex={1} mr='$3' />
+        <Text color='$color10'>OR</Text>
+        <Separator flex={1} ml='$3' />
+      </XStack>
       {/* Magic Link sign-in */}
-      <View style={{ marginBottom: 5 }}>
+      <YStack>
         <MagicLinkSignIn />
-      </View>
-
+      </YStack>
       {/* OR Separator */}
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          marginVertical: 15
-        }}
-      >
-        <View style={{ flex: 1, height: 1, backgroundColor: "#ddd" }} />
-        <Text style={{ marginHorizontal: 15, color: "#666", fontSize: 16 }}>
-          OR
-        </Text>
-        <View style={{ flex: 1, height: 1, backgroundColor: "#ddd" }} />
-      </View>
-
+      {/* @ts-ignore */}
+      <XStack justify='center' alignItems='center' justifyContent='center' my='$3'>
+        <Separator flex={1} mr='$3' />
+        <Text color='$color10'>OR</Text>
+        <Separator flex={1} ml='$3' />
+      </XStack>
       {/* OAuth sign-in */}
-      <View style={{ marginBottom: 30 }}>
-        <H4 style={{ fontSize: 18, fontWeight: "bold", marginBottom: 15 }}>
+      <YStack>
+        <H6 mb='$3'>Continue with Google</H6>
+        <Button theme='blue' size='$4' onPress={onOAuthSignInPress} mb='$3'>
           Continue with Google
-        </H4>
-        <Button
-          style={{
-            backgroundColor: "#007AFF",
-            padding: 5,
-            borderRadius: 8,
-            alignItems: "center",
-            flexDirection: "row",
-            justifyContent: "center"
-          }}
-          onPress={onOAuthSignInPress}
-        >
-          <Text style={{ color: "white", fontSize: 16, fontWeight: "bold" }}>
-            Continue with Google
-          </Text>
         </Button>
-      </View>
-
+      </YStack>
       {/* Sign up link */}
-      <View
-        style={{
-          flexDirection: "row",
-          justifyContent: "center",
-          marginTop: 30,
-          gap: 5
-        }}
-      >
-        <Text style={{ color: "#666" }}>Dont have an account?</Text>
+      <XStack>
+        <Text color='$color10'>Dont have an account?</Text>
         <Link href='/sign-up'>
-          <Text style={{ color: "#007AFF", fontWeight: "bold" }}>Sign up</Text>
+          <Text color='$blue10' fontWeight='bold'>
+            Sign up
+          </Text>
         </Link>
-      </View>
-    </View>
+      </XStack>
+    </YStack>
   );
 }
