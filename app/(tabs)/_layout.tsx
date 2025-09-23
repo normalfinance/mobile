@@ -1,16 +1,17 @@
-import { Redirect, Tabs } from "expo-router";
-import React from "react";
-
-import { HapticTab } from "@/components/haptic-tab";
-import { IconSymbol } from "@/components/ui/icon-symbol";
-import { Colors } from "@/constants/theme";
-import { useColorScheme } from "@/hooks/use-color-scheme";
+import { Redirect } from "expo-router";
+import React, { useState } from "react";
 import { useAuth } from "@clerk/clerk-expo";
+import { Tabs, YStack, H6, Text, View } from "tamagui";
+import { SafeAreaView } from "react-native-safe-area-context";
+
+import HomeScreen from "./index";
+import InvestScreen from "./invest";
+import AssetsScreen from "./assets";
+import SettingsScreen from "./settings";
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
-
   const { isSignedIn, userId } = useAuth();
+  const [activeTab, setActiveTab] = useState("home");
 
   if (!isSignedIn) {
     return <Redirect href='/sign-in' />;
@@ -20,32 +21,57 @@ export default function TabLayout() {
     console.log("userId", userId);
   }
 
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case "home":
+        return <HomeScreen />;
+      case "invest":
+        return <InvestScreen />;
+      case "assets":
+        return <AssetsScreen />;
+      case "settings":
+        return <SettingsScreen />;
+      default:
+        return <HomeScreen />;
+    }
+  };
+
   return (
-    <Tabs
-      screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? "light"].tint,
-        headerShown: false,
-        tabBarButton: HapticTab
-      }}
-    >
-      <Tabs.Screen
-        name='index'
-        options={{
-          title: "Home",
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name='house.fill' color={color} />
-          )
-        }}
-      />
-      <Tabs.Screen
-        name='explore'
-        options={{
-          title: "Explore",
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name='paperplane.fill' color={color} />
-          )
-        }}
-      />
-    </Tabs>
+    // @ts-ignore
+    <View flex={1} backgroundColor='$background'>
+      <SafeAreaView style={{ flex: 1 }}>
+        <YStack flex={1}>
+          <YStack flex={1}>{renderTabContent()}</YStack>
+
+          <Tabs
+            value={activeTab}
+            onValueChange={setActiveTab}
+            orientation='horizontal'
+            flexDirection='row'
+            width='100%'
+          >
+            <Tabs.List
+              backgroundColor='$background'
+              borderTopWidth={1}
+              borderTopColor='$borderColor'
+              width='100%'
+            >
+              <Tabs.Tab value='home' flex={1}>
+                <Text>Home</Text>
+              </Tabs.Tab>
+              <Tabs.Tab value='invest' flex={1}>
+                <Text>Invest</Text>
+              </Tabs.Tab>
+              <Tabs.Tab value='assets' flex={1}>
+                <Text>Assets</Text>
+              </Tabs.Tab>
+              <Tabs.Tab value='settings' flex={1}>
+                <Text>Settings</Text>
+              </Tabs.Tab>
+            </Tabs.List>
+          </Tabs>
+        </YStack>
+      </SafeAreaView>
+    </View>
   );
 }
