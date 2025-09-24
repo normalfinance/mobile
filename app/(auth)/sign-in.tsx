@@ -3,7 +3,7 @@ import { Link, useRouter } from "expo-router";
 import { Alert } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import React, { useEffect } from "react";
-import MagicLinkSignIn from "@/components/magic-link-signin";
+import PasswordlessSignIn from "@/components/passwordless-signin";
 import {
   Button,
   Text,
@@ -119,9 +119,9 @@ export default function Page() {
         <Text color='$color10'>OR</Text>
         <Separator flex={1} ml='$3' />
       </XStack>
-      {/* Magic Link sign-in */}
+      {/* Passwordless sign-in */}
       <YStack>
-        <MagicLinkSignIn />
+        <PasswordlessSignIn />
       </YStack>
       {/* OR Separator */}
       {/* @ts-ignore */}

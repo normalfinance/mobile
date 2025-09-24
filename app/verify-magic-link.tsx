@@ -1,6 +1,6 @@
 import React from 'react';
-import MagicLinkVerify from '@/components/magic-link-verify';
+import PasswordlessVerify from '@/components/passwordless-verify';
 
 export default function VerifyMagicLinkPage() {
-  return <MagicLinkVerify />;
+  return <PasswordlessVerify />;
 }
