@@ -1,22 +1,20 @@
-import * as SecureStore from 'expo-secure-store';
 import { Keypair } from '@stellar/stellar-sdk';
-import * as Crypto from 'expo-crypto';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { STORAGE_ERRORS } from '../lib/constants/storage.constants';
+import { walletStorage } from '../lib/utils/storage.utils';
+import { createKeypairFromSeed, createKeypairFromSecret } from '../lib/utils/crypto.utils';
+import { STALE_TIMES } from '../lib/utils/query.utils';
 
 export interface WalletInfo {
   publicKey: string;
   address: string;
 }
 
-const WALLET_KEY = 'stellar_wallet';
-const PRIVATE_KEY = 'stellar_private_key';
 
 // Core wallet functions
 export const createWallet = async (): Promise<WalletInfo> => {
   try {
-    // Generate secure random bytes using expo-crypto
-    const randomBytes = await Crypto.getRandomBytesAsync(32);
-    const keypair = Keypair.fromRawEd25519Seed(Buffer.from(randomBytes));
+    const keypair = await createKeypairFromSeed();
     
     const walletInfo: WalletInfo = {
       publicKey: keypair.publicKey(),
@@ -24,7 +22,7 @@ export const createWallet = async (): Promise<WalletInfo> => {
     };
 
     // Store the wallet securely
-    await storeWallet(walletInfo, keypair.secret());
+    await walletStorage.setWallet(walletInfo, keypair.secret());
     
     return walletInfo;
   } catch (error) {
@@ -35,7 +33,7 @@ export const createWallet = async (): Promise<WalletInfo> => {
 export const importFromPrivateKey = async (privateKey: string): Promise<WalletInfo> => {
   try {
     // Create keypair from private key
-    const keypair = Keypair.fromSecret(privateKey);
+    const keypair = createKeypairFromSecret(privateKey);
     
     const walletInfo: WalletInfo = {
       publicKey: keypair.publicKey(),
@@ -43,7 +41,7 @@ export const importFromPrivateKey = async (privateKey: string): Promise<WalletIn
     };
 
     // Store the imported wallet
-    await storeWallet(walletInfo, privateKey);
+    await walletStorage.setWallet(walletInfo, privateKey);
     
     return walletInfo;
   } catch (error) {
@@ -52,29 +50,19 @@ export const importFromPrivateKey = async (privateKey: string): Promise<WalletIn
 };
 
 export const getWallet = async (): Promise<WalletInfo | null> => {
-  try {
-    const walletData = await SecureStore.getItemAsync(WALLET_KEY);
-    if (!walletData) {
-      return null;
-    }
-    
-    return JSON.parse(walletData);
-  } catch (error) {
-    console.error('Failed to get wallet:', error);
-    return null;
-  }
+  return await walletStorage.getWallet();
 };
 
 export const getKeypair = async (): Promise<Keypair | null> => {
   try {
-    const privateKey = await SecureStore.getItemAsync(PRIVATE_KEY);
+    const privateKey = await walletStorage.getPrivateKey();
     if (!privateKey) {
       return null;
     }
 
-    return Keypair.fromSecret(privateKey);
+    return createKeypairFromSecret(privateKey);
   } catch (error) {
-    console.error('Failed to get keypair:', error);
+    console.error(STORAGE_ERRORS.FAILED_TO_GET_PRIVATE_KEY, error);
     return null;
   }
 };
@@ -89,36 +77,13 @@ export const hasWallet = async (): Promise<boolean> => {
 };
 
 export const deleteWallet = async (): Promise<void> => {
-  try {
-    await SecureStore.deleteItemAsync(WALLET_KEY);
-    await SecureStore.deleteItemAsync(PRIVATE_KEY);
-  } catch (error) {
-    console.error('Failed to delete wallet:', error);
-    throw error;
-  }
+  await walletStorage.deleteWallet();
 };
 
 export const getPrivateKey = async (): Promise<string | null> => {
-  try {
-    return await SecureStore.getItemAsync(PRIVATE_KEY);
-  } catch (error) {
-    console.error('Failed to get private key:', error);
-    return null;
-  }
+  return await walletStorage.getPrivateKey();
 };
 
-// Private helper function
-const storeWallet = async (walletInfo: WalletInfo, privateKey: string): Promise<void> => {
-  try {
-    // Store wallet info (public data)
-    await SecureStore.setItemAsync(WALLET_KEY, JSON.stringify(walletInfo));
-    
-    // Store private key separately and securely
-    await SecureStore.setItemAsync(PRIVATE_KEY, privateKey);
-  } catch (error) {
-    throw new Error(`Failed to store wallet: ${error}`);
-  }
-};
 
 // Query Keys
 export const walletQueryKeys = {
@@ -169,7 +134,7 @@ export const useWallet = () => {
   return useQuery({
     queryKey: walletQueryKeys.info(),
     queryFn: getWallet,
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: STALE_TIMES.MEDIUM,
   });
 };
 
@@ -178,7 +143,7 @@ export const useWalletKeypair = (enabled: boolean = true) => {
     queryKey: walletQueryKeys.keypair(),
     queryFn: getKeypair,
     enabled,
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: STALE_TIMES.MEDIUM,
   });
 };
 
@@ -186,7 +151,7 @@ export const useHasWallet = () => {
   return useQuery({
     queryKey: walletQueryKeys.hasWallet(),
     queryFn: hasWallet,
-    staleTime: 1 * 60 * 1000, // 1 minute
+    staleTime: STALE_TIMES.SHORT,
   });
 };
 
@@ -214,7 +179,7 @@ export const usePrivateKey = (enabled: boolean = false) => {
     queryKey: walletQueryKeys.privateKey(),
     queryFn: getPrivateKey,
     enabled,
-    staleTime: 1 * 60 * 1000, // 1 minute
+    staleTime: STALE_TIMES.SHORT,
   });
 };
 

@@ -46,8 +46,5 @@ export {
 
 // Type exports
 export type { WalletInfo } from "./wallet.service";
-export type {
-  SignedTransaction,
-  TransactionDetails
-} from "./transaction.service";
+export type { SignedTransaction } from "./transaction.service";
 export type { TransactionRequest, TransactionResponse } from "./api.service";

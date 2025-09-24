@@ -1,4 +1,19 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
+import {
+  BASE_URL,
+  DEFAULT_TIMEOUT,
+  HEALTH_CHECK_TIMEOUT,
+  API_ENDPOINTS,
+  RETRY_CONFIG
+} from '../lib/constants/api.constants';
+import {
+  createTimeoutSignal,
+  handleHttpError,
+  isRetryableError,
+  calculateRetryDelay,
+  sleep,
+  validateHttpResponse
+} from '../lib/utils/http.utils';
 
 export interface TransactionRequest {
   walletAddress: string;
@@ -17,8 +32,6 @@ export interface TransactionResponse {
   error?: string;
 }
 
-const BASE_URL = 'https://api.normalfinance.io';
-const DEFAULT_TIMEOUT = 30000; // 30 seconds
 
 // Core API functions
 export const submitTransaction = async (
@@ -33,33 +46,18 @@ export const submitTransaction = async (
       transactionType
     };
 
-    const response = await fetch(`${BASE_URL}/transaction`, {
+    const response = await fetch(`${BASE_URL}${API_ENDPOINTS.transaction}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(requestBody),
-      signal: AbortSignal.timeout(DEFAULT_TIMEOUT)
+      signal: createTimeoutSignal(DEFAULT_TIMEOUT)
     });
 
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.error || `HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    return data as TransactionResponse;
+    return await validateHttpResponse(response) as TransactionResponse;
   } catch (error) {
-    if (error instanceof Error) {
-      if (error.name === 'TimeoutError') {
-        throw new Error('Transaction submission timed out. Please try again.');
-      }
-      if (error.message.includes('NetworkError') || error.message.includes('Failed to fetch')) {
-        throw new Error('Network error. Please check your connection and try again.');
-      }
-      throw error;
-    }
-    throw new Error('An unknown error occurred while submitting transaction.');
+    throw handleHttpError(error);
   }
 };
 
@@ -78,21 +76,14 @@ export const submitTransactionWithRetry = async (
       lastError = error as Error;
       
       // Don't retry for certain errors
-      if (
-        error instanceof Error && (
-          error.message.includes('Rate limit exceeded') ||
-          error.message.includes('Invalid signature') ||
-          error.message.includes('400') ||
-          error.message.includes('403')
-        )
-      ) {
+      if (error instanceof Error && !isRetryableError(error)) {
         throw error;
       }
 
       // Wait before retrying (exponential backoff)
       if (attempt < maxRetries) {
-        const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
-        await new Promise(resolve => setTimeout(resolve, delay));
+        const delay = calculateRetryDelay(attempt);
+        await sleep(delay);
       }
     }
   }
@@ -102,9 +93,9 @@ export const submitTransactionWithRetry = async (
 
 export const healthCheck = async (): Promise<boolean> => {
   try {
-    const response = await fetch(`${BASE_URL}/health`, {
+    const response = await fetch(`${BASE_URL}${API_ENDPOINTS.health}`, {
       method: 'GET',
-      signal: AbortSignal.timeout(5000) // 5 second timeout for health check
+      signal: createTimeoutSignal(HEALTH_CHECK_TIMEOUT)
     });
     return response.ok;
   } catch {
@@ -118,16 +109,12 @@ export const getApiStatus = async (): Promise<{
   rateLimits?: any;
 }> => {
   try {
-    const response = await fetch(`${BASE_URL}/status`, {
+    const response = await fetch(`${BASE_URL}${API_ENDPOINTS.status}`, {
       method: 'GET',
-      signal: AbortSignal.timeout(5000)
+      signal: createTimeoutSignal(HEALTH_CHECK_TIMEOUT)
     });
 
-    if (!response.ok) {
-      throw new Error(`Status check failed: ${response.status}`);
-    }
-
-    return await response.json();
+    return await validateHttpResponse(response);
   } catch (error) {
     throw new Error(`Failed to get API status: ${error}`);
   }

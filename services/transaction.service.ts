@@ -1,22 +1,24 @@
-import { Transaction, Networks } from "@stellar/stellar-sdk";
+import { Networks } from "@stellar/stellar-sdk";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getWallet, getKeypair, walletQueryKeys } from "./wallet.service";
+import {
+  NETWORK_PASSPHRASE,
+  STELLAR_ERRORS
+} from "../lib/constants/stellar.constants";
+import {
+  parseTransaction,
+  getTransactionDetails as getTransactionDetailsUtil,
+  verifyTransactionSignature,
+  signTransactionWithKeypair,
+  TransactionDetails
+} from "../lib/utils/stellar.utils";
+import { STALE_TIMES } from "../lib/utils/query.utils";
 
 export interface SignedTransaction {
   signedXDR: string;
   transactionHash: string;
   walletAddress: string;
 }
-
-export interface TransactionDetails {
-  hash: string;
-  operations: any[];
-  fee: string;
-  sequence: string;
-}
-
-// Stellar network passphrase (you can configure this based on your environment)
-const NETWORK_PASSPHRASE = Networks.PUBLIC; // Use Networks.TESTNET for testnet
 
 // Core transaction functions
 export const signTransaction = async (
@@ -26,22 +28,20 @@ export const signTransaction = async (
     // Get the user's keypair
     const keypair = await getKeypair();
     if (!keypair) {
-      throw new Error(
-        "No wallet found. Please create or import a wallet first."
-      );
+      throw new Error(STELLAR_ERRORS.NO_WALLET);
     }
 
     // Get wallet info for the address
     const walletInfo = await getWallet();
     if (!walletInfo) {
-      throw new Error("Wallet information not found.");
+      throw new Error(STELLAR_ERRORS.NO_WALLET_INFO);
     }
 
     // Parse the transaction from XDR
-    const transaction = new Transaction(unsignedXDR, NETWORK_PASSPHRASE);
+    const transaction = parseTransaction(unsignedXDR);
 
     // Sign the transaction
-    transaction.sign(keypair);
+    signTransactionWithKeypair(transaction, keypair);
 
     // Get the signed XDR
     const signedXDR = transaction.toXDR();
@@ -55,7 +55,7 @@ export const signTransaction = async (
       walletAddress: walletInfo.publicKey
     };
   } catch (error) {
-    throw new Error(`Failed to sign transaction: ${error}`);
+    throw new Error(`${STELLAR_ERRORS.SIGN_FAILED}: ${error}`);
   }
 };
 
@@ -65,7 +65,7 @@ export const verifyTransaction = async (
 ): Promise<boolean> => {
   try {
     // Parse the signed transaction
-    const transaction = new Transaction(signedXDR, NETWORK_PASSPHRASE);
+    const transaction = parseTransaction(signedXDR);
 
     // Get the wallet info
     const walletInfo = await getWallet();
@@ -80,35 +80,15 @@ export const verifyTransaction = async (
     }
 
     // Verify signature
-    return transaction.signatures.some((sig) => {
-      try {
-        return keypair.verify(transaction.hash(), sig.signature());
-      } catch {
-        return false;
-      }
-    });
+    return verifyTransactionSignature(transaction, keypair);
   } catch (error) {
-    console.error("Transaction verification failed:", error);
+    console.error(STELLAR_ERRORS.VERIFY_FAILED, error);
     return false;
   }
 };
 
 export const getTransactionDetails = (xdr: string): TransactionDetails => {
-  try {
-    const transaction = new Transaction(xdr, NETWORK_PASSPHRASE);
-
-    return {
-      hash: transaction.hash().toString("hex"),
-      operations: transaction.operations.map((op) => ({
-        type: op.type
-        // Add more operation details as needed
-      })),
-      fee: transaction.fee,
-      sequence: transaction.sequence
-    };
-  } catch (error) {
-    throw new Error(`Failed to parse transaction: ${error}`);
-  }
+  return getTransactionDetailsUtil(xdr);
 };
 
 // Query Keys
@@ -148,7 +128,7 @@ export const useVerifyTransaction = (
     ),
     queryFn: () => verifyTransaction(signedXDR!, expectedAddress!),
     enabled: Boolean(signedXDR && expectedAddress),
-    staleTime: 5 * 60 * 1000 // 5 minutes
+    staleTime: STALE_TIMES.MEDIUM
   });
 };
 
@@ -157,7 +137,7 @@ export const useTransactionDetails = (xdr?: string) => {
     queryKey: transactionQueryKeys.details(xdr || ""),
     queryFn: () => getTransactionDetails(xdr!),
     enabled: Boolean(xdr),
-    staleTime: Infinity // Transaction details don't change
+    staleTime: STALE_TIMES.INFINITE
   });
 };
 
