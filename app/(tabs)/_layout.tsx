@@ -8,40 +8,16 @@ import HomeScreen from "./index";
 import InvestScreen from "./invest";
 import AssetsScreen from "./assets";
 import SettingsScreen from "./settings";
-import { WalletService } from "@/services";
+import { useHasWallet } from "@/services";
 
 export default function TabLayout() {
   const { isSignedIn, userId } = useAuth();
   const [activeTab, setActiveTab] = useState("home");
-  const [hasWallet, setHasWallet] = useState<boolean | null>(null);
-  const [isCheckingWallet, setIsCheckingWallet] = useState(true);
+  const { data: hasWallet, isLoading: isCheckingWallet } = useHasWallet();
 
   if (!isSignedIn) {
     return <Redirect href='/sign-in' />;
   }
-
-  useEffect(() => {
-    const checkWalletExists = async () => {
-      if (!userId) {
-        setIsCheckingWallet(false);
-        return;
-      }
-
-      console.log("Checking wallet existence for user:", userId);
-      try {
-        const hasWalletResult = await WalletService.hasWallet();
-        console.log("Wallet check result:", hasWalletResult);
-        setHasWallet(hasWalletResult);
-      } catch (error) {
-        console.error("Error checking wallet existence:", error);
-        setHasWallet(false);
-      } finally {
-        setIsCheckingWallet(false);
-      }
-    };
-
-    checkWalletExists();
-  }, [userId]);
 
   if (isCheckingWallet) {
     return (

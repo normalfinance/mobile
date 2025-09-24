@@ -14,7 +14,7 @@ import {
 } from "tamagui";
 import { Clipboard } from "react-native";
 import { SignOutButton } from "@/components/sign-out";
-import { WalletService, WalletInfo } from "@/services";
+import { useWallet, WalletInfo } from "@/services";
 
 // Utility functions
 const formatDate = (date: Date | string) => {
@@ -30,32 +30,8 @@ const truncateAddress = (address: string, start = 6, end = 6) => {
 
 export default function SettingsScreen() {
   const { userId } = useAuth();
-  const [walletInfo, setWalletInfo] = useState<WalletInfo | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [isCopying, setIsCopying] = useState(false);
-
-  useEffect(() => {
-    const loadWalletInfo = async () => {
-      if (!userId) {
-        setIsLoading(false);
-        return;
-      }
-
-      console.log("Loading wallet info for user:", userId);
-      try {
-        const info = await WalletService.getWallet();
-        console.log("Wallet info loaded:", info);
-        setWalletInfo(info);
-      } catch (error) {
-        console.error("Error loading wallet info:", error);
-        setWalletInfo(null);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadWalletInfo();
-  }, [userId]);
+  const { data: walletInfo, isLoading } = useWallet();
 
   const handleCopyAddress = async () => {
     if (!walletInfo?.publicKey) return;

@@ -13,6 +13,7 @@ import { StatusBar } from "expo-status-bar";
 import "react-native-reanimated";
 import { TamaguiProvider, createTamagui } from "@tamagui/core";
 import { defaultConfig } from "@tamagui/config/v4";
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { useColorScheme } from "@/hooks/use-color-scheme";
 
@@ -28,18 +29,31 @@ declare module "@tamagui/core" {
   interface TamaguiCustomConfig extends Conf {}
 }
 
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 2,
+      staleTime: 5 * 60 * 1000, // 5 minutes
+    },
+    mutations: {
+      retry: 1,
+    },
+  },
+});
+
 export default function RootLayout() {
   const colorScheme = useColorScheme();
 
   return (
-    <TamaguiProvider config={config}>
-      <ClerkProvider
-        tokenCache={tokenCache}
-        publishableKey={process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY}
-      >
-        <ThemeProvider
-          value={colorScheme === "dark" ? DarkTheme : DefaultTheme}
+    <QueryClientProvider client={queryClient}>
+      <TamaguiProvider config={config}>
+        <ClerkProvider
+          tokenCache={tokenCache}
+          publishableKey={process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY}
         >
+          <ThemeProvider
+            value={colorScheme === "dark" ? DarkTheme : DefaultTheme}
+          >
           <Stack>
             <Stack.Screen name='(tabs)' options={{ headerShown: false }} />
             <Stack.Screen name='(auth)' options={{ headerShown: false }} />
@@ -56,9 +70,10 @@ export default function RootLayout() {
               options={{ presentation: "modal", title: "Modal" }}
             />
           </Stack>
-          <StatusBar style='auto' />
-        </ThemeProvider>
-      </ClerkProvider>
-    </TamaguiProvider>
+            <StatusBar style='auto' />
+          </ThemeProvider>
+        </ClerkProvider>
+      </TamaguiProvider>
+    </QueryClientProvider>
   );
 }

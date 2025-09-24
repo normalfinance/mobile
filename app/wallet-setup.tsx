@@ -15,26 +15,30 @@ import {
   Separator,
   Spinner
 } from "tamagui";
-import { WalletService } from "@/services";
+import { useCreateWallet, useImportWallet } from "@/services";
 
 // Utility functions
 const validatePrivateKey = (privateKey: string) => {
   // Stellar private keys start with 'S' and are 56 characters long
   const trimmed = privateKey.trim();
-  return trimmed.length === 56 && trimmed.startsWith('S');
+  return trimmed.length === 56 && trimmed.startsWith("S");
 };
 
 const getWalletErrorMessage = (error: string) => {
-  return error || 'An unknown error occurred';
+  return error || "An unknown error occurred";
 };
 
 export default function WalletSetupScreen() {
   const { userId } = useAuth();
   const router = useRouter();
-  const [isLoading, setIsLoading] = useState(false);
   const [showImportForm, setShowImportForm] = useState(false);
   const [privateKey, setPrivateKey] = useState("");
   const [privateKeyError, setPrivateKeyError] = useState("");
+
+  const createWallet = useCreateWallet();
+  const importWallet = useImportWallet();
+
+  const isLoading = createWallet.isPending || importWallet.isPending;
 
   const handleCreateNewWallet = async () => {
     if (!userId) {
@@ -43,10 +47,9 @@ export default function WalletSetupScreen() {
     }
 
     console.log("Creating new wallet for user:", userId);
-    setIsLoading(true);
 
     try {
-      const result = await WalletService.createWallet();
+      const result = await createWallet.mutateAsync();
 
       console.log("Wallet created successfully:", result.publicKey);
       Alert.alert(
@@ -62,8 +65,6 @@ export default function WalletSetupScreen() {
     } catch (error) {
       console.error("Error creating wallet:", error);
       Alert.alert("Error", "Failed to create wallet. Please try again.");
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -76,16 +77,19 @@ export default function WalletSetupScreen() {
     const trimmedPrivateKey = privateKey.trim();
 
     if (!validatePrivateKey(trimmedPrivateKey)) {
-      setPrivateKeyError("Please enter a valid Stellar private key (starts with 'S' and is 56 characters long)");
+      setPrivateKeyError(
+        "Please enter a valid Stellar private key (starts with 'S' and is 56 characters long)"
+      );
       return;
     }
 
     setPrivateKeyError("");
     console.log("Importing wallet for user:", userId);
-    setIsLoading(true);
 
     try {
-      const result = await WalletService.importFromPrivateKey(trimmedPrivateKey);
+      const result = await importWallet.mutateAsync({
+        privateKey: trimmedPrivateKey
+      });
 
       console.log("Wallet imported successfully:", result.publicKey);
       Alert.alert(
@@ -101,8 +105,6 @@ export default function WalletSetupScreen() {
     } catch (error) {
       console.error("Error importing wallet:", error);
       Alert.alert("Error", "Failed to import wallet. Please try again.");
-    } finally {
-      setIsLoading(false);
     }
   };
 
