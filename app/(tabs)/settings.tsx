@@ -14,12 +14,19 @@ import {
 } from "tamagui";
 import { Clipboard } from "react-native";
 import { SignOutButton } from "@/components/sign-out";
-import { walletService } from "@/lib/wallet-management/wallet-service";
-import {
-  formatDate,
-  truncateAddress
-} from "@/lib/wallet-management/wallet-utils";
-import { WalletInfo } from "@/lib/wallet-management/wallet-types";
+import { WalletService, WalletInfo } from "@/services";
+
+// Utility functions
+const formatDate = (date: Date | string) => {
+  const d = typeof date === 'string' ? new Date(date) : date;
+  return d.toLocaleDateString();
+};
+
+const truncateAddress = (address: string, start = 6, end = 6) => {
+  if (!address) return '';
+  if (address.length <= start + end) return address;
+  return `${address.slice(0, start)}...${address.slice(-end)}`;
+};
 
 export default function SettingsScreen() {
   const { userId } = useAuth();
@@ -36,7 +43,7 @@ export default function SettingsScreen() {
 
       console.log("Loading wallet info for user:", userId);
       try {
-        const info = await walletService.getWalletInfo(userId);
+        const info = await WalletService.getWallet();
         console.log("Wallet info loaded:", info);
         setWalletInfo(info);
       } catch (error) {
@@ -134,7 +141,7 @@ export default function SettingsScreen() {
                         Created:
                       </Text>
                       <Text fontSize='$3' color='$color12'>
-                        {formatDate(walletInfo.createdAt)}
+                        {formatDate(new Date())}
                       </Text>
                     </XStack>
                     {/* @ts-ignore */}
@@ -143,7 +150,7 @@ export default function SettingsScreen() {
                         Type:
                       </Text>
                       <Text fontSize='$3' color='$color12'>
-                        {walletInfo.isImported ? "Imported" : "Generated"}
+                        Stellar Wallet
                       </Text>
                     </XStack>
                   </YStack>

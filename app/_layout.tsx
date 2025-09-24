@@ -1,3 +1,6 @@
+// Initialize Node.js polyfills - MUST be first import
+import '../shim';
+
 import {
   DarkTheme,
   DefaultTheme,

@@ -15,20 +15,26 @@ import {
   Separator,
   Spinner
 } from "tamagui";
-import { walletService } from "@/lib/wallet-management/wallet-service";
-import {
-  sanitizeMnemonic,
-  validateMnemonic,
-  getWalletErrorMessage
-} from "@/lib/wallet-management/wallet-utils";
+import { WalletService } from "@/services";
+
+// Utility functions
+const validatePrivateKey = (privateKey: string) => {
+  // Stellar private keys start with 'S' and are 56 characters long
+  const trimmed = privateKey.trim();
+  return trimmed.length === 56 && trimmed.startsWith('S');
+};
+
+const getWalletErrorMessage = (error: string) => {
+  return error || 'An unknown error occurred';
+};
 
 export default function WalletSetupScreen() {
   const { userId } = useAuth();
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [showImportForm, setShowImportForm] = useState(false);
-  const [mnemonic, setMnemonic] = useState("");
-  const [mnemonicError, setMnemonicError] = useState("");
+  const [privateKey, setPrivateKey] = useState("");
+  const [privateKeyError, setPrivateKeyError] = useState("");
 
   const handleCreateNewWallet = async () => {
     if (!userId) {
@@ -40,27 +46,19 @@ export default function WalletSetupScreen() {
     setIsLoading(true);
 
     try {
-      const result = await walletService.createWallet({ userId });
+      const result = await WalletService.createWallet();
 
-      if (result.success) {
-        console.log("Wallet created successfully:", result.publicKey);
-        Alert.alert(
-          "Wallet Created!",
-          `Your Stellar wallet has been created successfully.\n\nPublic Address: ${result.publicKey}`,
-          [
-            {
-              text: "Continue",
-              onPress: () => router.replace("/(tabs)")
-            }
-          ]
-        );
-      } else {
-        console.error("Failed to create wallet:", result.error);
-        Alert.alert(
-          "Error",
-          getWalletErrorMessage(result.error || "Unknown error")
-        );
-      }
+      console.log("Wallet created successfully:", result.publicKey);
+      Alert.alert(
+        "Wallet Created!",
+        `Your Stellar wallet has been created successfully.\n\nPublic Address: ${result.publicKey}`,
+        [
+          {
+            text: "Continue",
+            onPress: () => router.replace("/(tabs)")
+          }
+        ]
+      );
     } catch (error) {
       console.error("Error creating wallet:", error);
       Alert.alert("Error", "Failed to create wallet. Please try again.");
@@ -75,42 +73,31 @@ export default function WalletSetupScreen() {
       return;
     }
 
-    const sanitizedMnemonic = sanitizeMnemonic(mnemonic);
+    const trimmedPrivateKey = privateKey.trim();
 
-    if (!validateMnemonic(sanitizedMnemonic)) {
-      setMnemonicError("Please enter a valid 12 or 24 word mnemonic phrase");
+    if (!validatePrivateKey(trimmedPrivateKey)) {
+      setPrivateKeyError("Please enter a valid Stellar private key (starts with 'S' and is 56 characters long)");
       return;
     }
 
-    setMnemonicError("");
+    setPrivateKeyError("");
     console.log("Importing wallet for user:", userId);
     setIsLoading(true);
 
     try {
-      const result = await walletService.importWallet({
-        userId,
-        mnemonic: sanitizedMnemonic
-      });
+      const result = await WalletService.importFromPrivateKey(trimmedPrivateKey);
 
-      if (result.success) {
-        console.log("Wallet imported successfully:", result.publicKey);
-        Alert.alert(
-          "Wallet Imported!",
-          `Your Stellar wallet has been imported successfully.\n\nPublic Address: ${result.publicKey}`,
-          [
-            {
-              text: "Continue",
-              onPress: () => router.replace("/(tabs)")
-            }
-          ]
-        );
-      } else {
-        console.error("Failed to import wallet:", result.error);
-        Alert.alert(
-          "Error",
-          getWalletErrorMessage(result.error || "Unknown error")
-        );
-      }
+      console.log("Wallet imported successfully:", result.publicKey);
+      Alert.alert(
+        "Wallet Imported!",
+        `Your Stellar wallet has been imported successfully.\n\nPublic Address: ${result.publicKey}`,
+        [
+          {
+            text: "Continue",
+            onPress: () => router.replace("/(tabs)")
+          }
+        ]
+      );
     } catch (error) {
       console.error("Error importing wallet:", error);
       Alert.alert("Error", "Failed to import wallet. Please try again.");
@@ -119,10 +106,10 @@ export default function WalletSetupScreen() {
     }
   };
 
-  const handleMnemonicChange = (text: string) => {
-    setMnemonic(text);
-    if (mnemonicError) {
-      setMnemonicError("");
+  const handlePrivateKeyChange = (text: string) => {
+    setPrivateKey(text);
+    if (privateKeyError) {
+      setPrivateKeyError("");
     }
   };
 
@@ -212,7 +199,7 @@ export default function WalletSetupScreen() {
               color='$color11'
               marginTop='$4'
             >
-              Use your existing 12 or 24 word recovery phrase
+              Use your existing Stellar private key
             </Text>
           </YStack>
         </YStack>
@@ -226,8 +213,8 @@ export default function WalletSetupScreen() {
             mb='$4'
             onPress={() => {
               setShowImportForm(false);
-              setMnemonic("");
-              setMnemonicError("");
+              setPrivateKey("");
+              setPrivateKeyError("");
             }}
           >
             <Text>← Back</Text>
@@ -236,36 +223,36 @@ export default function WalletSetupScreen() {
           <H3 mb='$4'>Import Your Wallet</H3>
 
           <Text fontSize='$4' color='$color11' mb='$3'>
-            Enter your recovery phrase
+            Enter your private key
           </Text>
 
           <TextArea
             size='$4'
-            placeholder='Enter your 12 or 24 word recovery phrase...'
-            value={mnemonic}
-            onChangeText={handleMnemonicChange}
-            numberOfLines={4}
-            borderColor={mnemonicError ? "$red8" : "$borderColor"}
+            placeholder='Enter your Stellar private key (starts with S...)'
+            value={privateKey}
+            onChangeText={handlePrivateKeyChange}
+            numberOfLines={3}
+            borderColor={privateKeyError ? "$red8" : "$borderColor"}
             mb='$2'
             autoCapitalize='none'
             autoCorrect={false}
           />
 
-          {mnemonicError ? (
+          {privateKeyError ? (
             <Text color='$red10' fontSize='$3' mb='$4'>
-              {mnemonicError}
+              {privateKeyError}
             </Text>
           ) : null}
 
           <Text fontSize='$2' color='$color10' mb='$6'>
-            Your recovery phrase should be 12 or 24 words separated by spaces
+            Your private key should start with 'S' and be 56 characters long
           </Text>
 
           <Button
             size='$5'
             theme='blue'
             onPress={handleImportWallet}
-            disabled={isLoading || !mnemonic.trim()}
+            disabled={isLoading || !privateKey.trim()}
           >
             <Text fontSize='$5' fontWeight='600'>
               Import Wallet

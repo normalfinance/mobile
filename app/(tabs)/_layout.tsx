@@ -8,7 +8,7 @@ import HomeScreen from "./index";
 import InvestScreen from "./invest";
 import AssetsScreen from "./assets";
 import SettingsScreen from "./settings";
-import { walletService } from "@/lib/wallet-management/wallet-service";
+import { WalletService } from "@/services";
 
 export default function TabLayout() {
   const { isSignedIn, userId } = useAuth();
@@ -29,9 +29,9 @@ export default function TabLayout() {
 
       console.log("Checking wallet existence for user:", userId);
       try {
-        const walletResult = await walletService.checkWalletExists(userId);
-        console.log("Wallet check result:", walletResult);
-        setHasWallet(walletResult.exists);
+        const hasWalletResult = await WalletService.hasWallet();
+        console.log("Wallet check result:", hasWalletResult);
+        setHasWallet(hasWalletResult);
       } catch (error) {
         console.error("Error checking wallet existence:", error);
         setHasWallet(false);
