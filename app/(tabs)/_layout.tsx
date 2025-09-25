@@ -8,12 +8,14 @@ import HomeScreen from "./index";
 import InvestScreen from "./invest";
 import AssetsScreen from "./assets";
 import SettingsScreen from "./settings";
-import { useHasWallet } from "@/services";
+import { useHasWallet, useHasWalletWithBackendCheck, useAuthCredentials } from "@/services";
 
 export default function TabLayout() {
   const { isSignedIn, userId } = useAuth();
   const [activeTab, setActiveTab] = useState("home");
-  const { data: hasWallet, isLoading: isCheckingWallet } = useHasWallet();
+  const { data: credentials } = useAuthCredentials();
+  const { data: hasWallet, isLoading: isCheckingWallet } =
+    useHasWalletWithBackendCheck(credentials);
 
   if (!isSignedIn) {
     return <Redirect href='/sign-in' />;
@@ -22,10 +24,15 @@ export default function TabLayout() {
   if (isCheckingWallet) {
     return (
       // @ts-ignore
-      <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor="$background">
-        <Spinner size="large" color="$blue10" />
+      <YStack
+        flex={1}
+        justifyContent='center'
+        alignItems='center'
+        backgroundColor='$background'
+      >
+        <Spinner size='large' color='$blue10' />
         {/* @ts-ignore */}
-        <Text marginTop="$4" color="$color11">
+        <Text marginTop='$4' color='$color11'>
           Checking wallet...
         </Text>
       </YStack>

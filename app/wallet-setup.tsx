@@ -19,7 +19,8 @@ import {
   useCreateWallet, 
   useImportWallet, 
   useCreateDeterministicWallet,
-  useCheckWalletExists 
+  useCheckWalletExists,
+  useAuthCredentials
 } from "@/services";
 
 // Utility functions
@@ -43,7 +44,8 @@ export default function WalletSetupScreen() {
   const createWallet = useCreateWallet();
   const importWallet = useImportWallet();
   const createDeterministicWallet = useCreateDeterministicWallet();
-  const { data: walletCheck, isLoading: checkingWallet } = useCheckWalletExists();
+  const { data: credentials } = useAuthCredentials();
+  const { data: walletCheck, isLoading: checkingWallet } = useCheckWalletExists(credentials);
 
   const isLoading = createWallet.isPending || importWallet.isPending || createDeterministicWallet.isPending || checkingWallet;
 

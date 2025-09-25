@@ -83,21 +83,37 @@ export const checkWalletExists = async (
   authCredentials?: AuthCredentials
 ): Promise<{ exists: boolean; wallet?: WalletInfo }> => {
   try {
+    console.log("Checking wallet exists");
     // Get auth credentials if not provided
     const credentials = authCredentials || requireAuth();
+    console.log("Credentials", credentials);
     const { userId, sessionSecret } = credentials;
 
     // First check if wallet exists locally
     const localWallet = await getWallet();
+    console.log("Local wallet", localWallet);
     if (localWallet) {
       return { exists: true, wallet: localWallet };
     }
 
-    const backendResult = await checkWallet(userId);
+    let backendResult = {
+      exists: false,
+      walletData: {} as any
+    };
+
+    // backendResult = await checkWallet(userId);
+
+    //override backendResult with a mock wallet as if it was returned from the backend
+    backendResult.exists = true;
+    backendResult.walletData = {
+      publicKey: "GABZPGP2N5M66ABHHY3YF6W4XUH363WIP7ZJ375B64NQ7CPSZ6EI3QXM",
+      address: "GABZPGP2N5M66ABHHY3YF6W4XUH363WIP7ZJ375B64NQ7CPSZ6EI3QXM",
+      salt: "a4f7c91e2b56d83f"
+    };
 
     if (backendResult.exists && backendResult.walletData) {
       // Wallet exists in backend, derive it locally
-      const salt = backendResult.walletData.salt;
+      const salt = backendResult.walletData.salt || "test-salt-from-mock";
 
       if (!salt) {
         throw new Error("Salt not found in backend wallet data");
@@ -108,6 +124,8 @@ export const checkWalletExists = async (
         sessionSecret,
         salt
       );
+
+      console.log("Derived wallet from user data", derivedWallet);
 
       // Verify the derived public key matches the backend
       if (derivedWallet.publicKey !== backendResult.walletData.publicKey) {
@@ -277,17 +295,21 @@ export const useHasWallet = () => {
   });
 };
 
-export const useHasWalletWithBackendCheck = (enabled: boolean = true) => {
+export const useHasWalletWithBackendCheck = (
+  credentials?: AuthCredentials,
+  enabled: boolean = true
+) => {
+  console.log("Enabled in useHasWalletWithBackendCheck", enabled);
+  console.log("Credentials in useHasWalletWithBackendCheck", credentials);
   return useQuery({
-    queryKey: walletQueryKeys.hasWalletBackend("auth"),
+    queryKey: walletQueryKeys.hasWalletBackend(credentials?.userId || ""),
     queryFn: () => {
-      const credentials = getAuthCredentials();
       if (!credentials) {
         throw new Error("Not authenticated");
       }
       return hasWalletWithBackendCheck(credentials);
     },
-    enabled: enabled && !!getAuthCredentials(),
+    enabled: enabled && !!credentials,
     staleTime: STALE_TIMES.SHORT
   });
 };
@@ -320,17 +342,19 @@ export const usePrivateKey = (enabled: boolean = false) => {
   });
 };
 
-export const useCheckWalletExists = (enabled: boolean = true) => {
+export const useCheckWalletExists = (
+  credentials?: AuthCredentials,
+  enabled: boolean = true
+) => {
   return useQuery({
-    queryKey: walletQueryKeys.checkExists("auth"),
+    queryKey: walletQueryKeys.checkExists(credentials?.userId || ""),
     queryFn: () => {
-      const credentials = getAuthCredentials();
       if (!credentials) {
         throw new Error("Not authenticated");
       }
       return checkWalletExists(credentials);
     },
-    enabled: enabled && !!getAuthCredentials(),
+    enabled: enabled && !!credentials,
     staleTime: STALE_TIMES.MEDIUM
   });
 };
