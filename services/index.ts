@@ -7,6 +7,9 @@ export {
   hasWallet,
   deleteWallet,
   getPrivateKey,
+  checkWalletExists,
+  createDeterministicWallet,
+  hasWalletWithBackendCheck,
   walletQueryKeys,
   useCreateWallet,
   useImportWallet,
@@ -15,6 +18,9 @@ export {
   useHasWallet,
   useDeleteWallet,
   usePrivateKey,
+  useCheckWalletExists,
+  useCreateDeterministicWallet,
+  useHasWalletWithBackendCheck,
   useWalletStatus,
   useWalletActions
 } from "./wallet.service";
@@ -37,14 +43,30 @@ export {
   submitTransactionWithRetry,
   healthCheck,
   getApiStatus,
+  checkWallet,
   apiQueryKeys,
   useSubmitTransaction,
   useSubmitTransactionWithRetry,
   useHealthCheck,
-  useApiStatus
+  useApiStatus,
+  useCheckWallet
 } from "./api.service";
+
+// Auth Service - Core functions and hooks
+export {
+  getAuthCredentials,
+  getCurrentUserId,
+  getCurrentSessionSecret,
+  isUserAuthenticated,
+  requireAuth,
+  authQueryKeys,
+  useAuthCredentials,
+  useAuthStatus,
+  useRequireAuth
+} from "./auth.service";
 
 // Type exports
 export type { WalletInfo } from "./wallet.service";
 export type { SignedTransaction } from "./transaction.service";
-export type { TransactionRequest, TransactionResponse } from "./api.service";
+export type { TransactionRequest, TransactionResponse, CheckWalletRequest, CheckWalletResponse } from "./api.service";
+export type { AuthCredentials, AuthStatus } from "./auth.service";

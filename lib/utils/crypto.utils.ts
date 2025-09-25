@@ -36,3 +36,72 @@ export const getPublicKeyFromPrivate = (privateKey: string): string => {
   const keypair = createKeypairFromSecret(privateKey);
   return keypair.publicKey();
 };
+
+export const generateSalt = async (size: number = 32): Promise<string> => {
+  const randomBytes = await generateSecureRandomBytes(size);
+  return Buffer.from(randomBytes).toString('hex');
+};
+
+export const deriveKeyFromUserData = async (
+  userId: string,
+  sessionSecret: string,
+  salt: string,
+  iterations: number = 100000
+): Promise<Uint8Array> => {
+  try {
+    const input = `${userId}:${sessionSecret}`;
+    const encoder = new TextEncoder();
+    const data = encoder.encode(input);
+    const saltBytes = Buffer.from(salt, 'hex');
+    
+    const importedKey = await crypto.subtle.importKey(
+      'raw',
+      data,
+      { name: 'PBKDF2' },
+      false,
+      ['deriveBits']
+    );
+    
+    const derivedBits = await crypto.subtle.deriveBits(
+      {
+        name: 'PBKDF2',
+        salt: saltBytes,
+        iterations: iterations,
+        hash: 'SHA-256',
+      },
+      importedKey,
+      256 // 32 bytes * 8 bits
+    );
+    
+    return new Uint8Array(derivedBits);
+  } catch (error) {
+    throw new Error(`Key derivation failed: ${error}`);
+  }
+};
+
+export const createKeypairFromDerivedKey = (derivedKey: Uint8Array): Keypair => {
+  try {
+    return Keypair.fromRawEd25519Seed(Buffer.from(derivedKey));
+  } catch (error) {
+    throw new Error(`Failed to create keypair from derived key: ${error}`);
+  }
+};
+
+export const deriveWalletFromUserData = async (
+  userId: string,
+  sessionSecret: string,
+  salt: string
+): Promise<{ keypair: Keypair; publicKey: string; address: string }> => {
+  try {
+    const derivedKey = await deriveKeyFromUserData(userId, sessionSecret, salt);
+    const keypair = createKeypairFromDerivedKey(derivedKey);
+    
+    return {
+      keypair,
+      publicKey: keypair.publicKey(),
+      address: keypair.publicKey()
+    };
+  } catch (error) {
+    throw new Error(`Wallet derivation failed: ${error}`);
+  }
+};

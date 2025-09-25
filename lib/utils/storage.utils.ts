@@ -1,5 +1,5 @@
-import * as SecureStore from 'expo-secure-store';
-import { STORAGE_KEYS, STORAGE_ERRORS } from '../constants/storage.constants';
+import * as SecureStore from "expo-secure-store";
+import { STORAGE_KEYS, STORAGE_ERRORS } from "../constants/storage.constants";
 
 export const secureStorage = {
   async setItem(key: string, value: string): Promise<void> {
@@ -35,11 +35,11 @@ export const secureStorage = {
   async getJSON<T>(key: string): Promise<T | null> {
     const item = await this.getItem(key);
     if (!item) return null;
-    
+
     try {
       return JSON.parse(item);
     } catch (error) {
-      console.error('Failed to parse JSON from storage:', error);
+      console.error("Failed to parse JSON from storage:", error);
       return null;
     }
   }
@@ -62,5 +62,32 @@ export const walletStorage = {
   async deleteWallet(): Promise<void> {
     await secureStorage.deleteItem(STORAGE_KEYS.WALLET);
     await secureStorage.deleteItem(STORAGE_KEYS.PRIVATE_KEY);
+  },
+
+  async setUserId(userId: string): Promise<void> {
+    try {
+      await secureStorage.setItem(STORAGE_KEYS.USER_ID, userId);
+    } catch (error) {
+      throw new Error(`${STORAGE_ERRORS.FAILED_TO_STORE_USER_ID}: ${error}`);
+    }
+  },
+
+  async getUserId(): Promise<string | null> {
+    try {
+      return await secureStorage.getItem(STORAGE_KEYS.USER_ID);
+    } catch (error) {
+      console.error(`${STORAGE_ERRORS.FAILED_TO_GET_USER_ID}:`, error);
+      return null;
+    }
+  },
+
+  async setDerivedWallet(
+    walletInfo: any,
+    privateKey: string,
+    salt: string,
+    userId: string
+  ): Promise<void> {
+    await this.setWallet(walletInfo, privateKey);
+    await this.setUserId(userId);
   }
 };

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "expo-router";
 import { useAuth } from "@clerk/clerk-expo";
 import { Alert } from "react-native";
@@ -15,7 +15,12 @@ import {
   Separator,
   Spinner
 } from "tamagui";
-import { useCreateWallet, useImportWallet } from "@/services";
+import { 
+  useCreateWallet, 
+  useImportWallet, 
+  useCreateDeterministicWallet,
+  useCheckWalletExists 
+} from "@/services";
 
 // Utility functions
 const validatePrivateKey = (privateKey: string) => {
@@ -37,8 +42,27 @@ export default function WalletSetupScreen() {
 
   const createWallet = useCreateWallet();
   const importWallet = useImportWallet();
+  const createDeterministicWallet = useCreateDeterministicWallet();
+  const { data: walletCheck, isLoading: checkingWallet } = useCheckWalletExists();
 
-  const isLoading = createWallet.isPending || importWallet.isPending;
+  const isLoading = createWallet.isPending || importWallet.isPending || createDeterministicWallet.isPending || checkingWallet;
+
+  // Auto-recover wallet if it exists in backend
+  useEffect(() => {
+    if (walletCheck?.exists && walletCheck.wallet) {
+      console.log("Wallet found in backend, auto-recovering:", walletCheck.wallet.publicKey);
+      Alert.alert(
+        "Wallet Recovered!",
+        `Your wallet has been automatically recovered from your account.\n\nPublic Address: ${walletCheck.wallet.publicKey}`,
+        [
+          {
+            text: "Continue",
+            onPress: () => router.replace("/(tabs)")
+          }
+        ]
+      );
+    }
+  }, [walletCheck, router]);
 
   const handleCreateNewWallet = async () => {
     if (!userId) {
@@ -46,15 +70,22 @@ export default function WalletSetupScreen() {
       return;
     }
 
-    console.log("Creating new wallet for user:", userId);
+    // Check if wallet already exists
+    if (walletCheck?.exists) {
+      Alert.alert("Wallet Exists", "You already have a wallet associated with this account.");
+      return;
+    }
+
+    console.log("Creating new deterministic wallet for user:", userId);
 
     try {
-      const result = await createWallet.mutateAsync();
+      // Use deterministic wallet creation instead of random wallet
+      const result = await createDeterministicWallet.mutateAsync(undefined);
 
-      console.log("Wallet created successfully:", result.publicKey);
+      console.log("Deterministic wallet created successfully:", result.publicKey);
       Alert.alert(
         "Wallet Created!",
-        `Your Stellar wallet has been created successfully.\n\nPublic Address: ${result.publicKey}`,
+        `Your Stellar wallet has been created and linked to your account.\n\nPublic Address: ${result.publicKey}`,
         [
           {
             text: "Continue",
@@ -63,7 +94,7 @@ export default function WalletSetupScreen() {
         ]
       );
     } catch (error) {
-      console.error("Error creating wallet:", error);
+      console.error("Error creating deterministic wallet:", error);
       Alert.alert("Error", "Failed to create wallet. Please try again.");
     }
   };
@@ -169,7 +200,7 @@ export default function WalletSetupScreen() {
               color='$color11'
               marginBottom='$4'
             >
-              This will generate a new Stellar wallet for you
+              This will create a new Stellar wallet linked to your account
             </Text>
           </YStack>
           <XStack
