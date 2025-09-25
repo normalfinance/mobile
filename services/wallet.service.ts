@@ -106,8 +106,8 @@ export const checkWalletExists = async (
     //override backendResult with a mock wallet as if it was returned from the backend
     backendResult.exists = true;
     backendResult.walletData = {
-      publicKey: "GABZPGP2N5M66ABHHY3YF6W4XUH363WIP7ZJ375B64NQ7CPSZ6EI3QXM",
-      address: "GABZPGP2N5M66ABHHY3YF6W4XUH363WIP7ZJ375B64NQ7CPSZ6EI3QXM",
+      publicKey: "GA6PTKEEVZ4GFH2OVAUOFNK57VJHJ2O7IGZFXQHFNV4FI24PWEZHUP6U",
+      address: "GA6PTKEEVZ4GFH2OVAUOFNK57VJHJ2O7IGZFXQHFNV4FI24PWEZHUP6U",
       salt: "a4f7c91e2b56d83f"
     };
 
@@ -139,6 +139,8 @@ export const checkWalletExists = async (
         salt,
         userId
       );
+
+      console.log("Derived wallet stored LOCALLY", derivedWallet);
 
       return {
         exists: true,

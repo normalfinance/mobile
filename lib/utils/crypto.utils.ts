@@ -1,5 +1,7 @@
 import * as Crypto from "expo-crypto";
 import { Keypair } from "@stellar/stellar-sdk";
+import { pbkdf2 as pbkdf2Noble } from "@noble/hashes/pbkdf2";
+import { sha256 } from "@noble/hashes/sha2";
 
 export const generateSecureRandomBytes = async (
   size: number = 32
@@ -57,28 +59,31 @@ export const deriveKeyFromUserData = async (
     const data = encoder.encode(input);
     const saltBytes = Buffer.from(salt, "hex");
 
-    const importedKey = await crypto.subtle.importKey(
-      "raw",
-      data,
-      { name: "PBKDF2" },
-      false,
-      ["deriveBits"]
-    );
-    console.log("Imported key deriveKeyFromUserData", importedKey);
+    // const importedKey = await crypto.subtle.importKey(
+    //   "raw",
+    //   data,
+    //   { name: "PBKDF2" },
+    //   false,
+    //   ["deriveBits"]
+    // );
+    // console.log("Imported key deriveKeyFromUserData", importedKey);
 
-    const derivedBits = await crypto.subtle.deriveBits(
-      {
-        name: "PBKDF2",
-        salt: saltBytes,
-        iterations: iterations,
-        hash: "SHA-256"
-      },
-      importedKey,
-      256 // 32 bytes * 8 bits
-    );
-    console.log("Derived bits deriveKeyFromUserData", derivedBits);
+    // const derivedBits = await crypto.subtle.deriveBits(
+    //   {
+    //     name: "PBKDF2",
+    //     salt: saltBytes,
+    //     iterations: iterations,
+    //     hash: "SHA-256"
+    //   },
+    //   importedKey,
+    //   256 // 32 bytes * 8 bits
+    // );
 
-    return new Uint8Array(derivedBits);
+    const derivedbits = pbkdf2Noble(sha256, data, saltBytes, {
+      c: iterations,
+      dkLen: 32
+    });
+    return derivedbits;
   } catch (error) {
     console.error("Error in deriveKeyFromUserData", error);
     throw new Error(`Key derivation failed: ${error}`);
@@ -106,7 +111,8 @@ export const deriveWalletFromUserData = async (
     const keypair = createKeypairFromDerivedKey(derivedKey);
     console.log(
       "Derived keypair from derived key from deriveWalletFromUserData",
-      keypair.secret()
+      keypair.secret(),
+      keypair.publicKey()
     );
 
     return {
