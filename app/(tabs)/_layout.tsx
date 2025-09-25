@@ -1,24 +1,44 @@
 import { Redirect } from "expo-router";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useAuth } from "@clerk/clerk-expo";
-import { Tabs, YStack, H6, Text, View } from "tamagui";
+import { Tabs, YStack, H6, Text, View, Spinner } from "tamagui";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import HomeScreen from "./index";
 import InvestScreen from "./invest";
 import AssetsScreen from "./assets";
 import SettingsScreen from "./settings";
+import { useHasWallet } from "@/services";
 
 export default function TabLayout() {
   const { isSignedIn, userId } = useAuth();
   const [activeTab, setActiveTab] = useState("home");
+  const { data: hasWallet, isLoading: isCheckingWallet } = useHasWallet();
 
   if (!isSignedIn) {
     return <Redirect href='/sign-in' />;
   }
 
+  if (isCheckingWallet) {
+    return (
+      // @ts-ignore
+      <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor="$background">
+        <Spinner size="large" color="$blue10" />
+        {/* @ts-ignore */}
+        <Text marginTop="$4" color="$color11">
+          Checking wallet...
+        </Text>
+      </YStack>
+    );
+  }
+
+  if (hasWallet === false) {
+    console.log("No wallet found, redirecting to wallet setup");
+    return <Redirect href='/wallet-setup' />;
+  }
+
   if (userId) {
-    console.log("userId", userId);
+    console.log("userId", userId, "hasWallet", hasWallet);
   }
 
   const renderTabContent = () => {

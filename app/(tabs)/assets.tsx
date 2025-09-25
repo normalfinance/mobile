@@ -1,6 +1,6 @@
 import React from "react";
 import { YStack, XStack, H2, H6, Text, Card, ScrollView } from "tamagui";
-import { mockAssets } from "@/utils/mocks";
+import { mockAssets } from "@/lib/utils/mocks";
 
 const AssetItem = ({
   name,

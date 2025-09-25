@@ -1,0 +1,231 @@
+import React, { useState } from "react";
+import { Alert } from "react-native";
+import { useSignIn } from "@clerk/clerk-expo";
+import { Button, Text, Input, YStack, H6, XStack, Separator } from "tamagui";
+
+interface PasswordlessSignInProps {
+  onSuccess?: () => void;
+  onEmailSent?: () => void;
+}
+
+export default function PasswordlessSignIn({
+  onSuccess,
+  onEmailSent
+}: PasswordlessSignInProps) {
+  const { signIn, setActive, isLoaded } = useSignIn();
+  const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+
+  const sendCode = async () => {
+    if (!isLoaded || !email.trim()) return;
+
+    setIsLoading(true);
+    try {
+      const signInAttempt = await signIn.create({
+        identifier: email
+      });
+
+      if (!signInAttempt.supportedFirstFactors) {
+        throw new Error("Email code factor not supported");
+      }
+
+      const strategy = signInAttempt.supportedFirstFactors.find(
+        (factor: any) => factor.strategy === "email_code"
+      ) as {
+        emailAddressId: string;
+        strategy: string;
+        primary: boolean;
+        safeIdentifier: string;
+      };
+
+      if (strategy) {
+        await signIn.prepareFirstFactor({
+          strategy: "email_code",
+          emailAddressId: strategy.emailAddressId
+        });
+
+        setEmailSent(true);
+        setCooldown(60); // 60 second cooldown
+        startCooldownTimer();
+        onEmailSent?.();
+
+        Alert.alert(
+          "Code Sent",
+          "Check your email for a 6-digit verification code.",
+          [{ text: "OK" }]
+        );
+      }
+    } catch (error: any) {
+      console.error("Send code error:", error);
+      Alert.alert(
+        "Error",
+        error.errors?.[0]?.message ||
+          "Failed to send verification code. Please try again."
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const verifyCode = async () => {
+    if (!isLoaded || !code.trim() || code.length !== 6) return;
+
+    setIsVerifying(true);
+    try {
+      const signInAttempt = await signIn.attemptFirstFactor({
+        strategy: "email_code",
+        code: code.trim()
+      });
+
+      if (signInAttempt.status === "complete") {
+        await setActive({ session: signInAttempt.createdSessionId });
+        onSuccess?.();
+
+        Alert.alert("Success", "You have been signed in successfully!", [
+          { text: "OK" }
+        ]);
+      } else {
+        console.error("Sign-in not complete:", signInAttempt);
+        Alert.alert(
+          "Verification Failed",
+          "The verification process is not complete. Please try again."
+        );
+      }
+    } catch (error: any) {
+      console.error("Code verification error:", error);
+      Alert.alert(
+        "Invalid Code",
+        error.errors?.[0]?.message ||
+          "The code you entered is invalid or has expired. Please check your email and try again."
+      );
+      setCode(""); // Clear the code field on error
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  const startCooldownTimer = () => {
+    const timer = setInterval(() => {
+      setCooldown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const resendCode = () => {
+    if (cooldown === 0) {
+      setCode(""); // Clear code field when resending
+      sendCode();
+    }
+  };
+
+  const resetFlow = () => {
+    setEmailSent(false);
+    setCode("");
+    setCooldown(0);
+  };
+
+  return (
+    <YStack space='$3'>
+      <H6>Passwordless Sign In</H6>
+
+      {!emailSent ? (
+        <YStack space='$3'>
+          <Input
+            size='$4'
+            placeholder='Enter your email'
+            keyboardType='email-address'
+            autoCapitalize='none'
+            autoCorrect={false}
+            value={email}
+            onChangeText={setEmail}
+            editable={!isLoading}
+            borderWidth={1}
+            borderColor='$borderColor'
+          />
+
+          <Button
+            theme={email.trim() && !isLoading ? "blue" : undefined}
+            size='$4'
+            onPress={sendCode}
+            disabled={!email.trim() || isLoading}
+            opacity={!email.trim() || isLoading ? 0.6 : 1}
+          >
+            <Text color='white' fontWeight='bold'>
+              {isLoading ? "Sending..." : "Send Code"}
+            </Text>
+          </Button>
+        </YStack>
+      ) : (
+        <YStack space='$3'>
+          <YStack
+            bg='$blue2'
+            p='$3'
+            borderLeftWidth={4}
+            borderLeftColor='$blue8'
+          >
+            <Text fontSize='$4' color='$blue11' fontWeight='600'>
+              Code sent to {email}
+            </Text>
+            <Text fontSize='$3' color='$blue10' mt='$1'>
+              Enter the 6-digit code from your email below.
+            </Text>
+          </YStack>
+          <Input
+            size='$4'
+            placeholder='Enter 6-digit code'
+            keyboardType='number-pad'
+            maxLength={6}
+            value={code}
+            onChangeText={setCode}
+            editable={!isVerifying}
+            borderWidth={1}
+            borderColor='$borderColor'
+            fontSize='$5'
+            fontWeight='bold'
+          />
+
+          <Button
+            theme={code.length === 6 && !isVerifying ? "blue" : undefined}
+            size='$4'
+            onPress={verifyCode}
+            disabled={code.length !== 6 || isVerifying}
+            opacity={code.length !== 6 || isVerifying ? 0.6 : 1}
+          >
+            <Text color='white' fontWeight='bold'>
+              {isVerifying ? "Verifying..." : "Verify Code"}
+            </Text>
+          </Button>
+
+          {/* @ts-ignore */}
+          <XStack space='$2' justifyContent='center'>
+            <Button
+              size='$3'
+              variant='outlined'
+              theme={cooldown > 0 ? undefined : "blue"}
+              onPress={resendCode}
+              disabled={cooldown > 0}
+              opacity={cooldown > 0 ? 0.6 : 1}
+            >
+              <Text fontWeight='500'>
+                {cooldown > 0 ? `Resend in ${cooldown}s` : "Resend Code"}
+              </Text>
+            </Button>
+
+            <Button size='$3' variant='outlined' onPress={resetFlow}>
+              <Text fontWeight='500'>Change Email</Text>
+            </Button>
+          </XStack>
+        </YStack>
+      )}
+    </YStack>
+  );
+}
