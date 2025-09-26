@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
   YStack,
   XStack,
@@ -6,17 +6,19 @@ import {
   H4,
   Text,
   Button,
-  TextArea,
   Card,
   Separator,
-  ScrollView
+  ScrollView,
+  Input
 } from "tamagui";
 import {
   validateMnemonic,
   normalizeMnemonic,
   isMnemonicComplete,
-  splitMnemonicToWords
+  splitMnemonicToWords,
+  wordsToMnemonic
 } from "@/lib/utils/mnemonic.utils";
+import type { TextInput } from "react-native";
 
 interface ImportMnemonicFormProps {
   onImport: (mnemonic: string) => void;
@@ -31,28 +33,195 @@ const ImportMnemonicForm: React.FC<ImportMnemonicFormProps> = ({
   isLoading = false,
   error
 }) => {
-  const [mnemonic, setMnemonic] = useState("");
+  const inputRef = useRef<TextInput | null>(null);
+  const [words, setWords] = useState<string[]>([]);
+  const [inputValue, setInputValue] = useState("");
   const [mnemonicError, setMnemonicError] = useState("");
-  const [wordCount, setWordCount] = useState(0);
+  const [wordLimitWarning, setWordLimitWarning] = useState(false);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
 
-  const handleMnemonicChange = (text: string) => {
-    setMnemonic(text);
-    setMnemonicError("");
+  const normalizedWords = useMemo(() => {
+    const trimmedInput = inputValue.trim();
+    const baseWords = [...words];
 
-    // Update word count
-    const words = splitMnemonicToWords(text);
-    setWordCount(words.filter((word) => word.length > 0).length);
-  };
+    if (editingIndex !== null) {
+      if (trimmedInput) {
+        baseWords[editingIndex] = trimmedInput.toLowerCase();
+      }
+      return baseWords;
+    }
+
+    const pendingWord = trimmedInput ? trimmedInput.toLowerCase() : null;
+    return pendingWord ? [...baseWords, pendingWord] : baseWords;
+  }, [words, inputValue, editingIndex]);
+
+  const normalizedMnemonic = useMemo(() => {
+    return normalizeMnemonic(wordsToMnemonic(normalizedWords));
+  }, [normalizedWords]);
+
+  const wordCount = normalizedWords.length;
+
+  const addWords = useCallback((candidateWords: string[]) => {
+    if (!candidateWords.length) {
+      return;
+    }
+
+    setEditingIndex(null);
+    setWords((prevWords) => {
+      const sanitized = candidateWords
+        .map((word) => word.trim().toLowerCase())
+        .filter((word) => word.length > 0);
+
+      if (!sanitized.length) {
+        return prevWords;
+      }
+
+      const availableSlots = Math.max(0, 24 - prevWords.length);
+      if (availableSlots === 0) {
+        setWordLimitWarning(true);
+        return prevWords;
+      }
+
+      const allowedWords = sanitized.slice(0, availableSlots);
+      if (allowedWords.length < sanitized.length) {
+        setWordLimitWarning(true);
+      }
+
+      setMnemonicError("");
+      return [...prevWords, ...allowedWords];
+    });
+  }, []);
+
+  const commitPendingWord = useCallback(() => {
+    const trimmed = inputValue.trim();
+    if (!trimmed) {
+      if (editingIndex !== null) {
+        setEditingIndex(null);
+      }
+      return;
+    }
+
+    if (editingIndex !== null) {
+      setWords((prev) => {
+        const next = [...prev];
+        next[editingIndex] = trimmed.toLowerCase();
+        return next;
+      });
+      setEditingIndex(null);
+      setInputValue("");
+      return;
+    }
+
+    if (words.length >= 24) {
+      setWordLimitWarning(true);
+      setInputValue("");
+      return;
+    }
+
+    addWords([trimmed]);
+    setInputValue("");
+  }, [addWords, editingIndex, inputValue, words.length]);
+
+  const handleWordInputChange = useCallback(
+    (text: string) => {
+      setWordLimitWarning(false);
+      setMnemonicError("");
+
+      if (editingIndex !== null) {
+        setInputValue(text.replace(/\s+/g, " "));
+        return;
+      }
+
+      if (!text.includes(" ")) {
+        setInputValue(text.replace(/\s+/g, " "));
+        return;
+      }
+
+      // Handle pasted phrases and spaces
+      const collapsed = text.replace(/\s+/g, " ");
+      const endsWithSpace = /\s$/.test(text);
+      const parts = collapsed.split(" ");
+
+      const candidateWords = endsWithSpace ? parts : parts.slice(0, -1);
+      addWords(candidateWords);
+
+      const remaining = endsWithSpace ? "" : parts[parts.length - 1] ?? "";
+      setInputValue(remaining);
+    },
+    [addWords, editingIndex]
+  );
+
+  const handleKeyPress = useCallback(
+    ({ nativeEvent }: { nativeEvent: { key: string } }) => {
+      if (nativeEvent.key === "Backspace" && inputValue === "") {
+        if (editingIndex !== null) {
+          setEditingIndex(null);
+          setInputValue("");
+          return;
+        }
+        setWordLimitWarning(false);
+        setMnemonicError("");
+        setWords((prev) => {
+          if (!prev.length) {
+            return prev;
+          }
+          const next = [...prev];
+          const lastWord = next.pop() ?? "";
+          setInputValue(lastWord);
+          return next;
+        });
+      }
+    },
+    [editingIndex, inputValue]
+  );
+
+  const handleChipRemove = useCallback(
+    (index: number) => {
+      setWordLimitWarning(false);
+      setMnemonicError("");
+      setWords((prev) => prev.filter((_, idx) => idx !== index));
+
+      if (editingIndex !== null) {
+        if (index === editingIndex) {
+          setEditingIndex(null);
+          setInputValue("");
+        } else if (index < editingIndex) {
+          setEditingIndex(editingIndex - 1);
+        }
+      }
+    },
+    [editingIndex]
+  );
+
+  const handleChipEdit = useCallback(
+    (index: number) => {
+      const wordToEdit = words[index];
+      if (!wordToEdit) {
+        return;
+      }
+
+      setWordLimitWarning(false);
+      setMnemonicError("");
+      setEditingIndex(index);
+      setInputValue(wordToEdit);
+      setTimeout(() => {
+        inputRef.current?.focus?.();
+      }, 0);
+    },
+    [words]
+  );
 
   const handleImport = () => {
-    const normalizedMnemonic = normalizeMnemonic(mnemonic);
+    setWordLimitWarning(false);
+    setMnemonicError("");
+    const finalWords = normalizedWords;
 
-    if (!normalizedMnemonic) {
+    if (!finalWords.length) {
       setMnemonicError("Please enter your recovery phrase");
       return;
     }
 
-    if (!isMnemonicComplete(normalizedMnemonic)) {
+    if (!isMnemonicComplete(wordsToMnemonic(finalWords))) {
       setMnemonicError("Recovery phrase must contain exactly 24 words");
       return;
     }
@@ -69,24 +238,15 @@ const ImportMnemonicForm: React.FC<ImportMnemonicFormProps> = ({
 
   const isValidWordCount = wordCount === 24;
   const hasValidMnemonic =
-    mnemonic.trim() && validateMnemonic(normalizeMnemonic(mnemonic));
+    isValidWordCount &&
+    normalizeMnemonic(normalizedMnemonic).trim().length > 0 &&
+    validateMnemonic(normalizedMnemonic);
+
+  const remainingSlots = Math.max(0, 24 - words.length);
 
   return (
     <ScrollView flex={1} showsVerticalScrollIndicator={false}>
       <YStack space='$4'>
-        <XStack
-          // @ts-ignore
-          justifyContent='flex-start'
-          alignItems='center'
-          mb='$2'
-        >
-          <Button size='$3' variant='outlined' onPress={onBack}>
-            <Text>← Back</Text>
-          </Button>
-        </XStack>
-
-        <H3>Import from Recovery Phrase</H3>
-
         <Card
           // @ts-ignore
           backgroundColor='$blue2'
@@ -103,14 +263,9 @@ const ImportMnemonicForm: React.FC<ImportMnemonicFormProps> = ({
         </Card>
 
         <YStack space='$3'>
-          <H4>Enter Your Recovery Phrase</H4>
-
-          <TextArea
-            size='$4'
-            placeholder='Enter your 24-word recovery phrase here, separated by spaces...'
-            value={mnemonic}
-            onChangeText={handleMnemonicChange}
-            numberOfLines={6}
+          <YStack
+            space='$3'
+            borderWidth={1}
             borderColor={
               mnemonicError || error
                 ? "$red8"
@@ -118,12 +273,97 @@ const ImportMnemonicForm: React.FC<ImportMnemonicFormProps> = ({
                 ? "$green8"
                 : "$borderColor"
             }
-            autoCapitalize='none'
-            autoCorrect={false}
-            autoComplete='off'
             // @ts-ignore
-            textAlign='left'
-          />
+            borderRadius='$4'
+            p='$3'
+          >
+            <XStack flexWrap='wrap' gap='$2'>
+              {words.map((word, index) => {
+                const isEditing = editingIndex === index;
+                return (
+                  <XStack
+                    key={`${word}-${index}`}
+                    // @ts-ignore
+                    alignItems='center'
+                    backgroundColor={isEditing ? "$blue3" : "$gray3"}
+                    borderRadius='$4'
+                    py='$1'
+                    px='$2'
+                    gap='$2'
+                    borderWidth={isEditing ? 1 : 0}
+                    borderColor={isEditing ? "$blue8" : "transparent"}
+                  >
+                    {/* @ts-ignore */}
+                    <XStack gap='$1' alignItems='center'>
+                      <Text fontSize='$2' color='$color10'>
+                        {index + 1}.
+                      </Text>
+                      <Text fontSize='$3' fontWeight='500'>
+                        {word}
+                      </Text>
+                    </XStack>
+                    <XStack gap='$1'>
+                      <Button
+                        size='$2'
+                        variant='outlined'
+                        onPress={() => handleChipEdit(index)}
+                        disabled={isLoading}
+                      >
+                        <Text fontSize='$2'>Edit</Text>
+                      </Button>
+                      <Button
+                        size='$2'
+                        variant='outlined'
+                        onPress={() => handleChipRemove(index)}
+                        disabled={isLoading}
+                      >
+                        <Text fontSize='$2'>×</Text>
+                      </Button>
+                    </XStack>
+                  </XStack>
+                );
+              })}
+            </XStack>
+
+            {(editingIndex !== null || words.length < 24) && (
+              <Input
+                ref={inputRef}
+                size='$4'
+                placeholder={
+                  editingIndex !== null
+                    ? `Edit word #${editingIndex + 1}`
+                    : words.length === 0
+                    ? "Type or paste your recovery words..."
+                    : `Word #${words.length + 1}`
+                }
+                value={inputValue}
+                onChangeText={handleWordInputChange}
+                onSubmitEditing={commitPendingWord}
+                onBlur={commitPendingWord}
+                onKeyPress={handleKeyPress}
+                autoCapitalize='none'
+                autoCorrect={false}
+                autoComplete='off'
+                width='100%'
+                // @ts-ignore
+                alignSelf='stretch'
+                backgroundColor='$background'
+                borderColor='$borderColor'
+                borderWidth={1}
+                borderRadius='$4'
+                px='$3'
+                py='$3'
+                mt='$3'
+              />
+            )}
+
+            {wordLimitWarning && (
+              <Text color='$yellow10' fontSize='$3'>
+                Recovery phrase accepts exactly 24 words. Remove a word before
+                adding more.
+              </Text>
+            )}
+          </YStack>
 
           <XStack
             // @ts-ignore
@@ -152,18 +392,12 @@ const ImportMnemonicForm: React.FC<ImportMnemonicFormProps> = ({
             </Text>
           )}
 
-          <Card
-            // @ts-ignore
-            backgroundColor='$gray2'
-            p='$3'
-          >
-            <Text fontSize='$3' color='$color11' lineHeight='$1'>
-              <Text fontWeight='600'>Tips:</Text>
-              {"\n"}• Words should be separated by spaces{"\n"}• Must be exactly
-              24 words{"\n"}• Check spelling carefully{"\n"}• Case doesn't
-              matter
+          {remainingSlots > 0 && !mnemonicError && !wordLimitWarning && (
+            <Text fontSize='$3' color='$color10'>
+              {remainingSlots} more {remainingSlots === 1 ? "word" : "words"}{" "}
+              needed to complete your phrase.
             </Text>
-          </Card>
+          )}
         </YStack>
 
         <Separator my='$2' />
@@ -180,33 +414,7 @@ const ImportMnemonicForm: React.FC<ImportMnemonicFormProps> = ({
               {isLoading ? "Importing Wallet..." : "Import Wallet"}
             </Text>
           </Button>
-
-          <Text
-            // @ts-ignore
-            textAlign='center'
-            fontSize='$2'
-            color='$color10'
-          >
-            Your wallet will be restored with all your assets and transaction
-            history
-          </Text>
         </YStack>
-
-        <Card
-          // @ts-ignore
-          backgroundColor='$yellow2'
-          borderColor='$yellow8'
-          p='$4'
-          mt='$4'
-        >
-          <Text fontSize='$3' color='$yellow11' fontWeight='600' mb='$2'>
-            ⚠️ Security Reminder
-          </Text>
-          <Text color='$yellow11' fontSize='$3' lineHeight='$1'>
-            Never share your recovery phrase with anyone. Anyone with access to
-            your recovery phrase can control your wallet and funds.
-          </Text>
-        </Card>
       </YStack>
     </ScrollView>
   );

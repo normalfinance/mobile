@@ -167,7 +167,7 @@ export const checkWalletExists = async (
     // };
 
     //override backendResult with a mock wallet as if it was returned from the backend - this time wallet does not exist
-    backendResult.exists = false;
+    backendResult.exists = false; 
 
     if (backendResult.exists && backendResult.walletData) {
       // Wallet exists in backend, derive it locally
