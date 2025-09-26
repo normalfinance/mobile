@@ -15,14 +15,14 @@ import {
   Separator,
   Spinner
 } from "tamagui";
-import { 
-  useCreateWallet, 
-  useImportWallet, 
+import {
+  useCreateWallet,
+  useImportWallet,
   useCreateDeterministicWallet,
   useCheckWalletExists,
   useAuthCredentials,
   useCreateWalletWithMnemonic,
-  useImportFromMnemonic,
+  useImportFromMnemonic
 } from "@/services";
 import BackupPhraseModal from "@/components/wallet/BackupPhraseModal";
 import VerificationModal from "@/components/wallet/VerificationModal";
@@ -43,13 +43,14 @@ export default function WalletSetupScreen() {
   const { userId } = useAuth();
   const router = useRouter();
   const [showImportForm, setShowImportForm] = useState(false);
-  const [importType, setImportType] = useState<"private-key" | "mnemonic">("private-key");
+  const [importType, setImportType] = useState<"private-key" | "mnemonic">(
+    "private-key"
+  );
   const [privateKey, setPrivateKey] = useState("");
   const [privateKeyError, setPrivateKeyError] = useState("");
   const [showBackupModal, setShowBackupModal] = useState(false);
   const [showVerificationModal, setShowVerificationModal] = useState(false);
   const [currentMnemonic, setCurrentMnemonic] = useState("");
-  const [walletJustCreated, setWalletJustCreated] = useState(false);
 
   const createWallet = useCreateWallet();
   const importWallet = useImportWallet();
@@ -57,26 +58,16 @@ export default function WalletSetupScreen() {
   const createWalletWithMnemonic = useCreateWalletWithMnemonic();
   const importFromMnemonic = useImportFromMnemonic();
   const { data: credentials } = useAuthCredentials();
-  const { data: walletCheck, isLoading: checkingWallet } = useCheckWalletExists(credentials);
+  const { data: walletCheck, isLoading: checkingWallet } =
+    useCheckWalletExists(credentials);
 
-  const isLoading = createWallet.isPending || importWallet.isPending || createDeterministicWallet.isPending || createWalletWithMnemonic.isPending || importFromMnemonic.isPending || checkingWallet;
-
-  // Auto-recover wallet if it exists in backend (but not if we just created one)
-  useEffect(() => {
-    if (walletCheck?.exists && walletCheck.wallet && !walletJustCreated) {
-      console.log("Wallet found in backend, auto-recovering:", walletCheck.wallet.publicKey);
-      Alert.alert(
-        "Wallet Recovered!",
-        `Your wallet has been automatically recovered from your account.\n\nPublic Address: ${walletCheck.wallet.publicKey}`,
-        [
-          {
-            text: "Continue",
-            onPress: () => router.replace("/(tabs)")
-          }
-        ]
-      );
-    }
-  }, [walletCheck, router, walletJustCreated]);
+  const isLoading =
+    createWallet.isPending ||
+    importWallet.isPending ||
+    createDeterministicWallet.isPending ||
+    createWalletWithMnemonic.isPending ||
+    importFromMnemonic.isPending ||
+    checkingWallet;
 
   const handleCreateNewWallet = async () => {
     if (!userId) {
@@ -86,7 +77,10 @@ export default function WalletSetupScreen() {
 
     // Check if wallet already exists
     if (walletCheck?.exists) {
-      Alert.alert("Wallet Exists", "You already have a wallet associated with this account.");
+      Alert.alert(
+        "Wallet Exists",
+        "You already have a wallet associated with this account."
+      );
       return;
     }
 
@@ -97,8 +91,7 @@ export default function WalletSetupScreen() {
 
       console.log("Wallet created successfully:", result.publicKey);
       setCurrentMnemonic(result.mnemonic);
-      setWalletJustCreated(true); // Mark that we just created a wallet
-      
+
       Alert.alert(
         "Wallet Created! 🎉",
         `Your Stellar wallet has been created successfully.\n\nPublic Address: ${result.publicKey}`,
@@ -116,11 +109,10 @@ export default function WalletSetupScreen() {
                 "Without backing up your wallet, you won't be able to recover it if you lose access. Are you sure?",
                 [
                   { text: "Cancel", style: "cancel" },
-                  { 
-                    text: "Skip", 
-                    style: "destructive", 
+                  {
+                    text: "Skip",
+                    style: "destructive",
                     onPress: () => {
-                      setWalletJustCreated(false);
                       router.replace("/(tabs)");
                     }
                   }
@@ -192,7 +184,10 @@ export default function WalletSetupScreen() {
     try {
       const result = await importFromMnemonic.mutateAsync({ mnemonic });
 
-      console.log("Wallet imported from mnemonic successfully:", result.publicKey);
+      console.log(
+        "Wallet imported from mnemonic successfully:",
+        result.publicKey
+      );
       Alert.alert(
         "Wallet Imported! 🎉",
         `Your Stellar wallet has been imported successfully.\n\nPublic Address: ${result.publicKey}`,
@@ -217,14 +212,12 @@ export default function WalletSetupScreen() {
   const handleVerificationComplete = () => {
     setShowVerificationModal(false);
     setCurrentMnemonic(""); // Clear mnemonic from memory
-    setWalletJustCreated(false); // Reset the flag
     router.replace("/(tabs)");
   };
 
   const handleCloseBackup = () => {
     setShowBackupModal(false);
     setCurrentMnemonic(""); // Clear mnemonic from memory
-    setWalletJustCreated(false); // Reset the flag when backup is skipped
   };
 
   const handleCloseVerification = () => {
@@ -345,7 +338,9 @@ export default function WalletSetupScreen() {
           <XStack space='$2' mb='$4'>
             <Button
               size='$3'
-              variant={importType === "private-key" ? "solid" : "outlined" as any}
+              variant={
+                importType === "private-key" ? "solid" : ("outlined" as any)
+              }
               theme={importType === "private-key" ? "blue" : undefined}
               onPress={() => setImportType("private-key")}
               flex={1}
@@ -354,7 +349,9 @@ export default function WalletSetupScreen() {
             </Button>
             <Button
               size='$3'
-              variant={importType === "mnemonic" ? "solid" : "outlined" as any}
+              variant={
+                importType === "mnemonic" ? "solid" : ("outlined" as any)
+              }
               theme={importType === "mnemonic" ? "blue" : undefined}
               onPress={() => setImportType("mnemonic")}
               flex={1}
@@ -412,14 +409,12 @@ export default function WalletSetupScreen() {
           )}
         </YStack>
       )}
-      
       <BackupPhraseModal
         visible={showBackupModal}
         mnemonic={currentMnemonic}
         onClose={handleCloseBackup}
         onBackupConfirmed={handleBackupConfirmed}
       />
-      
       <VerificationModal
         visible={showVerificationModal}
         mnemonic={currentMnemonic}

@@ -1,5 +1,5 @@
 import { Redirect } from "expo-router";
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useAuth } from "@clerk/clerk-expo";
 import { Tabs, YStack, H6, Text, View, Spinner } from "tamagui";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -17,9 +17,28 @@ import {
 export default function TabLayout() {
   const { isSignedIn, userId } = useAuth();
   const [activeTab, setActiveTab] = useState("home");
-  const { data: credentials } = useAuthCredentials();
-  const { data: hasWallet, isLoading: isCheckingWallet } =
-    useHasWalletWithBackendCheck(credentials);
+  const { data: credentials, isLoading: isLoadingCredentials } =
+    useAuthCredentials();
+  const { data: hasLocalWallet, isLoading: isCheckingLocalWallet } =
+    useHasWallet();
+  const shouldCheckBackend = !!credentials && hasLocalWallet === false;
+  const { data: hasBackendWallet, isLoading: isCheckingBackendWallet } =
+    useHasWalletWithBackendCheck(credentials, shouldCheckBackend);
+
+  const isCheckingWallet =
+    isLoadingCredentials ||
+    isCheckingLocalWallet ||
+    (shouldCheckBackend && isCheckingBackendWallet);
+
+  const resolvedHasWallet =
+    hasLocalWallet === true
+      ? true
+      : hasBackendWallet === true
+      ? true
+      : hasLocalWallet === false &&
+        (!shouldCheckBackend || hasBackendWallet === false)
+      ? false
+      : undefined;
 
   if (!isSignedIn) {
     return <Redirect href='/sign-in' />;
@@ -44,13 +63,13 @@ export default function TabLayout() {
     );
   }
 
-  if (hasWallet === false) {
+  if (resolvedHasWallet === false) {
     console.log("No wallet found, redirecting to wallet setup");
     return <Redirect href='/wallet-setup' />;
   }
 
   if (userId) {
-    console.log("userId", userId, "hasWallet", hasWallet);
+    console.log("userId", userId, "hasWallet", resolvedHasWallet);
   }
 
   const renderTabContent = () => {
