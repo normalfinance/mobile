@@ -8,7 +8,11 @@ import HomeScreen from "./index";
 import InvestScreen from "./invest";
 import AssetsScreen from "./assets";
 import SettingsScreen from "./settings";
-import { useHasWallet, useHasWalletWithBackendCheck, useAuthCredentials } from "@/services";
+import {
+  useHasWallet,
+  useHasWalletWithBackendCheck,
+  useAuthCredentials
+} from "@/services";
 
 export default function TabLayout() {
   const { isSignedIn, userId } = useAuth();
@@ -26,6 +30,7 @@ export default function TabLayout() {
       // @ts-ignore
       <YStack
         flex={1}
+        // @ts-ignore
         justifyContent='center'
         alignItems='center'
         backgroundColor='$background'

@@ -22,7 +22,9 @@ export {
   useCreateDeterministicWallet,
   useHasWalletWithBackendCheck,
   useWalletStatus,
-  useWalletActions
+  useWalletActions,
+  useCreateWalletWithMnemonic,
+  useImportFromMnemonic
 } from "./wallet.service";
 
 // Transaction Service - Core functions and hooks
@@ -68,5 +70,10 @@ export {
 // Type exports
 export type { WalletInfo } from "./wallet.service";
 export type { SignedTransaction } from "./transaction.service";
-export type { TransactionRequest, TransactionResponse, CheckWalletRequest, CheckWalletResponse } from "./api.service";
+export type {
+  TransactionRequest,
+  TransactionResponse,
+  CheckWalletRequest,
+  CheckWalletResponse
+} from "./api.service";
 export type { AuthCredentials, AuthStatus } from "./auth.service";

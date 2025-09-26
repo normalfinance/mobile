@@ -57,3 +57,31 @@ if (typeof global.crypto === 'undefined') {
     }
   };
 }
+
+// Ensure crypto.getRandomValues is available on the global object for BIP39
+if (typeof global.crypto?.getRandomValues === 'undefined') {
+  if (typeof global.crypto === 'undefined') {
+    global.crypto = {};
+  }
+  global.crypto.getRandomValues = getRandomValues;
+}
+
+// Also ensure it's available on the crypto module
+if (typeof require !== 'undefined') {
+  try {
+    const crypto = require('crypto-browserify');
+    if (typeof crypto.getRandomValues === 'undefined') {
+      crypto.getRandomValues = getRandomValues;
+    }
+  } catch (e) {
+    // crypto-browserify not available, create a minimal crypto module
+    const mockCrypto = {
+      getRandomValues: getRandomValues,
+      randomBytes: (size) => {
+        const bytes = getRandomValues(new Uint8Array(size));
+        return Buffer.from(bytes);
+      }
+    };
+    require.cache['crypto'] = { exports: mockCrypto };
+  }
+}

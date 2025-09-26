@@ -11,12 +11,19 @@ export const SignOutButton = () => {
 
   const handleSignOut = async () => {
     try {
-      // Clear wallet data from secure storage
+      // Clear wallet data from secure storage BEFORE signing out
+      console.log("Clearing wallet data from secure storage...");
       await deleteWallet.mutateAsync();
+      console.log("Wallet data cleared successfully");
+      
+      // Then sign out from Clerk
+      console.log("Signing out from Clerk...");
       await signOut();
+      console.log("Signed out successfully");
+      
       router.replace("/(tabs)");
     } catch (err) {
-      console.error(JSON.stringify(err, null, 2));
+      console.error("Error during sign out:", JSON.stringify(err, null, 2));
     }
   };
 

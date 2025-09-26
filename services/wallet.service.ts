@@ -6,10 +6,15 @@ import {
   createKeypairFromSeed,
   createKeypairFromSecret,
   deriveWalletFromUserData,
-  generateSalt
+  generateSalt,
+  createWalletFromMnemonic,
+  generateWalletWithMnemonic
 } from "../lib/utils/crypto.utils";
+import {
+  validateMnemonic,
+  normalizeMnemonic
+} from "../lib/utils/mnemonic.utils";
 import { STALE_TIMES } from "../lib/utils/query.utils";
-import { checkWallet } from "./api.service";
 import {
   getAuthCredentials,
   requireAuth,
@@ -61,6 +66,56 @@ export const importFromPrivateKey = async (
   }
 };
 
+export const createWalletWithMnemonic = async (): Promise<
+  WalletInfo & { mnemonic: string }
+> => {
+  try {
+    const walletData = generateWalletWithMnemonic();
+
+    const walletInfo: WalletInfo = {
+      publicKey: walletData.publicKey,
+      address: walletData.address
+    };
+
+    // Store the wallet securely
+    await walletStorage.setWallet(walletInfo, walletData.keypair.secret());
+
+    return {
+      ...walletInfo,
+      mnemonic: walletData.mnemonic
+    };
+  } catch (error) {
+    throw new Error(`Failed to create wallet with mnemonic: ${error}`);
+  }
+};
+
+export const importFromMnemonic = async (
+  mnemonic: string,
+  passphrase: string = ""
+): Promise<WalletInfo> => {
+  try {
+    const normalizedMnemonic = normalizeMnemonic(mnemonic);
+
+    if (!validateMnemonic(normalizedMnemonic)) {
+      throw new Error("Invalid mnemonic phrase");
+    }
+
+    const walletData = createWalletFromMnemonic(normalizedMnemonic, passphrase);
+
+    const walletInfo: WalletInfo = {
+      publicKey: walletData.publicKey,
+      address: walletData.address
+    };
+
+    // Store the imported wallet
+    await walletStorage.setWallet(walletInfo, walletData.keypair.secret());
+
+    return walletInfo;
+  } catch (error) {
+    throw new Error(`Failed to import wallet from mnemonic: ${error}`);
+  }
+};
+
 export const getWallet = async (): Promise<WalletInfo | null> => {
   return await walletStorage.getWallet();
 };
@@ -104,12 +159,15 @@ export const checkWalletExists = async (
     // backendResult = await checkWallet(userId);
 
     //override backendResult with a mock wallet as if it was returned from the backend
-    backendResult.exists = true;
-    backendResult.walletData = {
-      publicKey: "GA6PTKEEVZ4GFH2OVAUOFNK57VJHJ2O7IGZFXQHFNV4FI24PWEZHUP6U",
-      address: "GA6PTKEEVZ4GFH2OVAUOFNK57VJHJ2O7IGZFXQHFNV4FI24PWEZHUP6U",
-      salt: "a4f7c91e2b56d83f"
-    };
+    // backendResult.exists = true;
+    // backendResult.walletData = {
+    //   publicKey: "GA6PTKEEVZ4GFH2OVAUOFNK57VJHJ2O7IGZFXQHFNV4FI24PWEZHUP6U",
+    //   address: "GA6PTKEEVZ4GFH2OVAUOFNK57VJHJ2O7IGZFXQHFNV4FI24PWEZHUP6U",
+    //   salt: "a4f7c91e2b56d83f"
+    // };
+
+    //override backendResult with a mock wallet as if it was returned from the backend - this time wallet does not exist
+    backendResult.exists = false;
 
     if (backendResult.exists && backendResult.walletData) {
       // Wallet exists in backend, derive it locally
@@ -272,6 +330,47 @@ export const useImportWallet = () => {
   });
 };
 
+export const useCreateWalletWithMnemonic = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: createWalletWithMnemonic,
+    onSuccess: (walletInfo) => {
+      // Update all wallet-related queries
+      const { mnemonic, ...wallet } = walletInfo;
+      queryClient.setQueryData(walletQueryKeys.info(), wallet);
+      queryClient.setQueryData(walletQueryKeys.hasWallet(), true);
+      queryClient.invalidateQueries({ queryKey: walletQueryKeys.all });
+    },
+    onError: (error) => {
+      console.error("Wallet creation with mnemonic failed:", error);
+    }
+  });
+};
+
+export const useImportFromMnemonic = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      mnemonic,
+      passphrase
+    }: {
+      mnemonic: string;
+      passphrase?: string;
+    }) => importFromMnemonic(mnemonic, passphrase),
+    onSuccess: (walletInfo) => {
+      // Update all wallet-related queries
+      queryClient.setQueryData(walletQueryKeys.info(), walletInfo);
+      queryClient.setQueryData(walletQueryKeys.hasWallet(), true);
+      queryClient.invalidateQueries({ queryKey: walletQueryKeys.all });
+    },
+    onError: (error) => {
+      console.error("Wallet import from mnemonic failed:", error);
+    }
+  });
+};
+
 export const useWallet = () => {
   return useQuery({
     queryKey: walletQueryKeys.info(),
@@ -414,6 +513,8 @@ export const useWalletActions = () => {
   const importMutation = useImportWallet();
   const deleteMutation = useDeleteWallet();
   const createDeterministicMutation = useCreateDeterministicWallet();
+  const createWithMnemonicMutation = useCreateWalletWithMnemonic();
+  const importFromMnemonicMutation = useImportFromMnemonic();
 
   return {
     createWallet: createMutation.mutate,
@@ -424,14 +525,22 @@ export const useWalletActions = () => {
     deleteWalletAsync: deleteMutation.mutateAsync,
     createDeterministicWallet: createDeterministicMutation.mutate,
     createDeterministicWalletAsync: createDeterministicMutation.mutateAsync,
+    createWalletWithMnemonic: createWithMnemonicMutation.mutate,
+    createWalletWithMnemonicAsync: createWithMnemonicMutation.mutateAsync,
+    importFromMnemonic: importFromMnemonicMutation.mutate,
+    importFromMnemonicAsync: importFromMnemonicMutation.mutateAsync,
     isCreating: createMutation.isPending,
     isImporting: importMutation.isPending,
     isDeleting: deleteMutation.isPending,
     isCreatingDeterministic: createDeterministicMutation.isPending,
+    isCreatingWithMnemonic: createWithMnemonicMutation.isPending,
+    isImportingFromMnemonic: importFromMnemonicMutation.isPending,
     error:
       createMutation.error ||
       importMutation.error ||
       deleteMutation.error ||
-      createDeterministicMutation.error
+      createDeterministicMutation.error ||
+      createWithMnemonicMutation.error ||
+      importFromMnemonicMutation.error
   };
 };

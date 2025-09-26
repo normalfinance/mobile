@@ -1,7 +1,10 @@
 import * as Crypto from "expo-crypto";
 import { Keypair } from "@stellar/stellar-sdk";
+// @ts-ignore
 import { pbkdf2 as pbkdf2Noble } from "@noble/hashes/pbkdf2";
+// @ts-ignore
 import { sha256 } from "@noble/hashes/sha2";
+import { createKeypairFromMnemonic, generateMnemonic } from "./mnemonic.utils";
 
 export const generateSecureRandomBytes = async (
   size: number = 32
@@ -123,5 +126,42 @@ export const deriveWalletFromUserData = async (
   } catch (error) {
     console.error("Error in deriveWalletFromUserData", error);
     throw new Error(`Wallet derivation failed: ${error}`);
+  }
+};
+
+export const createWalletFromMnemonic = (
+  mnemonic: string,
+  passphrase: string = ""
+): {
+  keypair: Keypair;
+  publicKey: string;
+  address: string;
+  mnemonic: string;
+} => {
+  try {
+    const keypair = createKeypairFromMnemonic(mnemonic, passphrase);
+
+    return {
+      keypair,
+      publicKey: keypair.publicKey(),
+      address: keypair.publicKey(),
+      mnemonic
+    };
+  } catch (error) {
+    throw new Error(`Failed to create wallet from mnemonic: ${error}`);
+  }
+};
+
+export const generateWalletWithMnemonic = (): {
+  keypair: Keypair;
+  publicKey: string;
+  address: string;
+  mnemonic: string;
+} => {
+  try {
+    const mnemonic = generateMnemonic();
+    return createWalletFromMnemonic(mnemonic);
+  } catch (error) {
+    throw new Error(`Failed to generate wallet with mnemonic: ${error}`);
   }
 };

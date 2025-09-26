@@ -60,8 +60,14 @@ export const walletStorage = {
   },
 
   async deleteWallet(): Promise<void> {
+    console.log("Deleting wallet from secure storage...");
     await secureStorage.deleteItem(STORAGE_KEYS.WALLET);
+    console.log("Deleted wallet info");
     await secureStorage.deleteItem(STORAGE_KEYS.PRIVATE_KEY);
+    console.log("Deleted private key");
+    await secureStorage.deleteItem(STORAGE_KEYS.USER_ID);
+    console.log("Deleted user ID");
+    console.log("All wallet data deleted successfully");
   },
 
   async setUserId(userId: string): Promise<void> {
