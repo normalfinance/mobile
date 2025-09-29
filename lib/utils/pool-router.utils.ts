@@ -1,8 +1,8 @@
-import { 
-  TransactionBuilder, 
-  Contract, 
-  SorobanRpc, 
-  scValToNative, 
+import {
+  TransactionBuilder,
+  Contract,
+  rpc as SorobanRpc,
+  scValToNative,
   xdr,
   Account,
   Keypair
@@ -40,39 +40,37 @@ export async function estimateSwap(
   });
 
   const txBuilder = new TransactionBuilder(networkConfig.testingSource, {
-    fee: '1000000', // Higher fee for contract simulation
+    fee: "1000000", // Higher fee for contract simulation
     timebounds: { minTime: 0, maxTime: 0 },
-    networkPassphrase: networkConfig.networkPassphrase,
+    networkPassphrase: networkConfig.networkPassphrase
   });
 
   // Convert arguments to ScVal format
-  const assetInParam = args.asset_in === 'native' 
-    ? xdr.ScVal.scvInstanceType(xdr.ScInstanceType.scInstanceTypeContract())
-    : xdr.ScVal.scvAddress(xdr.ScAddress.scAddressTypeContract(
-        xdr.Hash.fromXDR(Buffer.from(args.asset_in, 'hex'))
-      ));
-      
-  const assetOutParam = args.asset_out === 'native'
-    ? xdr.ScVal.scvInstanceType(xdr.ScInstanceType.scInstanceTypeContract())
-    : xdr.ScVal.scvAddress(xdr.ScAddress.scAddressTypeContract(
-        xdr.Hash.fromXDR(Buffer.from(args.asset_out, 'hex'))
-      ));
-  const amountInParam = xdr.ScVal.scvI128(
-    xdr.Int128Parts.fromXDR(args.amount_in.toString(16).padStart(32, '0'), 'hex')
+  const assetInParam =
+    args.asset_in === "native"
+      ? xdr.ScVal.scvSymbol("native")
+      : xdr.ScVal.scvString(args.asset_in);
+
+  const assetOutParam =
+    args.asset_out === "native"
+      ? xdr.ScVal.scvSymbol("native")
+      : xdr.ScVal.scvString(args.asset_out);
+  const amountInParam = xdr.ScVal.scvU64(
+    new xdr.Uint64(args.amount_in.toString())
   );
 
   // Add contract operation
   txBuilder.addOperation(
     new Contract(poolRouterAddress).call(
-      'estimate_swap',
+      "estimate_swap",
       assetInParam,
-      assetOutParam, 
+      assetOutParam,
       amountInParam
     )
   );
 
   const stellarRpc = new SorobanRpc.Server(networkConfig.rpcUrl);
-  
+
   try {
     const result = await stellarRpc.simulateTransaction(txBuilder.build());
 
@@ -80,22 +78,25 @@ export async function estimateSwap(
       const resultXdr = result.result?.retval;
       if (resultXdr) {
         const nativeResult = scValToNative(resultXdr);
-        
+
         console.log("✅ Pool Router estimate result:", nativeResult);
-        
+
         // Parse the result based on your contract's return structure
         return {
           amount_out: BigInt(nativeResult.amount_out || nativeResult[0] || 0),
-          spread_amount: BigInt(nativeResult.spread_amount || nativeResult[1] || 0),
-          commission_amount: BigInt(nativeResult.commission_amount || nativeResult[2] || 0),
-          total_fee: BigInt(nativeResult.total_fee || nativeResult[3] || 0),
+          spread_amount: BigInt(
+            nativeResult.spread_amount || nativeResult[1] || 0
+          ),
+          commission_amount: BigInt(
+            nativeResult.commission_amount || nativeResult[2] || 0
+          ),
+          total_fee: BigInt(nativeResult.total_fee || nativeResult[3] || 0)
         };
       }
     }
-    
-    console.error("❌ Pool Router simulation failed:", result.error);
-    throw new Error(`Pool Router estimate failed: ${JSON.stringify(result.error)}`);
-    
+
+    console.error("❌ Pool Router simulation failed:", result);
+    throw new Error(`Pool Router estimate failed: ${JSON.stringify(result)}`);
   } catch (error) {
     console.error("❌ Pool Router estimate error:", error);
     throw error;
@@ -118,41 +119,41 @@ export async function buildSwapTransaction(
   }
 ): Promise<TransactionBuilder> {
   console.log(`🔨 Building Pool Router swap transaction...`);
-  
+
   const txBuilder = new TransactionBuilder(sourceAccount, {
-    fee: '10000000', // 1 XLM fee for complex swap transaction
-    networkPassphrase: networkConfig.networkPassphrase,
+    fee: "10000000", // 1 XLM fee for complex swap transaction
+    networkPassphrase: networkConfig.networkPassphrase
   });
 
   // Convert arguments to ScVal format
-  const userParam = xdr.ScVal.scvAddress(xdr.ScAddress.scAddressTypeAccount(
-    Keypair.fromPublicKey(swapArgs.user).xdrAccountId()
-  ));
-  
-  const assetInParam = swapArgs.asset_in === 'native' 
-    ? xdr.ScVal.scvInstanceType(xdr.ScInstanceType.scInstanceTypeContract())
-    : xdr.ScVal.scvAddress(xdr.ScAddress.scAddressTypeContract(
-        xdr.Hash.fromXDR(Buffer.from(swapArgs.asset_in, 'hex'))
-      ));
-      
-  const assetOutParam = swapArgs.asset_out === 'native'
-    ? xdr.ScVal.scvInstanceType(xdr.ScInstanceType.scInstanceTypeContract())
-    : xdr.ScVal.scvAddress(xdr.ScAddress.scAddressTypeContract(
-        xdr.Hash.fromXDR(Buffer.from(swapArgs.asset_out, 'hex'))
-      ));
-
-  const amountInParam = xdr.ScVal.scvI128(
-    xdr.Int128Parts.fromXDR(swapArgs.amount_in.toString(16).padStart(32, '0'), 'hex')
+  const userParam = xdr.ScVal.scvAddress(
+    xdr.ScAddress.scAddressTypeAccount(
+      Keypair.fromPublicKey(swapArgs.user).xdrAccountId()
+    )
   );
-  
-  const amountOutMinParam = xdr.ScVal.scvI128(
-    xdr.Int128Parts.fromXDR(swapArgs.amount_out_min.toString(16).padStart(32, '0'), 'hex')
+
+  const assetInParam =
+    swapArgs.asset_in === "native"
+      ? xdr.ScVal.scvSymbol("native")
+      : xdr.ScVal.scvString(swapArgs.asset_in);
+
+  const assetOutParam =
+    swapArgs.asset_out === "native"
+      ? xdr.ScVal.scvSymbol("native")
+      : xdr.ScVal.scvString(swapArgs.asset_out);
+
+  const amountInParam = xdr.ScVal.scvU64(
+    new xdr.Uint64(swapArgs.amount_in.toString())
+  );
+
+  const amountOutMinParam = xdr.ScVal.scvU64(
+    new xdr.Uint64(swapArgs.amount_out_min.toString())
   );
 
   // Add swap operation
   txBuilder.addOperation(
     new Contract(poolRouterAddress).call(
-      'swap',
+      "swap",
       userParam,
       assetInParam,
       assetOutParam,
@@ -166,8 +167,8 @@ export async function buildSwapTransaction(
 
 // Asset address helpers
 export function getAssetAddress(symbol: string, issuer?: string): string {
-  if (symbol === 'XLM') return 'native';
-  return issuer || '';
+  if (symbol === "XLM") return "native";
+  return issuer || "";
 }
 
 // Convert display amount to contract amount (with decimals)
@@ -181,6 +182,6 @@ export function fromContractAmount(amount: bigint, decimals: number): string {
   const divisor = BigInt(Math.pow(10, decimals));
   const quotient = Number(amount / divisor);
   const remainder = Number(amount % divisor);
-  
+
   return (quotient + remainder / Math.pow(10, decimals)).toString();
 }

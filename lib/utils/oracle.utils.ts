@@ -1,7 +1,7 @@
 import { 
   TransactionBuilder, 
   Contract, 
-  SorobanRpc, 
+  rpc as SorobanRpc, 
   scValToNative, 
   xdr 
 } from "@stellar/stellar-sdk";
