@@ -1,3 +1,6 @@
+// Ensure crypto polyfills are loaded before Stellar SDK
+import '../shim';
+
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   SwapParams,
@@ -19,6 +22,7 @@ import {
   Account,
   Keypair
 } from "@stellar/stellar-sdk";
+import * as Crypto from "expo-crypto";
 import { getOraclePrice, formatTokenAmount } from "../lib/utils/oracle.utils";
 import {
   estimateSwap,
@@ -27,6 +31,13 @@ import {
   toContractAmount,
   fromContractAmount
 } from "../lib/utils/pool-router.utils";
+
+// Create a testing keypair using expo-crypto (same pattern as mnemonic.utils.ts)
+const createTestingKeypair = (): Keypair => {
+  // Generate 32 bytes of entropy using expo-crypto to ensure compatibility
+  const entropy = Crypto.getRandomValues(new Uint8Array(32));
+  return Keypair.fromRawEd25519Seed(Buffer.from(entropy));
+};
 
 // Get real swap quotes using Pool Router (same as web app)
 const calculateSwapQuote = async (
@@ -53,8 +64,10 @@ const calculateSwapQuote = async (
   }
 
   try {
-    // Create a testing source account for contract calls
-    const testingKeypair = Keypair.random();
+    // Create a testing source account for contract calls using expo-crypto directly
+    console.log("🔑 Creating testing keypair using expo-crypto...");
+    const testingKeypair = createTestingKeypair();
+    console.log("✅ Keypair created successfully:", testingKeypair.publicKey());
     const testingSource = new Account(testingKeypair.publicKey(), "0");
 
     const networkConfig = {
