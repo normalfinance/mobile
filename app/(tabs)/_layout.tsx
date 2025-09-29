@@ -1,5 +1,5 @@
 import { Redirect } from "expo-router";
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useAuth } from "@clerk/clerk-expo";
 import { Tabs, YStack, H6, Text, View, Spinner } from "tamagui";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -8,12 +8,37 @@ import HomeScreen from "./index";
 import InvestScreen from "./invest";
 import AssetsScreen from "./assets";
 import SettingsScreen from "./settings";
-import { useHasWallet } from "@/services";
+import {
+  useHasWallet,
+  useHasWalletWithBackendCheck,
+  useAuthCredentials
+} from "@/services";
 
 export default function TabLayout() {
   const { isSignedIn, userId } = useAuth();
   const [activeTab, setActiveTab] = useState("home");
-  const { data: hasWallet, isLoading: isCheckingWallet } = useHasWallet();
+  const { data: credentials, isLoading: isLoadingCredentials } =
+    useAuthCredentials();
+  const { data: hasLocalWallet, isLoading: isCheckingLocalWallet } =
+    useHasWallet();
+  const shouldCheckBackend = !!credentials && hasLocalWallet === false;
+  const { data: hasBackendWallet, isLoading: isCheckingBackendWallet } =
+    useHasWalletWithBackendCheck(credentials, shouldCheckBackend);
+
+  const isCheckingWallet =
+    isLoadingCredentials ||
+    isCheckingLocalWallet ||
+    (shouldCheckBackend && isCheckingBackendWallet);
+
+  const resolvedHasWallet =
+    hasLocalWallet === true
+      ? true
+      : hasBackendWallet === true
+      ? true
+      : hasLocalWallet === false &&
+        (!shouldCheckBackend || hasBackendWallet === false)
+      ? false
+      : undefined;
 
   if (!isSignedIn) {
     return <Redirect href='/sign-in' />;
@@ -22,23 +47,29 @@ export default function TabLayout() {
   if (isCheckingWallet) {
     return (
       // @ts-ignore
-      <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor="$background">
-        <Spinner size="large" color="$blue10" />
+      <YStack
+        flex={1}
+        // @ts-ignore
+        justifyContent='center'
+        alignItems='center'
+        backgroundColor='$background'
+      >
+        <Spinner size='large' color='$blue10' />
         {/* @ts-ignore */}
-        <Text marginTop="$4" color="$color11">
+        <Text marginTop='$4' color='$color11'>
           Checking wallet...
         </Text>
       </YStack>
     );
   }
 
-  if (hasWallet === false) {
+  if (resolvedHasWallet === false) {
     console.log("No wallet found, redirecting to wallet setup");
     return <Redirect href='/wallet-setup' />;
   }
 
   if (userId) {
-    console.log("userId", userId, "hasWallet", hasWallet);
+    console.log("userId", userId, "hasWallet", resolvedHasWallet);
   }
 
   const renderTabContent = () => {

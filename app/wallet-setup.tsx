@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "expo-router";
 import { useAuth } from "@clerk/clerk-expo";
 import { Alert } from "react-native";
@@ -15,7 +15,18 @@ import {
   Separator,
   Spinner
 } from "tamagui";
-import { useCreateWallet, useImportWallet } from "@/services";
+import {
+  useCreateWallet,
+  useImportWallet,
+  useCreateDeterministicWallet,
+  useCheckWalletExists,
+  useAuthCredentials,
+  useCreateWalletWithMnemonic,
+  useImportFromMnemonic
+} from "@/services";
+import BackupPhraseModal from "@/components/wallet/BackupPhraseModal";
+import VerificationModal from "@/components/wallet/VerificationModal";
+import ImportMnemonicForm from "@/components/wallet/ImportMnemonicForm";
 
 // Utility functions
 const validatePrivateKey = (privateKey: string) => {
@@ -32,13 +43,31 @@ export default function WalletSetupScreen() {
   const { userId } = useAuth();
   const router = useRouter();
   const [showImportForm, setShowImportForm] = useState(false);
+  const [importType, setImportType] = useState<"private-key" | "mnemonic">(
+    "private-key"
+  );
   const [privateKey, setPrivateKey] = useState("");
   const [privateKeyError, setPrivateKeyError] = useState("");
+  const [showBackupModal, setShowBackupModal] = useState(false);
+  const [showVerificationModal, setShowVerificationModal] = useState(false);
+  const [currentMnemonic, setCurrentMnemonic] = useState("");
 
   const createWallet = useCreateWallet();
   const importWallet = useImportWallet();
+  const createDeterministicWallet = useCreateDeterministicWallet();
+  const createWalletWithMnemonic = useCreateWalletWithMnemonic();
+  const importFromMnemonic = useImportFromMnemonic();
+  const { data: credentials } = useAuthCredentials();
+  const { data: walletCheck, isLoading: checkingWallet } =
+    useCheckWalletExists(credentials);
 
-  const isLoading = createWallet.isPending || importWallet.isPending;
+  const isLoading =
+    createWallet.isPending ||
+    importWallet.isPending ||
+    createDeterministicWallet.isPending ||
+    createWalletWithMnemonic.isPending ||
+    importFromMnemonic.isPending ||
+    checkingWallet;
 
   const handleCreateNewWallet = async () => {
     if (!userId) {
@@ -46,24 +75,55 @@ export default function WalletSetupScreen() {
       return;
     }
 
-    console.log("Creating new wallet for user:", userId);
+    // Check if wallet already exists
+    if (walletCheck?.exists) {
+      Alert.alert(
+        "Wallet Exists",
+        "You already have a wallet associated with this account."
+      );
+      return;
+    }
+
+    console.log("Creating new wallet with mnemonic for user:", userId);
 
     try {
-      const result = await createWallet.mutateAsync();
+      const result = await createWalletWithMnemonic.mutateAsync();
 
       console.log("Wallet created successfully:", result.publicKey);
+      setCurrentMnemonic(result.mnemonic);
+
       Alert.alert(
-        "Wallet Created!",
+        "Wallet Created! 🎉",
         `Your Stellar wallet has been created successfully.\n\nPublic Address: ${result.publicKey}`,
         [
           {
-            text: "Continue",
-            onPress: () => router.replace("/(tabs)")
+            text: "Backup Wallet",
+            onPress: () => setShowBackupModal(true)
+          },
+          {
+            text: "Skip Backup",
+            style: "destructive",
+            onPress: () => {
+              Alert.alert(
+                "Skip Backup?",
+                "Without backing up your wallet, you won't be able to recover it if you lose access. Are you sure?",
+                [
+                  { text: "Cancel", style: "cancel" },
+                  {
+                    text: "Skip",
+                    style: "destructive",
+                    onPress: () => {
+                      router.replace("/(tabs)");
+                    }
+                  }
+                ]
+              );
+            }
           }
         ]
       );
     } catch (error) {
-      console.error("Error creating wallet:", error);
+      console.error("Error creating wallet with mnemonic:", error);
       Alert.alert("Error", "Failed to create wallet. Please try again.");
     }
   };
@@ -113,6 +173,56 @@ export default function WalletSetupScreen() {
     if (privateKeyError) {
       setPrivateKeyError("");
     }
+  };
+
+  const handleMnemonicImport = async (mnemonic: string) => {
+    if (!userId) {
+      Alert.alert("Error", "User not authenticated");
+      return;
+    }
+
+    try {
+      const result = await importFromMnemonic.mutateAsync({ mnemonic });
+
+      console.log(
+        "Wallet imported from mnemonic successfully:",
+        result.publicKey
+      );
+      Alert.alert(
+        "Wallet Imported! 🎉",
+        `Your Stellar wallet has been imported successfully.\n\nPublic Address: ${result.publicKey}`,
+        [
+          {
+            text: "Continue",
+            onPress: () => router.replace("/(tabs)")
+          }
+        ]
+      );
+    } catch (error) {
+      console.error("Error importing wallet from mnemonic:", error);
+      return; // Error will be displayed by the form component
+    }
+  };
+
+  const handleBackupConfirmed = () => {
+    setShowBackupModal(false);
+    setShowVerificationModal(true);
+  };
+
+  const handleVerificationComplete = () => {
+    setShowVerificationModal(false);
+    setCurrentMnemonic(""); // Clear mnemonic from memory
+    router.replace("/(tabs)");
+  };
+
+  const handleCloseBackup = () => {
+    setShowBackupModal(false);
+    setCurrentMnemonic(""); // Clear mnemonic from memory
+  };
+
+  const handleCloseVerification = () => {
+    setShowVerificationModal(false);
+    setShowBackupModal(true); // Go back to backup modal
   };
 
   if (isLoading) {
@@ -169,7 +279,7 @@ export default function WalletSetupScreen() {
               color='$color11'
               marginBottom='$4'
             >
-              This will generate a new Stellar wallet for you
+              This will create a new Stellar wallet linked to your account
             </Text>
           </YStack>
           <XStack
@@ -201,7 +311,7 @@ export default function WalletSetupScreen() {
               color='$color11'
               marginTop='$4'
             >
-              Use your existing Stellar private key
+              Use your existing private key or recovery phrase
             </Text>
           </YStack>
         </YStack>
@@ -217,6 +327,7 @@ export default function WalletSetupScreen() {
               setShowImportForm(false);
               setPrivateKey("");
               setPrivateKeyError("");
+              setImportType("private-key");
             }}
           >
             <Text>← Back</Text>
@@ -224,44 +335,92 @@ export default function WalletSetupScreen() {
 
           <H3 mb='$4'>Import Your Wallet</H3>
 
-          <Text fontSize='$4' color='$color11' mb='$3'>
-            Enter your private key
-          </Text>
+          <XStack space='$2' mb='$4'>
+            <Button
+              size='$3'
+              variant={
+                importType === "private-key" ? "solid" : ("outlined" as any)
+              }
+              theme={importType === "private-key" ? "blue" : undefined}
+              onPress={() => setImportType("private-key")}
+              flex={1}
+            >
+              <Text>Private Key</Text>
+            </Button>
+            <Button
+              size='$3'
+              variant={
+                importType === "mnemonic" ? "solid" : ("outlined" as any)
+              }
+              theme={importType === "mnemonic" ? "blue" : undefined}
+              onPress={() => setImportType("mnemonic")}
+              flex={1}
+            >
+              <Text>Recovery Phrase</Text>
+            </Button>
+          </XStack>
 
-          <TextArea
-            size='$4'
-            placeholder='Enter your Stellar private key (starts with S...)'
-            value={privateKey}
-            onChangeText={handlePrivateKeyChange}
-            numberOfLines={3}
-            borderColor={privateKeyError ? "$red8" : "$borderColor"}
-            mb='$2'
-            autoCapitalize='none'
-            autoCorrect={false}
-          />
+          {importType === "private-key" ? (
+            <YStack space='$3'>
+              <Text fontSize='$4' color='$color11' mb='$3'>
+                Enter your private key
+              </Text>
 
-          {privateKeyError ? (
-            <Text color='$red10' fontSize='$3' mb='$4'>
-              {privateKeyError}
-            </Text>
-          ) : null}
+              <TextArea
+                size='$4'
+                placeholder='Enter your Stellar private key (starts with S...)'
+                value={privateKey}
+                onChangeText={handlePrivateKeyChange}
+                numberOfLines={3}
+                borderColor={privateKeyError ? "$red8" : "$borderColor"}
+                mb='$2'
+                autoCapitalize='none'
+                autoCorrect={false}
+              />
 
-          <Text fontSize='$2' color='$color10' mb='$6'>
-            Your private key should start with 'S' and be 56 characters long
-          </Text>
+              {privateKeyError ? (
+                <Text color='$red10' fontSize='$3' mb='$4'>
+                  {privateKeyError}
+                </Text>
+              ) : null}
 
-          <Button
-            size='$5'
-            theme='blue'
-            onPress={handleImportWallet}
-            disabled={isLoading || !privateKey.trim()}
-          >
-            <Text fontSize='$5' fontWeight='600'>
-              Import Wallet
-            </Text>
-          </Button>
+              <Text fontSize='$2' color='$color10' mb='$6'>
+                Your private key should start with 'S' and be 56 characters long
+              </Text>
+
+              <Button
+                size='$5'
+                theme='blue'
+                onPress={handleImportWallet}
+                disabled={isLoading || !privateKey.trim()}
+              >
+                <Text fontSize='$5' fontWeight='600'>
+                  Import Wallet
+                </Text>
+              </Button>
+            </YStack>
+          ) : (
+            <ImportMnemonicForm
+              onImport={handleMnemonicImport}
+              onBack={() => setImportType("private-key")}
+              isLoading={importFromMnemonic.isPending}
+              error={importFromMnemonic.error?.message}
+            />
+          )}
         </YStack>
       )}
+      <BackupPhraseModal
+        visible={showBackupModal}
+        mnemonic={currentMnemonic}
+        onClose={handleCloseBackup}
+        onBackupConfirmed={handleBackupConfirmed}
+      />
+      <VerificationModal
+        visible={showVerificationModal}
+        mnemonic={currentMnemonic}
+        onClose={handleCloseVerification}
+        onVerificationComplete={handleVerificationComplete}
+      />
     </YStack>
   );
 }

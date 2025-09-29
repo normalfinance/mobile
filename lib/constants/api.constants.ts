@@ -6,6 +6,7 @@ export const API_ENDPOINTS = {
   transaction: '/transaction',
   health: '/health',
   status: '/status',
+  checkWallet: '/api/check-wallet',
 } as const;
 
 export const HTTP_ERRORS = {
