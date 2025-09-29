@@ -86,7 +86,7 @@ export const formatMnemonicForDisplay = (mnemonic: string): { word: string; inde
 
 export const isMnemonicComplete = (input: string): boolean => {
   const words = splitMnemonicToWords(input);
-  return words.length === 24 && words.every(word => word.length > 0);
+  return (words.length === 12 || words.length === 24) && words.every(word => word.length > 0);
 };
 
 export const normalizeMnemonic = (input: string): string => {
