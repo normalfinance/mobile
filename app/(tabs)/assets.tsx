@@ -64,6 +64,29 @@ export default function AssetsScreen() {
     refetch
   } = useWalletBalanceStatus();
 
+  // Console log asset details when balances are loaded
+  React.useEffect(() => {
+    if (balances && balances.length > 0) {
+      console.log("📊 Assets loaded in wallet:");
+      console.log("==================================================");
+      
+      balances.forEach((asset, index) => {
+        const assetAddress = asset.asset_type === 'native' 
+          ? 'native' 
+          : asset.asset_issuer || 'unknown';
+          
+        console.log(`${index + 1}. Token: ${asset.display_name} (${asset.asset_code})`);
+        console.log(`   Asset Address: ${assetAddress}`);
+        console.log(`   Balance: ${asset.balance}`);
+        console.log(`   Asset Type: ${asset.asset_type}`);
+        console.log("---");
+      });
+      
+      console.log("==================================================");
+      console.log(`Total assets: ${balances.length}`);
+    }
+  }, [balances]);
+
   const renderContent = () => {
     if (!wallet) {
       return (
