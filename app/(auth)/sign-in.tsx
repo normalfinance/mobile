@@ -23,7 +23,12 @@ export default function Page() {
   const [emailAddress, setEmailAddress] = React.useState("");
   const [password, setPassword] = React.useState("");
 
-  const { startOAuthFlow } = useOAuth({ strategy: "oauth_google" });
+  const { startOAuthFlow: startGoogleOAuthFlow } = useOAuth({
+    strategy: "oauth_google"
+  });
+  const { startOAuthFlow: startAppleOAuthFlow } = useOAuth({
+    strategy: "oauth_apple"
+  });
 
   const useWarmUpBrowser = () => {
     useEffect(() => {
@@ -59,10 +64,10 @@ export default function Page() {
     }
   }, [isLoaded, emailAddress, password, signIn, setActive, router]);
 
-  const onOAuthSignInPress = React.useCallback(async () => {
-    console.log("onOAuthSignInPress");
+  const onGoogleSignInPress = React.useCallback(async () => {
+    console.log("onGoogleSignInPress");
     try {
-      const { createdSessionId, setActive } = await startOAuthFlow({});
+      const { createdSessionId, setActive } = await startGoogleOAuthFlow({});
 
       if (createdSessionId) {
         console.log("createdSessionId", createdSessionId);
@@ -70,10 +75,26 @@ export default function Page() {
         router.replace("/");
       }
     } catch (err) {
-      console.error("OAuth error", err);
+      console.error("Google OAuth error", err);
       Alert.alert("Error", "Failed to sign in with Google");
     }
-  }, [startOAuthFlow, router]);
+  }, [startGoogleOAuthFlow, router]);
+
+  const onAppleSignInPress = React.useCallback(async () => {
+    console.log("onAppleSignInPress");
+    try {
+      const { createdSessionId, setActive } = await startAppleOAuthFlow({});
+
+      if (createdSessionId) {
+        console.log("createdSessionId", createdSessionId);
+        setActive!({ session: createdSessionId });
+        router.replace("/");
+      }
+    } catch (err) {
+      console.error("Apple OAuth error", err);
+      Alert.alert("Error", "Failed to sign in with Apple");
+    }
+  }, [startAppleOAuthFlow, router]);
 
   return (
     <YStack flex={1} px='$4'>
@@ -114,7 +135,12 @@ export default function Page() {
       </YStack>
       {/* OR Separator */}
       {/* @ts-ignore */}
-      <XStack justify='center' alignItems='center' justifyContent='center' my='$3'>
+      <XStack
+        justify='center'
+        alignItems='center'
+        justifyContent='center'
+        my='$3'
+      >
         <Separator flex={1} mr='$3' />
         <Text color='$color10'>OR</Text>
         <Separator flex={1} ml='$3' />
@@ -125,7 +151,12 @@ export default function Page() {
       </YStack>
       {/* OR Separator */}
       {/* @ts-ignore */}
-      <XStack justify='center' alignItems='center' justifyContent='center' my='$3'>
+      <XStack
+        justify='center'
+        alignItems='center'
+        justifyContent='center'
+        my='$3'
+      >
         <Separator flex={1} mr='$3' />
         <Text color='$color10'>OR</Text>
         <Separator flex={1} ml='$3' />
@@ -133,8 +164,27 @@ export default function Page() {
       {/* OAuth sign-in */}
       <YStack>
         <H6 mb='$3'>Continue with Google</H6>
-        <Button theme='blue' size='$4' onPress={onOAuthSignInPress} mb='$3'>
+        <Button theme='blue' size='$4' onPress={onGoogleSignInPress} mb='$3'>
           Continue with Google
+        </Button>
+      </YStack>
+      {/* OR Separator */}
+      {/* @ts-ignore */}
+      <XStack
+        justify='center'
+        alignItems='center'
+        justifyContent='center'
+        my='$3'
+      >
+        <Separator flex={1} mr='$3' />
+        <Text color='$color10'>OR</Text>
+        <Separator flex={1} ml='$3' />
+      </XStack>
+      {/* Apple OAuth sign-in */}
+      <YStack>
+        <H6 mb='$3'>Continue with Apple</H6>
+        <Button theme='gray' size='$4' onPress={onAppleSignInPress} mb='$3'>
+          Continue with Apple
         </Button>
       </YStack>
       {/* Sign up link */}
