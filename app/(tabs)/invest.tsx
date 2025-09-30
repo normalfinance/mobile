@@ -6,7 +6,7 @@ import { useWalletBalances } from "@/services/balance.service";
 import {
   useSwapQuote,
   useExecuteSwap,
-  useAvailableTokens,
+  useAvailableTokens
 } from "@/services/swap.service";
 import { SwapFormData, SwapQuoteRequest } from "@/lib/types/swap.types";
 import { DisplayAsset } from "@/lib/types/balance.types";
@@ -20,31 +20,29 @@ const SwapCard = () => {
     slippageTolerance: 0.5
   });
 
-  // Data fetching hooks
   const { data: walletBalances = [], isLoading: isLoadingBalances } =
     useWalletBalances();
   const { data: availableTokens = [], isLoading: isLoadingTokens } =
     useAvailableTokens();
   const executeSwapMutation = useExecuteSwap();
 
-  // Filter wallet assets with non-zero balances for sell dropdown
   const sellableAssets = useMemo(() => {
     return walletBalances.filter((asset) => parseFloat(asset.balance) > 0);
   }, [walletBalances]);
 
-  // Convert available tokens to compatible format for buy dropdown
-  // Filter out the currently selected sell asset to prevent same-asset swaps
   const buyableTokens = useMemo(() => {
-    const sellAssetAddress = formData.sellAsset?.asset_type === "native" 
-      ? "native" 
-      : formData.sellAsset?.asset_issuer;
+    const sellAssetAddress =
+      formData.sellAsset?.asset_type === "native"
+        ? "native"
+        : formData.sellAsset?.asset_issuer;
 
     return availableTokens
       .filter((token) => {
-        // Exclude the currently selected sell asset
         if (sellAssetAddress && token.address === sellAssetAddress) {
-          // For assets with same issuer, also check symbol
-          if (token.address !== "native" && formData.sellAsset?.asset_code === token.symbol) {
+          if (
+            token.address !== "native" &&
+            formData.sellAsset?.asset_code === token.symbol
+          ) {
             return false;
           }
           if (token.address === "native") {
@@ -56,7 +54,7 @@ const SwapCard = () => {
       .map((token) => ({
         asset_code: token.symbol,
         asset_issuer: token.address === "native" ? undefined : token.address,
-        balance: "0", // Not relevant for buy tokens
+        balance: "0",
         asset_type:
           token.address === "native"
             ? ("native" as const)
@@ -66,7 +64,6 @@ const SwapCard = () => {
       }));
   }, [availableTokens, formData.sellAsset]);
 
-  // Prepare quote request
   const quoteRequest: SwapQuoteRequest = useMemo(() => {
     const sellTokenAddress =
       formData.sellAsset?.asset_type === "native"
@@ -86,35 +83,6 @@ const SwapCard = () => {
     };
   }, [formData]);
 
-  // Log buyable tokens when they change
-  React.useEffect(() => {
-    if (buyableTokens.length > 0) {
-      console.log("🔄 Buy tokens available (excluding selected sell asset):");
-      console.log("==================================================");
-      
-      buyableTokens.forEach((token, index) => {
-        const assetAddress = token.asset_type === 'native' 
-          ? 'native' 
-          : token.asset_issuer || 'unknown';
-          
-        console.log(`${index + 1}. Token: ${token.display_name} (${token.asset_code})`);
-        console.log(`   Asset Address: ${assetAddress}`);
-        console.log("---");
-      });
-      
-      console.log("==================================================");
-      console.log(`Available buy tokens: ${buyableTokens.length}`);
-      
-      if (formData.sellAsset) {
-        const sellAddress = formData.sellAsset.asset_type === 'native' 
-          ? 'native' 
-          : formData.sellAsset.asset_issuer;
-        console.log(`🚫 Excluded sell asset: ${formData.sellAsset.display_name} (${formData.sellAsset.asset_code}) - ${sellAddress}`);
-      }
-    }
-  }, [buyableTokens, formData.sellAsset]);
-
-  // Fetch swap quote
   const {
     data: quote,
     isLoading: isLoadingQuote,
@@ -129,7 +97,6 @@ const SwapCard = () => {
     )
   );
 
-  // Update buy amount when quote changes
   useEffect(() => {
     if (quote && !isLoadingQuote) {
       setFormData((prev) => ({
@@ -139,7 +106,6 @@ const SwapCard = () => {
     }
   }, [quote, isLoadingQuote]);
 
-  // Get balance for selected sell asset
   const selectedAssetBalance = useMemo(() => {
     if (!formData.sellAsset) return undefined;
     const balance = walletBalances.find(
@@ -148,7 +114,6 @@ const SwapCard = () => {
     return balance?.balance;
   }, [formData.sellAsset, walletBalances]);
 
-  // Handlers
   const handleSellAmountChange = (amount: string) => {
     setFormData((prev) => ({ ...prev, sellAmount: amount }));
   };
@@ -208,7 +173,6 @@ const SwapCard = () => {
     }
   };
 
-  // Validation
   const isSwapDisabled = useMemo(() => {
     if (!formData.sellAsset || !formData.buyAsset || !formData.sellAmount)
       return true;
@@ -239,28 +203,28 @@ const SwapCard = () => {
   };
 
   return (
-    <YStack space="$4">
+    <YStack space='$4'>
       {/* Sell Section */}
       <SwapSection
-        label="Sell"
+        label='Sell'
         asset={formData.sellAsset}
         amount={formData.sellAmount}
         onAmountChange={handleSellAmountChange}
         availableAssets={sellableAssets}
         onAssetSelect={handleSellAssetSelect}
-        placeholder="Select token"
+        placeholder='Select token'
         showMaxButton={true}
         onMaxPress={handleMaxPress}
         balance={selectedAssetBalance}
       />
 
       {/* Swap Direction Button */}
-      <XStack justifyContent="center">
+      <XStack justifyContent='center'>
         <Button
           onPress={handleSwapDirections}
-          backgroundColor="$gray4"
-          borderRadius="$4"
-          padding="$2"
+          backgroundColor='$gray4'
+          borderRadius='$4'
+          padding='$2'
           disabled={!formData.sellAsset || !formData.buyAsset}
         >
           <Text>↕</Text>
@@ -269,29 +233,29 @@ const SwapCard = () => {
 
       {/* Buy Section */}
       <SwapSection
-        label="Buy"
+        label='Buy'
         asset={formData.buyAsset}
         amount={formData.buyAmount}
         onAmountChange={handleBuyAmountChange}
         availableAssets={buyableTokens}
         onAssetSelect={handleBuyAssetSelect}
-        placeholder="Select token"
+        placeholder='Select token'
         readOnly={true}
       />
 
       {/* Quote Information */}
       {quote && !isLoadingQuote && (
         <YStack
-          backgroundColor="$gray2"
-          borderRadius="$4"
-          padding="$3"
-          space="$2"
+          backgroundColor='$gray2'
+          borderRadius='$4'
+          padding='$3'
+          space='$2'
         >
-          <XStack justifyContent="space-between">
-            <Text fontSize="$3" color="$gray11">
+          <XStack justifyContent='space-between'>
+            <Text fontSize='$3' color='$gray11'>
               Rate
             </Text>
-            <Text fontSize="$3">
+            <Text fontSize='$3'>
               1 {formData.sellAsset?.asset_code} ={" "}
               {(
                 parseFloat(quote.amountOut) / parseFloat(quote.amountIn)
@@ -299,22 +263,22 @@ const SwapCard = () => {
               {formData.buyAsset?.asset_code}
             </Text>
           </XStack>
-          <XStack justifyContent="space-between">
-            <Text fontSize="$3" color="$gray11">
+          <XStack justifyContent='space-between'>
+            <Text fontSize='$3' color='$gray11'>
               Price Impact
             </Text>
             <Text
-              fontSize="$3"
+              fontSize='$3'
               color={parseFloat(quote.priceImpact) > 3 ? "$red10" : "$gray12"}
             >
               {quote.priceImpact}%
             </Text>
           </XStack>
-          <XStack justifyContent="space-between">
-            <Text fontSize="$3" color="$gray11">
+          <XStack justifyContent='space-between'>
+            <Text fontSize='$3' color='$gray11'>
               Minimum Received
             </Text>
-            <Text fontSize="$3">
+            <Text fontSize='$3'>
               {parseFloat(quote.amountOutMin).toFixed(6)}{" "}
               {formData.buyAsset?.asset_code}
             </Text>
@@ -332,7 +296,7 @@ const SwapCard = () => {
 
       {/* Error Display */}
       {(quoteError || executeSwapMutation.error) && (
-        <Text fontSize="$3" color="$red10" textAlign="center">
+        <Text fontSize='$3' color='$red10' textAlign='center'>
           {quoteError?.message ||
             executeSwapMutation.error?.message ||
             "An error occurred"}
@@ -344,7 +308,6 @@ const SwapCard = () => {
 
 export default function InvestScreen() {
   return (
-    // @ts-ignore
     <YStack flex={1} padding='$4' backgroundColor='$background'>
       {/* @ts-ignore */}
       <H2 marginBottom='$4'>Invest</H2>
