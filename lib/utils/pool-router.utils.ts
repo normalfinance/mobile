@@ -15,14 +15,10 @@ export interface EstimateSwapArgs {
 export interface SwapEstimateResult {
   amount_out: bigint;
   spread_amount: bigint;
-  // commission_amount: bigint;
-  // total_fee: bigint;
 }
 
 export type SwapDirection = ContractSwapDirection;
 
-// Helper function to encode SwapDirection as simple symbol (Option A)
-// Helper function to determine swap direction and asset symbol
 export function getSwapDirectionAndAsset(
   asset_in: string,
   asset_out: string
@@ -31,16 +27,12 @@ export function getSwapDirectionAndAsset(
   direction: SwapDirection;
 } {
   if (asset_in === "native") {
-    // Buying token with XLM - use the symbol of the token we're buying
-    // Convert contract address to symbol (GB55... -> nBTC)
     const asset = addressToSymbol(asset_out);
     return {
       asset,
       direction: { tag: "Buy", values: undefined }
     };
   } else {
-    // Selling token for XLM - use the symbol of the token we're selling
-    // Convert contract address to symbol (GB55... -> nBTC)
     const asset = addressToSymbol(asset_in);
     return {
       asset,
@@ -49,20 +41,15 @@ export function getSwapDirectionAndAsset(
   }
 }
 
-// Helper function to convert contract address to symbol for Pool Router
 function addressToSymbol(address: string): string {
-  // The Pool Router expects symbols, not addresses
-  // For now, we'll map the known address to nBTC (this should be dynamic based on actual assets)
   if (address === "GB55TEPZCAPVA5QKOGTKEBLGJNCP4LSEIM65PMKYKVTABMFCKQNKPJ2H") {
-    return "nBTC"; // The Pool Router expects just the symbol
+    return "nBTC";
   }
 
-  // For native asset
   if (address === "native") {
     return "XLM";
   }
 
-  // If it's already a symbol (short string), return as-is
   if (
     address.length <= 12 &&
     !address.startsWith("G") &&
@@ -71,12 +58,10 @@ function addressToSymbol(address: string): string {
     return address;
   }
 
-  // Fallback - this should be improved to look up actual symbol from address
   console.warn(`⚠️ Unknown asset address: ${address}, using as symbol`);
   return address;
 }
 
-// Pool Router contract client (same as web app)
 export async function estimateSwap(
   poolRouterAddress: string,
   args: EstimateSwapArgs,
@@ -106,6 +91,12 @@ export async function estimateSwap(
     args.asset_out
   );
 
+  console.log("🔧 Pool Router parameters:", {
+    asset,
+    direction,
+    in_amount: args.amount_in.toString()
+  });
+
   const simulation = await poolRouterClient.estimate_swap(
     {
       asset,
@@ -120,16 +111,73 @@ export async function estimateSwap(
   }
 
   const result = simulation.result;
-
   console.log("✅ Pool Router estimate result:", result);
+  console.log("🔍 Result type:", typeof result);
+
+  if (typeof result === "object" && result !== null && "error" in result) {
+    const errorMessage = result.error || "Unknown contract error";
+    console.error("❌ Pool Router contract error:", errorMessage);
+    throw new Error(
+      `Pool Router contract error: ${
+        errorMessage || "Contract execution failed"
+      }`
+    );
+  }
+
+  if (!Array.isArray(result)) {
+    console.error(
+      "❌ Unexpected result format - expected array, got:",
+      typeof result
+    );
+    throw new Error(
+      `Pool Router returned unexpected format: ${typeof result}. Expected array with [amount_out, spread_amount]`
+    );
+  }
+
+  console.log("🔍 Result[0]:", result[0], "type:", typeof result[0]);
+  console.log("🔍 Result[1]:", result[1], "type:", typeof result[1]);
+  console.log("🔍 Result length:", result.length);
+
+  const safeToBigInt = (value: any, name: string): bigint => {
+    console.log(`🔧 Converting ${name}:`, value, "type:", typeof value);
+
+    if (value === null || value === undefined) {
+      throw new Error(`${name} is null or undefined`);
+    }
+
+    if (typeof value === "bigint") {
+      return value;
+    }
+
+    if (typeof value === "string" || typeof value === "number") {
+      try {
+        return BigInt(value);
+      } catch (error) {
+        throw new Error(
+          `Failed to convert ${name} "${value}" to BigInt: ${error}`
+        );
+      }
+    }
+
+    if (typeof value === "object" && value.toString) {
+      try {
+        return BigInt(value.toString());
+      } catch (error) {
+        throw new Error(
+          `Failed to convert ${name} object "${value}" to BigInt: ${error}`
+        );
+      }
+    }
+
+    throw new Error(`${name} has unsupported type: ${typeof value}`);
+  };
 
   return {
-    amount_out: BigInt(result[0]),
-    spread_amount: BigInt(result[1])
+    amount_out: safeToBigInt(result[0], "amount_out"),
+    spread_amount: safeToBigInt(result[1], "spread_amount")
   };
 }
 
-// Build swap transaction (same structure as web app)
 export async function buildSwapTransaction(
   poolRouterAddress: string,
   swapArgs: {
@@ -178,19 +226,16 @@ export async function buildSwapTransaction(
   );
 }
 
-// Asset address helpers
 export function getAssetAddress(symbol: string, issuer?: string): string {
   if (symbol === "XLM") return "native";
   return issuer || "";
 }
 
-// Convert display amount to contract amount (with decimals)
 export function toContractAmount(amount: string, decimals: number): bigint {
   const num = parseFloat(amount);
   return BigInt(Math.floor(num * Math.pow(10, decimals)));
 }
 
-// Convert contract amount to display amount
 export function fromContractAmount(amount: bigint, decimals: number): string {
   const divisor = BigInt(Math.pow(10, decimals));
   const quotient = Number(amount / divisor);
