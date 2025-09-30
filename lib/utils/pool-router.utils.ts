@@ -5,7 +5,8 @@ import {
   scValToNative,
   xdr,
   Account,
-  Keypair
+  Keypair,
+  Address
 } from "@stellar/stellar-sdk";
 
 export interface EstimateSwapArgs {
@@ -19,6 +20,34 @@ export interface SwapEstimateResult {
   spread_amount: bigint;
   commission_amount: bigint;
   total_fee: bigint;
+}
+
+export type SwapDirection = {
+  tag: 'Buy';
+  values: void;
+} | {
+  tag: 'Sell';
+  values: void;
+};
+
+// Helper function to determine swap direction and asset
+export function getSwapDirectionAndAsset(asset_in: string, asset_out: string): {
+  asset: string;
+  direction: SwapDirection;
+} {
+  if (asset_in === "native") {
+    // Buying token with XLM
+    return {
+      asset: asset_out,
+      direction: { tag: 'Buy', values: undefined as void }
+    };
+  } else {
+    // Selling token for XLM 
+    return {
+      asset: asset_in,
+      direction: { tag: 'Sell', values: undefined as void }
+    };
+  }
 }
 
 // Pool Router contract client (same as web app)
@@ -45,26 +74,32 @@ export async function estimateSwap(
     networkPassphrase: networkConfig.networkPassphrase
   });
 
-  // Convert arguments to ScVal format
-  const assetInParam =
-    args.asset_in === "native"
-      ? xdr.ScVal.scvSymbol("native")
-      : xdr.ScVal.scvString(args.asset_in);
+  // Get the correct asset and direction for the pool router
+  const { asset, direction } = getSwapDirectionAndAsset(args.asset_in, args.asset_out);
+  
+  console.log("🔄 Swap direction:", direction.tag, "for asset:", asset);
 
-  const assetOutParam =
-    args.asset_out === "native"
-      ? xdr.ScVal.scvSymbol("native")
-      : xdr.ScVal.scvString(args.asset_out);
-  const amountInParam = xdr.ScVal.scvU64(
-    new xdr.Uint64(args.amount_in.toString())
+  // Convert arguments to ScVal format using correct method signature
+  const assetParam = Address.fromString(asset).toScVal();
+  
+  // SwapDirection is a variant type - encode as vector with tag as first element
+  const directionParam = xdr.ScVal.scvVec([
+    xdr.ScVal.scvSymbol(direction.tag)
+  ]);
+  
+  const amountInParam = xdr.ScVal.scvU128(
+    new xdr.UInt128Parts({
+      lo: new xdr.Uint64(args.amount_in.toString()),
+      hi: new xdr.Uint64("0")
+    })
   );
 
   // Add contract operation
   txBuilder.addOperation(
     new Contract(poolRouterAddress).call(
       "estimate_swap",
-      assetInParam,
-      assetOutParam,
+      assetParam,
+      directionParam,
       amountInParam
     )
   );
@@ -125,29 +160,37 @@ export async function buildSwapTransaction(
     networkPassphrase: networkConfig.networkPassphrase
   });
 
-  // Convert arguments to ScVal format
+  // Get the correct asset and direction for the pool router
+  const { asset, direction } = getSwapDirectionAndAsset(swapArgs.asset_in, swapArgs.asset_out);
+  
+  console.log("🔄 Building swap transaction - Direction:", direction.tag, "for asset:", asset);
+
+  // Convert arguments to ScVal format using correct method signature
   const userParam = xdr.ScVal.scvAddress(
     xdr.ScAddress.scAddressTypeAccount(
       Keypair.fromPublicKey(swapArgs.user).xdrAccountId()
     )
   );
 
-  const assetInParam =
-    swapArgs.asset_in === "native"
-      ? xdr.ScVal.scvSymbol("native")
-      : xdr.ScVal.scvString(swapArgs.asset_in);
-
-  const assetOutParam =
-    swapArgs.asset_out === "native"
-      ? xdr.ScVal.scvSymbol("native")
-      : xdr.ScVal.scvString(swapArgs.asset_out);
-
-  const amountInParam = xdr.ScVal.scvU64(
-    new xdr.Uint64(swapArgs.amount_in.toString())
+  const assetParam = Address.fromString(asset).toScVal();
+  
+  // SwapDirection is a variant type - encode as vector with tag as first element
+  const directionParam = xdr.ScVal.scvVec([
+    xdr.ScVal.scvSymbol(direction.tag)
+  ]);
+  
+  const amountInParam = xdr.ScVal.scvU128(
+    new xdr.UInt128Parts({
+      lo: new xdr.Uint64(swapArgs.amount_in.toString()),
+      hi: new xdr.Uint64("0")
+    })
   );
 
-  const amountOutMinParam = xdr.ScVal.scvU64(
-    new xdr.Uint64(swapArgs.amount_out_min.toString())
+  const amountOutMinParam = xdr.ScVal.scvU128(
+    new xdr.UInt128Parts({
+      lo: new xdr.Uint64(swapArgs.amount_out_min.toString()),
+      hi: new xdr.Uint64("0")
+    })
   );
 
   // Add swap operation
@@ -155,8 +198,8 @@ export async function buildSwapTransaction(
     new Contract(poolRouterAddress).call(
       "swap",
       userParam,
-      assetInParam,
-      assetOutParam,
+      assetParam,
+      directionParam,
       amountInParam,
       amountOutMinParam
     )
