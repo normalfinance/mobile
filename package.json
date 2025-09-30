@@ -32,7 +32,6 @@
     "crypto-browserify": "^3.12.1",
     "events": "^3.3.0",
     "expo": "~54.0.10",
-    "expo-apple-authentication": "~8.0.7",
     "expo-auth-session": "~7.0.8",
     "expo-constants": "~18.0.9",
     "expo-crypto": "~15.0.7",
