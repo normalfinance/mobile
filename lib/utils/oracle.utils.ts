@@ -1,10 +1,9 @@
-import { 
-  TransactionBuilder, 
-  Contract, 
-  rpc as SorobanRpc, 
-  scValToNative, 
-  xdr 
-} from "@stellar/stellar-sdk";
+import { rpc as SorobanRpc } from "@stellar/stellar-sdk";
+import type { Account } from "@stellar/stellar-sdk";
+import {
+  Client as OracleRegistryClient,
+  type Asset
+} from "../contracts/oracle_registry";
 
 export interface PriceData {
   price: bigint;
@@ -13,53 +12,44 @@ export interface PriceData {
 
 // Get oracle price (same implementation as web app)
 export async function getOraclePrice(
-  oracleAddress: string, 
+  oracleAddress: string,
   asset: string,
   networkConfig: {
     rpcUrl: string;
     networkPassphrase: string;
-    testingSource: any;
+    testingSource: Account;
   }
 ): Promise<PriceData> {
+  oracleAddress = "CB4OHJ5KAEY2O5ZOFWOFYOCP6WL5FSZEPO4GVJLW4PBJZRWM4IID7QDF";
   console.log(`🔮 Fetching oracle price for ${asset} from ${oracleAddress}`);
-  
-  const txBuilder = new TransactionBuilder(networkConfig.testingSource, {
-    fee: '1000',
-    timebounds: { minTime: 0, maxTime: 0 },
+
+  const oracleClient = new OracleRegistryClient({
+    contractId: oracleAddress,
     networkPassphrase: networkConfig.networkPassphrase,
+    publicKey: networkConfig.testingSource.accountId(),
+    rpcUrl: networkConfig.rpcUrl
   });
 
-  // Create asset parameter (same as web app)
-  const assetParam = xdr.ScVal.scvVec([
-    xdr.ScVal.scvSymbol('Other'), 
-    xdr.ScVal.scvSymbol(asset)
-  ]);
+  const assetParam: Asset = { tag: "Other", values: [asset] };
 
-  txBuilder.addOperation(new Contract(oracleAddress).call('lastprice', assetParam));
+  const tx = await oracleClient.get_last_price(
+    { asset },
+    { simulate: true, fee: 1000 }
+  );
 
-  const stellarRpc = new SorobanRpc.Server(networkConfig.rpcUrl);
-  const result = await stellarRpc.simulateTransaction(txBuilder.build());
+  const simulation = await tx.simulate();
 
-  if (SorobanRpc.Api.isSimulationSuccess(result)) {
-    const xdrStr = result.result?.retval.toXDR('base64');
-    if (xdrStr) {
-      const priceResult: any = xdr.ScVal.fromXDR(xdrStr, 'base64')?.value();
-      if (priceResult) {
-        const price = scValToNative(priceResult[0]?.val());
-        const timestamp = Number(scValToNative(priceResult[1]?.val()));
-        
-        console.log(`📊 Oracle price for ${asset}: ${price} (timestamp: ${timestamp})`);
-        
-        return {
-          price,
-          timestamp,
-        };
-      }
-    }
-    throw new Error('Unable to decode oracle price result');
-  } else {
-    throw new Error(`Failed to fetch oracle price: ${result.error}`);
+  if (!simulation.result) {
+    throw new Error("Unable to decode oracle price result");
   }
+
+  const { last_oracle_price_twap, last_oracle_price_twap_ts } =
+    simulation.result;
+
+  return {
+    price: last_oracle_price_twap,
+    timestamp: Number(last_oracle_price_twap_ts)
+  };
 }
 
 // Get oracle decimals (same as web app)
@@ -68,34 +58,31 @@ export async function getOracleDecimals(
   networkConfig: {
     rpcUrl: string;
     networkPassphrase: string;
-    testingSource: any;
+    testingSource: Account;
   }
-): Promise<{ decimals: number; latestLedger: number }> {
+): Promise<{ decimals: number }> {
   console.log(`🔢 Fetching oracle decimals for ${oracleId}`);
-  
-  const txBuilder = new TransactionBuilder(networkConfig.testingSource, {
-    fee: '1000',
-    timebounds: { minTime: 0, maxTime: 0 },
+
+  const oracleClient = new OracleRegistryClient({
+    contractId: oracleId,
     networkPassphrase: networkConfig.networkPassphrase,
+    publicKey: networkConfig.testingSource.accountId(),
+    rpcUrl: networkConfig.rpcUrl
   });
-  
-  txBuilder.addOperation(new Contract(oracleId).call('decimals'));
 
-  const stellarRpc = new SorobanRpc.Server(networkConfig.rpcUrl);
-  const result = await stellarRpc.simulateTransaction(txBuilder.build());
+  const tx = await oracleClient.get_oracle(
+    { asset: oracleId },
+    { simulate: true, fee: 1000 }
+  );
+  const simulation = await tx.simulate();
 
-  if (SorobanRpc.Api.isSimulationSuccess(result)) {
-    const val = scValToNative((result as any).result.retval);
-    
-    console.log(`📐 Oracle decimals: ${val}`);
-    
-    return {
-      decimals: val,
-      latestLedger: result.latestLedger,
-    };
-  } else {
-    throw new Error(`Failed to fetch oracle decimals: ${result.error}`);
+  if (!simulation.result) {
+    throw new Error("Failed to fetch oracle decimals: empty result");
   }
+
+  return {
+    decimals: simulation.result.decimals
+  };
 }
 
 // Format token amount with oracle decimals (same as web app)
@@ -103,13 +90,15 @@ export function formatTokenAmount(amount: bigint, decimals: number): string {
   const divisor = BigInt(10 ** decimals);
   const quotient = amount / divisor;
   const remainder = amount % divisor;
-  
+
   if (remainder === BigInt(0)) {
     return quotient.toString();
   }
-  
-  const remainderStr = remainder.toString().padStart(decimals, '0');
-  const trimmedRemainder = remainderStr.replace(/0+$/, '');
-  
-  return trimmedRemainder ? `${quotient}.${trimmedRemainder}` : quotient.toString();
+
+  const remainderStr = remainder.toString().padStart(decimals, "0");
+  const trimmedRemainder = remainderStr.replace(/0+$/, "");
+
+  return trimmedRemainder
+    ? `${quotient}.${trimmedRemainder}`
+    : quotient.toString();
 }

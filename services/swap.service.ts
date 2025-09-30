@@ -1,5 +1,5 @@
 // Ensure crypto polyfills are loaded before Stellar SDK
-import '../shim';
+import "../shim";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
@@ -15,29 +15,20 @@ import {
 import { getKeypair } from "./wallet.service";
 import { STALE_TIMES } from "../lib/utils/query.utils";
 import {
-  TransactionBuilder,
   Networks,
-  Operation,
   Horizon,
   Account,
-  Keypair
+  TransactionBuilder
 } from "@stellar/stellar-sdk";
 import * as Crypto from "expo-crypto";
 import { getOraclePrice, formatTokenAmount } from "../lib/utils/oracle.utils";
 import {
   estimateSwap,
-  buildSwapTransaction as buildSwapTransactionUtil,
   getAssetAddress,
   toContractAmount,
-  fromContractAmount
+  fromContractAmount,
+  buildSwapTransaction as buildSwapTransactionUtils
 } from "../lib/utils/pool-router.utils";
-
-// Create a testing keypair using expo-crypto (same pattern as mnemonic.utils.ts)
-const createTestingKeypair = (): Keypair => {
-  // Generate 32 bytes of entropy using expo-crypto to ensure compatibility
-  const entropy = Crypto.getRandomValues(new Uint8Array(32));
-  return Keypair.fromRawEd25519Seed(Buffer.from(entropy));
-};
 
 // Get real swap quotes using Pool Router (same as web app)
 const calculateSwapQuote = async (
@@ -64,10 +55,12 @@ const calculateSwapQuote = async (
   }
 
   try {
-    // Create a testing source account for contract calls using expo-crypto directly
-    console.log("🔑 Creating testing keypair using expo-crypto...");
-    const testingKeypair = createTestingKeypair();
-    console.log("✅ Keypair created successfully:", testingKeypair.publicKey());
+    const testingKeypair = await getKeypair();
+
+    if (!testingKeypair) {
+      throw new Error("No wallet found");
+    }
+
     const testingSource = new Account(testingKeypair.publicKey(), "0");
 
     const networkConfig = {
@@ -141,9 +134,9 @@ const calculateSwapQuote = async (
 
       console.log("✅ Pool Router estimate success:", {
         amount_out: swapEstimate.amount_out.toString(),
-        spread_amount: swapEstimate.spread_amount.toString(),
-        commission_amount: swapEstimate.commission_amount.toString(),
-        total_fee: swapEstimate.total_fee.toString()
+        spread_amount: swapEstimate.spread_amount.toString()
+        // commission_amount: swapEstimate.commission_amount.toString(),
+        // total_fee: swapEstimate.total_fee.toString()
       });
     } catch (poolError) {
       console.warn(
@@ -151,21 +144,32 @@ const calculateSwapQuote = async (
         poolError
       );
 
-      // Fallback to oracle-based calculation
-      let exchangeRate = 1;
-      if (tokenInPrice && tokenOutPrice) {
-        exchangeRate = Number(tokenInPrice.price) / Number(tokenOutPrice.price);
-      } else if (tokenInInfo.symbol === "XLM") {
-        if (tokenOutInfo.symbol === "nBTC") exchangeRate = 0.000012;
-        if (tokenOutInfo.symbol === "nETH") exchangeRate = 0.00035;
-        if (tokenOutInfo.symbol === "nSOL") exchangeRate = 0.0045;
-      } else if (tokenOutInfo.symbol === "XLM") {
-        if (tokenInInfo.symbol === "nBTC") exchangeRate = 83333;
-        if (tokenInInfo.symbol === "nETH") exchangeRate = 2857;
-        if (tokenInInfo.symbol === "nSOL") exchangeRate = 222;
+      // Check if this is an UnreachableCodeReached error specifically
+      const errorString =
+        poolError instanceof Error ? poolError.message : String(poolError);
+      if (errorString.includes("UnreachableCodeReached")) {
+        console.error(
+          "😨 Contract execution error detected - this may indicate parameter encoding issues"
+        );
+        console.error("Debug info - Estimate args:", {
+          asset_in: estimateArgs.asset_in,
+          asset_out: estimateArgs.asset_out,
+          amount_in: estimateArgs.amount_in.toString()
+        });
       }
 
+      // Use oracle prices only - no hardcoded fallbacks
+      if (!tokenInPrice || !tokenOutPrice) {
+        console.error("🚨 Both Pool Router and Oracle pricing failed");
+        throw new Error(
+          "Unable to get swap quote: both Pool Router and Oracle prices failed"
+        );
+      }
+
+      const exchangeRate =
+        Number(tokenInPrice.price) / Number(tokenOutPrice.price);
       const fallbackAmountOut = amountInNum * exchangeRate * 0.997; // 0.3% fee
+
       swapEstimate = {
         amount_out: toContractAmount(
           fallbackAmountOut.toString(),
@@ -195,7 +199,7 @@ const calculateSwapQuote = async (
 
     // Calculate price impact
     const totalFeeDisplay = fromContractAmount(
-      swapEstimate.total_fee,
+      swapEstimate.spread_amount,
       tokenInInfo.decimals
     );
     const priceImpact = (
@@ -305,14 +309,26 @@ const buildSwapTransaction = async (
   console.log("🌐 Network config:", config);
 
   try {
-    // Step 1: Load account from Horizon (more reliable for mobile)
+    // Step 1: Load account from Horizon (freighter-mobile pattern)
     console.log("📋 Loading account for:", keypair.publicKey());
     const horizonServer = new Horizon.Server(config.horizonUrl);
-    const sourceAccount = await horizonServer.loadAccount(keypair.publicKey());
-    console.log("✅ Account loaded. Sequence:", sourceAccount.sequenceNumber());
 
-    // Step 2: Build REAL Pool Router swap transaction
-    console.log("🔨 Building REAL Pool Router swap transaction...");
+    let sourceAccount: Account;
+    try {
+      sourceAccount = await horizonServer.loadAccount(keypair.publicKey());
+      console.log(
+        "✅ Account loaded. Sequence:",
+        sourceAccount.sequenceNumber()
+      );
+    } catch (error) {
+      console.error("❌ Failed to load account:", error);
+      throw new Error(
+        `Failed to load account ${keypair.publicKey()}: ${error}`
+      );
+    }
+
+    // Step 2: Build Pool Router swap transaction via contract client
+    console.log("🔨 Building Pool Router swap transaction...");
 
     // Find token info for decimal conversion
     const tokenInInfo = AVAILABLE_SWAP_TOKENS.find(
@@ -351,65 +367,41 @@ const buildSwapTransaction = async (
       } = ${amountOutMinContract.toString()}`
     });
 
-    // Use the real Pool Router contract builder
-    let transaction;
-    try {
-      const swapTxBuilder = await buildSwapTransactionUtil(
-        config.poolRouter,
-        {
-          user: keypair.publicKey(),
-          asset_in: getAssetAddress(tokenInInfo.symbol, tokenInInfo.address),
-          asset_out: getAssetAddress(tokenOutInfo.symbol, tokenOutInfo.address),
-          amount_in: amountInContract,
-          amount_out_min: amountOutMinContract
-        },
-        sourceAccount,
-        { networkPassphrase: config.networkPassphrase }
-      );
+    // Build swap transaction via contract client
+    const swapTx = await buildSwapTransactionUtils(
+      config.poolRouter,
+      {
+        user: keypair.publicKey(),
+        asset_in: getAssetAddress(tokenInInfo.symbol, tokenInInfo.address),
+        asset_out: getAssetAddress(tokenOutInfo.symbol, tokenOutInfo.address),
+        amount_in: amountInContract,
+        amount_out_min: amountOutMinContract
+      },
+      sourceAccount,
+      {
+        networkPassphrase: config.networkPassphrase,
+        rpcUrl: config.rpcUrl
+      }
+    );
 
-      transaction = swapTxBuilder.setTimeout(300).build();
-      console.log("✅ Real Pool Router transaction built successfully!");
-    } catch (poolRouterError) {
-      console.warn(
-        "⚠️ Pool Router transaction build failed, using mock transaction:",
-        poolRouterError
-      );
+    console.log("✅ Pool Router transaction assembled successfully!");
 
-      // Fallback to mock transaction for testing
-      transaction = new TransactionBuilder(sourceAccount, {
-        fee: "10000000", // 1 XLM fee for complex operations
-        networkPassphrase: config.networkPassphrase
-      })
-        .addOperation(
-          Operation.bumpSequence({
-            bumpTo: sourceAccount.sequenceNumber()
-          })
-        )
-        .setTimeout(300)
-        .build();
-    }
-
-    console.log("🔧 Transaction built:", {
-      hash: transaction.hash().toString("hex"),
-      fee: transaction.fee,
-      operations: transaction.operations.length,
-      networkPassphrase: config.networkPassphrase
+    // Step 3: Sign transaction locally using assembled transaction
+    console.log("✍️ Signing transaction...");
+    await swapTx.sign({
+      signTransaction: async (xdr) => {
+        const txn = TransactionBuilder.fromXDR(xdr, config.networkPassphrase);
+        txn.sign(keypair);
+        return { signedTxXdr: txn.toXDR() };
+      }
     });
 
-    // Step 3: Sign transaction locally
-    console.log("✍️ Signing transaction...");
-    transaction.sign(keypair);
+    const signedXdr = swapTx.built?.toXDR();
+    console.log("📝 Signed XDR", signedXdr);
 
-    const signedXdr = transaction.toXDR();
-    console.log("📝 Signed XDR length:", signedXdr.length);
-    console.log("📝 Signed XDR preview:", signedXdr.substring(0, 100) + "...");
-    console.log(
-      "🔐 Transaction signature:",
-      transaction.signatures[0]
-        .signature()
-        .toString("base64")
-        .substring(0, 20) + "..."
-    );
+    if (!signedXdr) {
+      throw new Error("No signed XDR");
+    }
 
     return signedXdr;
   } catch (error) {
