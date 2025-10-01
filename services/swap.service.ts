@@ -9,8 +9,7 @@ import {
   SwapResult,
   DexDistribution,
   TokenInfo,
-  AVAILABLE_SWAP_TOKENS,
-  SWAP_CONTRACT_ADDRESSES
+  AVAILABLE_SWAP_TOKENS
 } from "../lib/types/swap.types";
 import { getKeypair } from "./wallet.service";
 import { STALE_TIMES } from "../lib/utils/query.utils";
@@ -29,6 +28,7 @@ import {
   fromContractAmount,
   buildSwapTransaction as buildSwapTransactionUtils
 } from "../lib/utils/pool-router.utils";
+import { formatNormalToken } from "../lib/utils/format.utils";
 
 // Get real swap quotes using Pool Router (same as web app)
 const calculateSwapQuote = async (
@@ -42,17 +42,18 @@ const calculateSwapQuote = async (
     throw new Error("Invalid amount");
   }
 
-  const config = getNetworkConfig();
   const tokenInInfo = AVAILABLE_SWAP_TOKENS.find(
-    (t) => t.address === request.tokenIn
+    (t) => t.symbol === formatNormalToken(request.tokenIn, "with-n")
   );
   const tokenOutInfo = AVAILABLE_SWAP_TOKENS.find(
-    (t) => t.address === request.tokenOut
+    (t) => t.symbol === formatNormalToken(request.tokenOut, "with-n")
   );
 
   if (!tokenInInfo || !tokenOutInfo) {
     throw new Error("Token not found");
   }
+
+  const config = getNetworkConfig();
 
   try {
     const testingKeypair = await getKeypair();
@@ -80,11 +81,11 @@ const calculateSwapQuote = async (
           config.reflectorOracle ||
             process.env.EXPO_PUBLIC_TESTNET_REFLECTOR_ORACLE ||
             "CCYOZJCOPG34LLQQ7N24YXBM7LL62R7ONMZ3G6WZAAYPB5OYKOMJRN63",
-          tokenInInfo.symbol,
+          formatNormalToken(request.tokenIn, "without-n"),
           networkConfig
         );
         console.log(
-          `📈 ${tokenInInfo.symbol} oracle price:`,
+          `📈 ${request.tokenIn} oracle price:`,
           formatTokenAmount(tokenInPrice.price, 14)
         );
       }
@@ -94,11 +95,14 @@ const calculateSwapQuote = async (
           config.reflectorOracle ||
             process.env.EXPO_PUBLIC_TESTNET_REFLECTOR_ORACLE ||
             "CCYOZJCOPG34LLQQ7N24YXBM7LL62R7ONMZ3G6WZAAYPB5OYKOMJRN63",
-          tokenOutInfo.symbol,
+          formatNormalToken(request.tokenOut, "without-n"),
           networkConfig
         );
         console.log(
-          `📈 ${tokenOutInfo.symbol} oracle price:`,
+          `📈 ${formatNormalToken(
+            tokenOutInfo.symbol,
+            "without-n"
+          )} oracle price:`,
           formatTokenAmount(tokenOutPrice.price, 14)
         );
       }
@@ -118,8 +122,8 @@ const calculateSwapQuote = async (
     );
 
     const estimateArgs = {
-      asset_in: getAssetAddress(tokenInInfo.symbol, tokenInInfo.address),
-      asset_out: getAssetAddress(tokenOutInfo.symbol, tokenOutInfo.address),
+      asset_in: formatNormalToken(tokenInInfo.symbol, "without-n"),
+      asset_out: formatNormalToken(tokenOutInfo.symbol, "without-n"),
       amount_in: amountInContract
     };
 
@@ -372,8 +376,8 @@ const buildSwapTransaction = async (
       config.poolRouter,
       {
         user: keypair.publicKey(),
-        asset_in: getAssetAddress(tokenInInfo.symbol, tokenInInfo.address),
-        asset_out: getAssetAddress(tokenOutInfo.symbol, tokenOutInfo.address),
+        asset_in: formatNormalToken(tokenInInfo.symbol, "without-n"),
+        asset_out: formatNormalToken(tokenOutInfo.symbol, "without-n"),
         amount_in: amountInContract,
         amount_out_min: amountOutMinContract
       },
@@ -386,6 +390,10 @@ const buildSwapTransaction = async (
 
     console.log("✅ Pool Router transaction assembled successfully!");
 
+    await swapTx.simulate();
+
+    console.log("✅ Pool Router transaction simulated successfully!");
+
     // Step 3: Sign transaction locally using assembled transaction
     console.log("✍️ Signing transaction...");
     await swapTx.sign({
@@ -396,7 +404,7 @@ const buildSwapTransaction = async (
       }
     });
 
-    const signedXdr = swapTx.built?.toXDR();
+    const signedXdr = swapTx.signed?.toXDR();
     console.log("📝 Signed XDR", signedXdr);
 
     if (!signedXdr) {
@@ -580,8 +588,3 @@ export const formatPriceImpact = (priceImpact: string): string => {
   if (isNaN(impact)) return "0%";
   return `${impact.toFixed(2)}%`;
 };
-
-// Constants for slippage tolerance options
-export const SLIPPAGE_OPTIONS = [0.1, 0.5, 1.0, 3.0]; // Percentages
-
-export { SWAP_CONTRACT_ADDRESSES };
