@@ -4,6 +4,7 @@ import {
   Client as OracleRegistryClient,
   type Asset
 } from "../contracts/oracle_registry";
+import { formatNormalToken } from "./format.utils";
 
 export interface PriceData {
   price: bigint;
@@ -30,10 +31,14 @@ export async function getOraclePrice(
     rpcUrl: networkConfig.rpcUrl
   });
 
-  const assetParam: Asset = { tag: "Other", values: [asset] };
+  // trim out n from the asset
+
+  let formattedAsset = formatNormalToken(asset, "without-n");
+
+  // const assetParam: Asset = { tag: "Other", values: [formattedAsset] };
 
   const tx = await oracleClient.get_last_price(
-    { asset },
+    { asset: formattedAsset },
     { simulate: true, fee: 1000 }
   );
 

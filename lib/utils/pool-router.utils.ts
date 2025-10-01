@@ -5,6 +5,7 @@ import {
 } from "../contracts/pool_router";
 
 import { type AssembledTransaction } from "@stellar/stellar-sdk/contract";
+import { formatNormalToken } from "./format.utils";
 
 export interface EstimateSwapArgs {
   asset_in: string;
@@ -19,47 +20,21 @@ export interface SwapEstimateResult {
 
 export type SwapDirection = ContractSwapDirection;
 
-export function getSwapDirectionAndAsset(
+export function getSwapDirection(
   asset_in: string,
   asset_out: string
 ): {
-  asset: string;
   direction: SwapDirection;
 } {
-  if (asset_in === "native") {
-    const asset = addressToSymbol(asset_out);
+  if (asset_in === "XLM") {
     return {
-      asset,
       direction: { tag: "Buy", values: undefined }
     };
   } else {
-    const asset = addressToSymbol(asset_in);
     return {
-      asset,
       direction: { tag: "Sell", values: undefined }
     };
   }
-}
-
-function addressToSymbol(address: string): string {
-  if (address === "GB55TEPZCAPVA5QKOGTKEBLGJNCP4LSEIM65PMKYKVTABMFCKQNKPJ2H") {
-    return "nBTC";
-  }
-
-  if (address === "native") {
-    return "XLM";
-  }
-
-  if (
-    address.length <= 12 &&
-    !address.startsWith("G") &&
-    !address.startsWith("C")
-  ) {
-    return address;
-  }
-
-  console.warn(`⚠️ Unknown asset address: ${address}, using as symbol`);
-  return address;
 }
 
 export async function estimateSwap(
@@ -86,20 +61,23 @@ export async function estimateSwap(
     rpcUrl: networkConfig.rpcUrl
   });
 
-  const { asset, direction } = getSwapDirectionAndAsset(
-    args.asset_in,
-    args.asset_out
-  );
+  const { direction } = getSwapDirection(args.asset_in, args.asset_out);
 
   console.log("🔧 Pool Router parameters:", {
-    asset,
+    asset: args.asset_in,
     direction,
     in_amount: args.amount_in.toString()
   });
 
+  const formattedAssetIn = formatNormalToken(args.asset_out, "without-n");
+  const formattedAssetOut = formatNormalToken(args.asset_in, "without-n");
+
+  console.log("🔧 Formatted Asset Out:", formattedAssetOut);
+  console.log("🔧 Formatted Asset In:", formattedAssetIn);
+
   const simulation = await poolRouterClient.estimate_swap(
     {
-      asset,
+      asset: formattedAssetIn,
       direction: direction as ContractSwapDirection,
       in_amount: args.amount_in
     },
@@ -202,22 +180,19 @@ export async function buildSwapTransaction(
     rpcUrl: networkConfig.rpcUrl
   });
 
-  const { asset, direction } = getSwapDirectionAndAsset(
-    swapArgs.asset_in,
-    swapArgs.asset_out
-  );
+  const { direction } = getSwapDirection(swapArgs.asset_in, swapArgs.asset_out);
 
   console.log(
     "🔄 Building swap transaction - Direction:",
     direction.tag,
     "for asset:",
-    asset
+    swapArgs.asset_in
   );
 
   return poolRouterClient.swap(
     {
       user: swapArgs.user,
-      asset,
+      asset: swapArgs.asset_in,
       direction: direction as ContractSwapDirection,
       in_amount: swapArgs.amount_in,
       out_min: swapArgs.amount_out_min

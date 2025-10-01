@@ -10,6 +10,7 @@ import {
 } from "@/services/swap.service";
 import { SwapFormData, SwapQuoteRequest } from "@/lib/types/swap.types";
 import { DisplayAsset } from "@/lib/types/balance.types";
+import { formatNormalToken } from "@/lib/utils/format.utils";
 
 const SwapCard = () => {
   const [formData, setFormData] = useState<SwapFormData>({
@@ -65,19 +66,19 @@ const SwapCard = () => {
   }, [availableTokens, formData.sellAsset]);
 
   const quoteRequest: SwapQuoteRequest = useMemo(() => {
-    const sellTokenAddress =
-      formData.sellAsset?.asset_type === "native"
-        ? "native"
-        : formData.sellAsset?.asset_issuer || "";
+    const sellToken = formatNormalToken(
+      formData.sellAsset?.asset_code || "",
+      "without-n"
+    );
 
-    const buyTokenAddress =
-      formData.buyAsset?.asset_type === "native"
-        ? "native"
-        : formData.buyAsset?.asset_issuer || "";
+    const buyToken = formatNormalToken(
+      formData.buyAsset?.asset_code || "",
+      "without-n"
+    );
 
     return {
-      tokenIn: sellTokenAddress,
-      tokenOut: buyTokenAddress,
+      tokenIn: sellToken,
+      tokenOut: buyToken,
       amountIn: formData.sellAmount,
       slippageTolerance: formData.slippageTolerance
     };
@@ -211,6 +212,7 @@ const SwapCard = () => {
         amount={formData.sellAmount}
         onAmountChange={handleSellAmountChange}
         availableAssets={sellableAssets}
+        // @ts-ignore
         onAssetSelect={handleSellAssetSelect}
         placeholder='Select token'
         showMaxButton={true}
@@ -238,6 +240,7 @@ const SwapCard = () => {
         amount={formData.buyAmount}
         onAmountChange={handleBuyAmountChange}
         availableAssets={buyableTokens}
+        // @ts-ignore
         onAssetSelect={handleBuyAssetSelect}
         placeholder='Select token'
         readOnly={true}
@@ -246,6 +249,7 @@ const SwapCard = () => {
       {/* Quote Information */}
       {quote && !isLoadingQuote && (
         <YStack
+          // @ts-ignore
           backgroundColor='$gray2'
           borderRadius='$4'
           padding='$3'
@@ -261,17 +265,6 @@ const SwapCard = () => {
                 parseFloat(quote.amountOut) / parseFloat(quote.amountIn)
               ).toFixed(6)}{" "}
               {formData.buyAsset?.asset_code}
-            </Text>
-          </XStack>
-          <XStack justifyContent='space-between'>
-            <Text fontSize='$3' color='$gray11'>
-              Price Impact
-            </Text>
-            <Text
-              fontSize='$3'
-              color={parseFloat(quote.priceImpact) > 3 ? "$red10" : "$gray12"}
-            >
-              {quote.priceImpact}%
             </Text>
           </XStack>
           <XStack justifyContent='space-between'>

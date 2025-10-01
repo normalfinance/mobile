@@ -1,4 +1,4 @@
-import { DisplayAsset } from './balance.types';
+import { DisplayAsset } from "./balance.types";
 
 export interface DexDistribution {
   parts: string;
@@ -27,7 +27,6 @@ export interface SwapQuote {
   amountIn: string;
   amountOut: string;
   amountOutMin: string;
-  priceImpact: string;
   route: DexDistribution[];
   deadline: number;
   swapParams: SwapParams;
@@ -64,42 +63,5 @@ export interface TokenInfo {
   logoUrl?: string;
 }
 
-// Available tokens for swapping (based on your wallet assets)
-export const AVAILABLE_SWAP_TOKENS: TokenInfo[] = [
-  {
-    address: 'GB55TEPZCAPVA5QKOGTKEBLGJNCP4LSEIM65PMKYKVTABMFCKQNKPJ2H',
-    symbol: 'nBTC',
-    name: 'nBTC',
-    decimals: 8,
-  },
-  {
-    address: 'GB55TEPZCAPVA5QKOGTKEBLGJNCP4LSEIM65PMKYKVTABMFCKQNKPJ2H',
-    symbol: 'nETH',
-    name: 'nETH',
-    decimals: 18,
-  },
-  {
-    address: 'GB55TEPZCAPVA5QKOGTKEBLGJNCP4LSEIM65PMKYKVTABMFCKQNKPJ2H',
-    symbol: 'nSOL',
-    name: 'nSOL',
-    decimals: 9,
-  },
-  {
-    address: 'native',
-    symbol: 'XLM',
-    name: 'Stellar Lumens',
-    decimals: 7,
-  },
-];
 
-// Mock contract addresses - to be replaced with real addresses
-export const SWAP_CONTRACT_ADDRESSES = {
-  SWAP_UTILITY: 'SWAP_UTILITY_CONTRACT_MOCK_ADDRESS',
-  SOROSWAP_ROUTER: 'SOROSWAP_ROUTER_MOCK_ADDRESS',
-  TOKENS: {
-    USDC: 'USDC_MOCK_ADDRESS',
-    BTC: 'BTC_MOCK_ADDRESS', 
-    ETH: 'ETH_MOCK_ADDRESS',
-    XLM: 'native',
-  }
-};
+

@@ -8,10 +8,9 @@ import {
   SwapQuote,
   SwapResult,
   DexDistribution,
-  TokenInfo,
-  AVAILABLE_SWAP_TOKENS,
-  SWAP_CONTRACT_ADDRESSES
+  TokenInfo
 } from "../lib/types/swap.types";
+import { AVAILABLE_SWAP_TOKENS } from "../lib/constants/tokens.constants";
 import { getKeypair } from "./wallet.service";
 import { STALE_TIMES } from "../lib/utils/query.utils";
 import {
@@ -29,6 +28,7 @@ import {
   fromContractAmount,
   buildSwapTransaction as buildSwapTransactionUtils
 } from "../lib/utils/pool-router.utils";
+import { formatNormalToken } from "../lib/utils/format.utils";
 
 // Get real swap quotes using Pool Router (same as web app)
 const calculateSwapQuote = async (
@@ -42,17 +42,18 @@ const calculateSwapQuote = async (
     throw new Error("Invalid amount");
   }
 
-  const config = getNetworkConfig();
   const tokenInInfo = AVAILABLE_SWAP_TOKENS.find(
-    (t) => t.address === request.tokenIn
+    (t) => t.symbol === formatNormalToken(request.tokenIn, "with-n")
   );
   const tokenOutInfo = AVAILABLE_SWAP_TOKENS.find(
-    (t) => t.address === request.tokenOut
+    (t) => t.symbol === formatNormalToken(request.tokenOut, "with-n")
   );
 
   if (!tokenInInfo || !tokenOutInfo) {
     throw new Error("Token not found");
   }
+
+  const config = getNetworkConfig();
 
   try {
     const testingKeypair = await getKeypair();
@@ -74,40 +75,43 @@ const calculateSwapQuote = async (
     // Get oracle prices for both tokens (same as web app)
     let tokenInPrice, tokenOutPrice;
 
-    try {
-      if (tokenInInfo.symbol !== "XLM") {
-        tokenInPrice = await getOraclePrice(
-          config.reflectorOracle ||
-            process.env.EXPO_PUBLIC_TESTNET_REFLECTOR_ORACLE ||
-            "CCYOZJCOPG34LLQQ7N24YXBM7LL62R7ONMZ3G6WZAAYPB5OYKOMJRN63",
-          tokenInInfo.symbol,
-          networkConfig
-        );
-        console.log(
-          `📈 ${tokenInInfo.symbol} oracle price:`,
-          formatTokenAmount(tokenInPrice.price, 14)
-        );
-      }
+    // try {
+    //   if (tokenInInfo.symbol !== "XLM") {
+    //     tokenInPrice = await getOraclePrice(
+    //       config.reflectorOracle ||
+    //         process.env.EXPO_PUBLIC_TESTNET_REFLECTOR_ORACLE ||
+    //         "CCYOZJCOPG34LLQQ7N24YXBM7LL62R7ONMZ3G6WZAAYPB5OYKOMJRN63",
+    //       formatNormalToken(request.tokenIn, "without-n"),
+    //       networkConfig
+    //     );
+    //     console.log(
+    //       `📈 ${request.tokenIn} oracle price:`,
+    //       formatTokenAmount(tokenInPrice.price, 14)
+    //     );
+    //   }
 
-      if (tokenOutInfo.symbol !== "XLM") {
-        tokenOutPrice = await getOraclePrice(
-          config.reflectorOracle ||
-            process.env.EXPO_PUBLIC_TESTNET_REFLECTOR_ORACLE ||
-            "CCYOZJCOPG34LLQQ7N24YXBM7LL62R7ONMZ3G6WZAAYPB5OYKOMJRN63",
-          tokenOutInfo.symbol,
-          networkConfig
-        );
-        console.log(
-          `📈 ${tokenOutInfo.symbol} oracle price:`,
-          formatTokenAmount(tokenOutPrice.price, 14)
-        );
-      }
-    } catch (oracleError) {
-      console.warn(
-        "⚠️ Oracle price fetch failed, using fallback pricing:",
-        oracleError
-      );
-    }
+    //   if (tokenOutInfo.symbol !== "XLM") {
+    //     tokenOutPrice = await getOraclePrice(
+    //       config.reflectorOracle ||
+    //         process.env.EXPO_PUBLIC_TESTNET_REFLECTOR_ORACLE ||
+    //         "CCYOZJCOPG34LLQQ7N24YXBM7LL62R7ONMZ3G6WZAAYPB5OYKOMJRN63",
+    //       formatNormalToken(request.tokenOut, "without-n"),
+    //       networkConfig
+    //     );
+    //     console.log(
+    //       `📈 ${formatNormalToken(
+    //         tokenOutInfo.symbol,
+    //         "without-n"
+    //       )} oracle price:`,
+    //       formatTokenAmount(tokenOutPrice.price, 14)
+    //     );
+    //   }
+    // } catch (oracleError) {
+    //   console.warn(
+    //     "⚠️ Oracle price fetch failed, using fallback pricing:",
+    //     oracleError
+    //   );
+    // }
 
     console.log("🏊 Step 2: Calling Pool Router estimate_swap...");
 
@@ -118,8 +122,8 @@ const calculateSwapQuote = async (
     );
 
     const estimateArgs = {
-      asset_in: getAssetAddress(tokenInInfo.symbol, tokenInInfo.address),
-      asset_out: getAssetAddress(tokenOutInfo.symbol, tokenOutInfo.address),
+      asset_in: formatNormalToken(tokenInInfo.symbol, "without-n"),
+      asset_out: formatNormalToken(tokenOutInfo.symbol, "without-n"),
       amount_in: amountInContract
     };
 
@@ -139,52 +143,53 @@ const calculateSwapQuote = async (
         // total_fee: swapEstimate.total_fee.toString()
       });
     } catch (poolError) {
-      console.warn(
-        "⚠️ Pool Router estimate failed, using oracle-based calculation:",
-        poolError
-      );
+      throw new Error("Pool Router estimate failed");
+      // console.warn(
+      //   "Pool Router estimate failed, using oracle-based calculation:",
+      //   poolError
+      // );
 
-      // Check if this is an UnreachableCodeReached error specifically
-      const errorString =
-        poolError instanceof Error ? poolError.message : String(poolError);
-      if (errorString.includes("UnreachableCodeReached")) {
-        console.error(
-          "😨 Contract execution error detected - this may indicate parameter encoding issues"
-        );
-        console.error("Debug info - Estimate args:", {
-          asset_in: estimateArgs.asset_in,
-          asset_out: estimateArgs.asset_out,
-          amount_in: estimateArgs.amount_in.toString()
-        });
-      }
+      // // Check if this is an UnreachableCodeReached error specifically
+      // const errorString =
+      //   poolError instanceof Error ? poolError.message : String(poolError);
+      // if (errorString.includes("UnreachableCodeReached")) {
+      //   console.error(
+      //     "Contract execution error detected - this may indicate parameter encoding issues"
+      //   );
+      //   console.error("Debug info - Estimate args:", {
+      //     asset_in: estimateArgs.asset_in,
+      //     asset_out: estimateArgs.asset_out,
+      //     amount_in: estimateArgs.amount_in.toString()
+      //   });
+      // }
 
-      // Use oracle prices only - no hardcoded fallbacks
-      if (!tokenInPrice || !tokenOutPrice) {
-        console.error("🚨 Both Pool Router and Oracle pricing failed");
-        throw new Error(
-          "Unable to get swap quote: both Pool Router and Oracle prices failed"
-        );
-      }
+      // // Use oracle prices only - no hardcoded fallbacks
+      // if (!tokenInPrice || !tokenOutPrice) {
+      //   console.error("Both Pool Router and Oracle pricing failed");
+      //   throw new Error(
+      //     "Unable to get swap quote: both Pool Router and Oracle prices failed"
+      //   );
+      // }
 
-      const exchangeRate =
-        Number(tokenInPrice.price) / Number(tokenOutPrice.price);
-      const fallbackAmountOut = amountInNum * exchangeRate * 0.997; // 0.3% fee
+      // const exchangeRate =
+      //   Number(tokenInPrice.price) / Number(tokenOutPrice.price);
+      // const fallbackAmountOut = amountInNum * exchangeRate * 0.997; // 0.3% fee
 
-      swapEstimate = {
-        amount_out: toContractAmount(
-          fallbackAmountOut.toString(),
-          tokenOutInfo.decimals
-        ),
-        spread_amount: BigInt(0),
-        commission_amount: toContractAmount(
-          (amountInNum * 0.003).toString(),
-          tokenInInfo.decimals
-        ),
-        total_fee: toContractAmount(
-          (amountInNum * 0.003).toString(),
-          tokenInInfo.decimals
-        )
-      };
+      // swapEstimate = {
+      //   amount_out: toContractAmount(
+      //     fallbackAmountOut.toString(),
+      //     tokenOutInfo.decimals
+      //   ),
+      //   spread_amount: BigInt(0),
+      //   commission_amount: toContractAmount(
+      //     (amountInNum * 0.003).toString(),
+      //     tokenInInfo.decimals
+      //   ),
+      //   total_fee: toContractAmount(
+      //     (amountInNum * 0.003).toString(),
+      //     tokenInInfo.decimals
+      //   )
+      // };
     }
 
     // Convert back to display amounts
@@ -197,15 +202,11 @@ const calculateSwapQuote = async (
       (1 - (request.slippageTolerance || 0.5) / 100)
     ).toString();
 
-    // Calculate price impact
+    // Calculate total fees for display
     const totalFeeDisplay = fromContractAmount(
       swapEstimate.spread_amount,
       tokenInInfo.decimals
     );
-    const priceImpact = (
-      (parseFloat(totalFeeDisplay) / amountInNum) *
-      100
-    ).toFixed(3);
 
     console.log(
       `💱 Real exchange rate: 1 ${tokenInInfo.symbol} = ${(
@@ -216,7 +217,6 @@ const calculateSwapQuote = async (
     console.log(
       `📉 Min amount (with slippage): ${amountOutMin} ${tokenOutInfo.symbol}`
     );
-    console.log(`💸 Price impact: ${priceImpact}%`);
 
     const distribution: DexDistribution = {
       parts: "10000",
@@ -243,7 +243,6 @@ const calculateSwapQuote = async (
       amountIn: request.amountIn,
       amountOut,
       amountOutMin,
-      priceImpact,
       route: [distribution],
       deadline,
       swapParams
@@ -372,8 +371,8 @@ const buildSwapTransaction = async (
       config.poolRouter,
       {
         user: keypair.publicKey(),
-        asset_in: getAssetAddress(tokenInInfo.symbol, tokenInInfo.address),
-        asset_out: getAssetAddress(tokenOutInfo.symbol, tokenOutInfo.address),
+        asset_in: formatNormalToken(tokenInInfo.symbol, "without-n"),
+        asset_out: formatNormalToken(tokenOutInfo.symbol, "without-n"),
         amount_in: amountInContract,
         amount_out_min: amountOutMinContract
       },
@@ -386,6 +385,10 @@ const buildSwapTransaction = async (
 
     console.log("✅ Pool Router transaction assembled successfully!");
 
+    await swapTx.simulate();
+
+    console.log("✅ Pool Router transaction simulated successfully!");
+
     // Step 3: Sign transaction locally using assembled transaction
     console.log("✍️ Signing transaction...");
     await swapTx.sign({
@@ -396,7 +399,7 @@ const buildSwapTransaction = async (
       }
     });
 
-    const signedXdr = swapTx.built?.toXDR();
+    const signedXdr = swapTx.signed?.toXDR();
     console.log("📝 Signed XDR", signedXdr);
 
     if (!signedXdr) {
@@ -492,19 +495,6 @@ const executeSwap = async (swapParams: SwapParams): Promise<SwapResult> => {
 
 // Get available tokens for swapping
 export const getAvailableTokens = async (): Promise<TokenInfo[]> => {
-  console.log("🪙 Available tokens for swapping:");
-  console.log("==================================================");
-
-  AVAILABLE_SWAP_TOKENS.forEach((token, index) => {
-    console.log(`${index + 1}. Token: ${token.name} (${token.symbol})`);
-    console.log(`   Asset Address: ${token.address}`);
-    console.log(`   Decimals: ${token.decimals}`);
-    console.log("---");
-  });
-
-  console.log("==================================================");
-  console.log(`Total available tokens: ${AVAILABLE_SWAP_TOKENS.length}`);
-
   return AVAILABLE_SWAP_TOKENS;
 };
 
@@ -563,7 +553,7 @@ export const useAvailableTokens = () => {
   return useQuery({
     queryKey: swapQueryKeys.tokens(),
     queryFn: getAvailableTokens,
-    staleTime: STALE_TIMES.LONG // Token list doesn't change often
+    staleTime: STALE_TIMES.LONG
   });
 };
 
@@ -574,14 +564,3 @@ export const parseTokenAmount = (amount: string, decimals: number): string => {
   // Convert to smallest unit (like wei for ETH)
   return (num * Math.pow(10, decimals)).toString();
 };
-
-export const formatPriceImpact = (priceImpact: string): string => {
-  const impact = parseFloat(priceImpact);
-  if (isNaN(impact)) return "0%";
-  return `${impact.toFixed(2)}%`;
-};
-
-// Constants for slippage tolerance options
-export const SLIPPAGE_OPTIONS = [0.1, 0.5, 1.0, 3.0]; // Percentages
-
-export { SWAP_CONTRACT_ADDRESSES };
