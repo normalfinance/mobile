@@ -75,43 +75,43 @@ const calculateSwapQuote = async (
     // Get oracle prices for both tokens (same as web app)
     let tokenInPrice, tokenOutPrice;
 
-    try {
-      if (tokenInInfo.symbol !== "XLM") {
-        tokenInPrice = await getOraclePrice(
-          config.reflectorOracle ||
-            process.env.EXPO_PUBLIC_TESTNET_REFLECTOR_ORACLE ||
-            "CCYOZJCOPG34LLQQ7N24YXBM7LL62R7ONMZ3G6WZAAYPB5OYKOMJRN63",
-          formatNormalToken(request.tokenIn, "without-n"),
-          networkConfig
-        );
-        console.log(
-          `📈 ${request.tokenIn} oracle price:`,
-          formatTokenAmount(tokenInPrice.price, 14)
-        );
-      }
+    // try {
+    //   if (tokenInInfo.symbol !== "XLM") {
+    //     tokenInPrice = await getOraclePrice(
+    //       config.reflectorOracle ||
+    //         process.env.EXPO_PUBLIC_TESTNET_REFLECTOR_ORACLE ||
+    //         "CCYOZJCOPG34LLQQ7N24YXBM7LL62R7ONMZ3G6WZAAYPB5OYKOMJRN63",
+    //       formatNormalToken(request.tokenIn, "without-n"),
+    //       networkConfig
+    //     );
+    //     console.log(
+    //       `📈 ${request.tokenIn} oracle price:`,
+    //       formatTokenAmount(tokenInPrice.price, 14)
+    //     );
+    //   }
 
-      if (tokenOutInfo.symbol !== "XLM") {
-        tokenOutPrice = await getOraclePrice(
-          config.reflectorOracle ||
-            process.env.EXPO_PUBLIC_TESTNET_REFLECTOR_ORACLE ||
-            "CCYOZJCOPG34LLQQ7N24YXBM7LL62R7ONMZ3G6WZAAYPB5OYKOMJRN63",
-          formatNormalToken(request.tokenOut, "without-n"),
-          networkConfig
-        );
-        console.log(
-          `📈 ${formatNormalToken(
-            tokenOutInfo.symbol,
-            "without-n"
-          )} oracle price:`,
-          formatTokenAmount(tokenOutPrice.price, 14)
-        );
-      }
-    } catch (oracleError) {
-      console.warn(
-        "⚠️ Oracle price fetch failed, using fallback pricing:",
-        oracleError
-      );
-    }
+    //   if (tokenOutInfo.symbol !== "XLM") {
+    //     tokenOutPrice = await getOraclePrice(
+    //       config.reflectorOracle ||
+    //         process.env.EXPO_PUBLIC_TESTNET_REFLECTOR_ORACLE ||
+    //         "CCYOZJCOPG34LLQQ7N24YXBM7LL62R7ONMZ3G6WZAAYPB5OYKOMJRN63",
+    //       formatNormalToken(request.tokenOut, "without-n"),
+    //       networkConfig
+    //     );
+    //     console.log(
+    //       `📈 ${formatNormalToken(
+    //         tokenOutInfo.symbol,
+    //         "without-n"
+    //       )} oracle price:`,
+    //       formatTokenAmount(tokenOutPrice.price, 14)
+    //     );
+    //   }
+    // } catch (oracleError) {
+    //   console.warn(
+    //     "⚠️ Oracle price fetch failed, using fallback pricing:",
+    //     oracleError
+    //   );
+    // }
 
     console.log("🏊 Step 2: Calling Pool Router estimate_swap...");
 
@@ -143,52 +143,53 @@ const calculateSwapQuote = async (
         // total_fee: swapEstimate.total_fee.toString()
       });
     } catch (poolError) {
-      console.warn(
-        "⚠️ Pool Router estimate failed, using oracle-based calculation:",
-        poolError
-      );
+      throw new Error("Pool Router estimate failed");
+      // console.warn(
+      //   "Pool Router estimate failed, using oracle-based calculation:",
+      //   poolError
+      // );
 
-      // Check if this is an UnreachableCodeReached error specifically
-      const errorString =
-        poolError instanceof Error ? poolError.message : String(poolError);
-      if (errorString.includes("UnreachableCodeReached")) {
-        console.error(
-          "😨 Contract execution error detected - this may indicate parameter encoding issues"
-        );
-        console.error("Debug info - Estimate args:", {
-          asset_in: estimateArgs.asset_in,
-          asset_out: estimateArgs.asset_out,
-          amount_in: estimateArgs.amount_in.toString()
-        });
-      }
+      // // Check if this is an UnreachableCodeReached error specifically
+      // const errorString =
+      //   poolError instanceof Error ? poolError.message : String(poolError);
+      // if (errorString.includes("UnreachableCodeReached")) {
+      //   console.error(
+      //     "Contract execution error detected - this may indicate parameter encoding issues"
+      //   );
+      //   console.error("Debug info - Estimate args:", {
+      //     asset_in: estimateArgs.asset_in,
+      //     asset_out: estimateArgs.asset_out,
+      //     amount_in: estimateArgs.amount_in.toString()
+      //   });
+      // }
 
-      // Use oracle prices only - no hardcoded fallbacks
-      if (!tokenInPrice || !tokenOutPrice) {
-        console.error("🚨 Both Pool Router and Oracle pricing failed");
-        throw new Error(
-          "Unable to get swap quote: both Pool Router and Oracle prices failed"
-        );
-      }
+      // // Use oracle prices only - no hardcoded fallbacks
+      // if (!tokenInPrice || !tokenOutPrice) {
+      //   console.error("Both Pool Router and Oracle pricing failed");
+      //   throw new Error(
+      //     "Unable to get swap quote: both Pool Router and Oracle prices failed"
+      //   );
+      // }
 
-      const exchangeRate =
-        Number(tokenInPrice.price) / Number(tokenOutPrice.price);
-      const fallbackAmountOut = amountInNum * exchangeRate * 0.997; // 0.3% fee
+      // const exchangeRate =
+      //   Number(tokenInPrice.price) / Number(tokenOutPrice.price);
+      // const fallbackAmountOut = amountInNum * exchangeRate * 0.997; // 0.3% fee
 
-      swapEstimate = {
-        amount_out: toContractAmount(
-          fallbackAmountOut.toString(),
-          tokenOutInfo.decimals
-        ),
-        spread_amount: BigInt(0),
-        commission_amount: toContractAmount(
-          (amountInNum * 0.003).toString(),
-          tokenInInfo.decimals
-        ),
-        total_fee: toContractAmount(
-          (amountInNum * 0.003).toString(),
-          tokenInInfo.decimals
-        )
-      };
+      // swapEstimate = {
+      //   amount_out: toContractAmount(
+      //     fallbackAmountOut.toString(),
+      //     tokenOutInfo.decimals
+      //   ),
+      //   spread_amount: BigInt(0),
+      //   commission_amount: toContractAmount(
+      //     (amountInNum * 0.003).toString(),
+      //     tokenInInfo.decimals
+      //   ),
+      //   total_fee: toContractAmount(
+      //     (amountInNum * 0.003).toString(),
+      //     tokenInInfo.decimals
+      //   )
+      // };
     }
 
     // Convert back to display amounts
@@ -576,4 +577,3 @@ export const parseTokenAmount = (amount: string, decimals: number): string => {
   // Convert to smallest unit (like wei for ETH)
   return (num * Math.pow(10, decimals)).toString();
 };
-
