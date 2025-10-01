@@ -8,253 +8,16 @@ import {
   SwapQuote,
   SwapResult,
   DexDistribution,
-  TokenInfo,
-  TransactionResponse
+  TokenInfo
 } from "../lib/types/swap.types";
 import { AVAILABLE_SWAP_TOKENS } from "../lib/constants/tokens.constants";
 import { getKeypair } from "./wallet.service";
 import { STALE_TIMES } from "../lib/utils/query.utils";
-import {
-  Networks,
-  Horizon,
-  Account,
-  TransactionBuilder
-} from "@stellar/stellar-sdk";
-import * as Crypto from "expo-crypto";
-import { getOraclePrice, formatTokenAmount } from "../lib/utils/oracle.utils";
-import {
-  estimateSwap,
-  getAssetAddress,
-  toContractAmount,
-  fromContractAmount,
-  buildSwapTransaction as buildSwapTransactionUtils
-} from "../lib/utils/pool-router.utils";
+import { Networks, Account } from "@stellar/stellar-sdk";
 import { formatNormalToken } from "../lib/utils/format.utils";
+import { useSwap } from "../hooks/use-swap";
 
-// Get real swap quotes using Pool Router (same as web app)
-const calculateSwapQuote = async (
-  request: SwapQuoteRequest
-): Promise<SwapQuote> => {
-  console.log("📊 Getting REAL swap quote from Pool Router...");
-  console.log("Quote request:", JSON.stringify(request, null, 2));
-
-  const amountInNum = parseFloat(request.amountIn);
-  if (isNaN(amountInNum) || amountInNum <= 0) {
-    throw new Error("Invalid amount");
-  }
-
-  const tokenInInfo = AVAILABLE_SWAP_TOKENS.find(
-    (t) => t.symbol === formatNormalToken(request.tokenIn, "with-n")
-  );
-  const tokenOutInfo = AVAILABLE_SWAP_TOKENS.find(
-    (t) => t.symbol === formatNormalToken(request.tokenOut, "with-n")
-  );
-
-  if (!tokenInInfo || !tokenOutInfo) {
-    throw new Error("Token not found");
-  }
-
-  const config = getNetworkConfig();
-
-  try {
-    const testingKeypair = await getKeypair();
-
-    if (!testingKeypair) {
-      throw new Error("No wallet found");
-    }
-
-    const testingSource = new Account(testingKeypair.publicKey(), "0");
-
-    const networkConfig = {
-      rpcUrl: config.rpcUrl,
-      networkPassphrase: config.networkPassphrase,
-      testingSource
-    };
-
-    console.log("🔮 Step 1: Fetching oracle prices...");
-
-    // Get oracle prices for both tokens (same as web app)
-    let tokenInPrice, tokenOutPrice;
-
-    // try {
-    //   if (tokenInInfo.symbol !== "XLM") {
-    //     tokenInPrice = await getOraclePrice(
-    //       config.reflectorOracle ||
-    //         process.env.EXPO_PUBLIC_TESTNET_REFLECTOR_ORACLE ||
-    //         "CCYOZJCOPG34LLQQ7N24YXBM7LL62R7ONMZ3G6WZAAYPB5OYKOMJRN63",
-    //       formatNormalToken(request.tokenIn, "without-n"),
-    //       networkConfig
-    //     );
-    //     console.log(
-    //       `📈 ${request.tokenIn} oracle price:`,
-    //       formatTokenAmount(tokenInPrice.price, 14)
-    //     );
-    //   }
-
-    //   if (tokenOutInfo.symbol !== "XLM") {
-    //     tokenOutPrice = await getOraclePrice(
-    //       config.reflectorOracle ||
-    //         process.env.EXPO_PUBLIC_TESTNET_REFLECTOR_ORACLE ||
-    //         "CCYOZJCOPG34LLQQ7N24YXBM7LL62R7ONMZ3G6WZAAYPB5OYKOMJRN63",
-    //       formatNormalToken(request.tokenOut, "without-n"),
-    //       networkConfig
-    //     );
-    //     console.log(
-    //       `📈 ${formatNormalToken(
-    //         tokenOutInfo.symbol,
-    //         "without-n"
-    //       )} oracle price:`,
-    //       formatTokenAmount(tokenOutPrice.price, 14)
-    //     );
-    //   }
-    // } catch (oracleError) {
-    //   console.warn(
-    //     "⚠️ Oracle price fetch failed, using fallback pricing:",
-    //     oracleError
-    //   );
-    // }
-
-    console.log("🏊 Step 2: Calling Pool Router estimate_swap...");
-
-    // Convert amount to contract format
-    const amountInContract = toContractAmount(
-      request.amountIn,
-      tokenInInfo.decimals
-    );
-
-    const estimateArgs = {
-      asset_in: formatNormalToken(tokenInInfo.symbol, "without-n"),
-      asset_out: formatNormalToken(tokenOutInfo.symbol, "without-n"),
-      amount_in: amountInContract
-    };
-
-    let swapEstimate;
-    try {
-      // Call the real Pool Router contract
-      swapEstimate = await estimateSwap(
-        config.poolRouter,
-        estimateArgs,
-        networkConfig
-      );
-
-      console.log("✅ Pool Router estimate success:", {
-        amount_out: swapEstimate.amount_out.toString(),
-        spread_amount: swapEstimate.spread_amount.toString()
-        // commission_amount: swapEstimate.commission_amount.toString(),
-        // total_fee: swapEstimate.total_fee.toString()
-      });
-    } catch (poolError) {
-      throw new Error("Pool Router estimate failed");
-      // console.warn(
-      //   "Pool Router estimate failed, using oracle-based calculation:",
-      //   poolError
-      // );
-
-      // // Check if this is an UnreachableCodeReached error specifically
-      // const errorString =
-      //   poolError instanceof Error ? poolError.message : String(poolError);
-      // if (errorString.includes("UnreachableCodeReached")) {
-      //   console.error(
-      //     "Contract execution error detected - this may indicate parameter encoding issues"
-      //   );
-      //   console.error("Debug info - Estimate args:", {
-      //     asset_in: estimateArgs.asset_in,
-      //     asset_out: estimateArgs.asset_out,
-      //     amount_in: estimateArgs.amount_in.toString()
-      //   });
-      // }
-
-      // // Use oracle prices only - no hardcoded fallbacks
-      // if (!tokenInPrice || !tokenOutPrice) {
-      //   console.error("Both Pool Router and Oracle pricing failed");
-      //   throw new Error(
-      //     "Unable to get swap quote: both Pool Router and Oracle prices failed"
-      //   );
-      // }
-
-      // const exchangeRate =
-      //   Number(tokenInPrice.price) / Number(tokenOutPrice.price);
-      // const fallbackAmountOut = amountInNum * exchangeRate * 0.997; // 0.3% fee
-
-      // swapEstimate = {
-      //   amount_out: toContractAmount(
-      //     fallbackAmountOut.toString(),
-      //     tokenOutInfo.decimals
-      //   ),
-      //   spread_amount: BigInt(0),
-      //   commission_amount: toContractAmount(
-      //     (amountInNum * 0.003).toString(),
-      //     tokenInInfo.decimals
-      //   ),
-      //   total_fee: toContractAmount(
-      //     (amountInNum * 0.003).toString(),
-      //     tokenInInfo.decimals
-      //   )
-      // };
-    }
-
-    // Convert back to display amounts
-    const amountOut = fromContractAmount(
-      swapEstimate.amount_out,
-      tokenOutInfo.decimals
-    );
-    const amountOutMin = (
-      parseFloat(amountOut) *
-      (1 - (request.slippageTolerance || 0.5) / 100)
-    ).toString();
-
-    // Calculate total fees for display
-    const totalFeeDisplay = fromContractAmount(
-      swapEstimate.spread_amount,
-      tokenInInfo.decimals
-    );
-
-    console.log(
-      `💱 Real exchange rate: 1 ${tokenInInfo.symbol} = ${(
-        parseFloat(amountOut) / amountInNum
-      ).toFixed(8)} ${tokenOutInfo.symbol}`
-    );
-    console.log(`📤 Amount out: ${amountOut} ${tokenOutInfo.symbol}`);
-    console.log(
-      `📉 Min amount (with slippage): ${amountOutMin} ${tokenOutInfo.symbol}`
-    );
-
-    const distribution: DexDistribution = {
-      parts: "10000",
-      path: `${request.tokenIn},${request.tokenOut}`,
-      protocol_id: "normal_pool_router"
-    };
-
-    const deadline = Math.floor(Date.now() / 1000) + 300; // 5 minutes
-
-    const keypair = await getKeypair();
-    const userAddress = keypair?.publicKey() || "USER_WALLET_ADDRESS";
-
-    const swapParams: SwapParams = {
-      amount_in: request.amountIn,
-      amount_out_min: amountOutMin,
-      deadline,
-      distribution: [distribution],
-      to: userAddress,
-      token_in: request.tokenIn,
-      token_out: request.tokenOut
-    };
-
-    return {
-      amountIn: request.amountIn,
-      amountOut,
-      amountOutMin,
-      route: [distribution],
-      deadline,
-      swapParams
-    };
-  } catch (error) {
-    console.error("❌ Error getting swap quote:", error);
-    throw error;
-  }
-};
-
-// Network configuration (replace with actual env vars)
+// Network configuration helper
 const getNetworkConfig = () => {
   const network = process.env.EXPO_PUBLIC_NETWORK || "TESTNET";
 
@@ -293,227 +56,142 @@ const getNetworkConfig = () => {
   }
 };
 
-// Build and sign transaction (same flow as web app)
-const buildSwapTransaction = async (
-  swapParams: SwapParams
-): Promise<string> => {
-  console.log("🔄 Starting swap transaction build...");
-  console.log("SwapParams:", JSON.stringify(swapParams, null, 2));
+const createSwapQuoteCalculator = (swapOps: ReturnType<typeof useSwap>) => {
+  return async (request: SwapQuoteRequest): Promise<SwapQuote> => {
+    console.log("📊 Getting swap quote from Pool Router...");
+    console.log("Quote request:", JSON.stringify(request, null, 2));
 
-  const keypair = await getKeypair();
-  if (!keypair) {
-    throw new Error("No wallet found");
-  }
-
-  const config = getNetworkConfig();
-  console.log("🌐 Network config:", config);
-
-  try {
-    // Step 1: Load account from Horizon (freighter-mobile pattern)
-    console.log("📋 Loading account for:", keypair.publicKey());
-    const horizonServer = new Horizon.Server(config.horizonUrl);
-
-    let sourceAccount: Account;
-    try {
-      sourceAccount = await horizonServer.loadAccount(keypair.publicKey());
-      console.log(
-        "✅ Account loaded. Sequence:",
-        sourceAccount.sequenceNumber()
-      );
-    } catch (error) {
-      console.error("❌ Failed to load account:", error);
-      throw new Error(
-        `Failed to load account ${keypair.publicKey()}: ${error}`
-      );
+    const amountInNum = parseFloat(request.amountIn);
+    if (isNaN(amountInNum) || amountInNum <= 0) {
+      throw new Error("Invalid amount");
     }
 
-    // Step 2: Build Pool Router swap transaction via contract client
-    console.log("🔨 Building Pool Router swap transaction...", swapParams);
-
-    // Find token info for decimal conversion
     const tokenInInfo = AVAILABLE_SWAP_TOKENS.find(
-      (t) =>
-        t.symbol === swapParams.token_in ||
-        (swapParams.token_in === "native" && t.symbol === "XLM")
+      (t) => t.symbol === formatNormalToken(request.tokenIn, "with-n")
     );
     const tokenOutInfo = AVAILABLE_SWAP_TOKENS.find(
-      (t) =>
-        t.symbol === formatNormalToken(swapParams.token_out, "with-n") ||
-        (swapParams.token_out === "native" && t.symbol === "XLM")
+      (t) => t.symbol === formatNormalToken(request.tokenOut, "with-n")
     );
-
-    console.log("🔢 Token info:", {
-      tokenInInfo,
-      tokenOutInfo
-    });
 
     if (!tokenInInfo || !tokenOutInfo) {
-      throw new Error(
-        `Token info not found for swap: ${swapParams.token_in} -> ${swapParams.token_out}`
-      );
+      throw new Error("Token not found");
     }
 
-    // Convert amounts to contract format (with proper decimals)
-    const amountInContract = toContractAmount(
-      swapParams.amount_in,
-      tokenInInfo.decimals
-    );
-    const amountOutMinContract = toContractAmount(
-      swapParams.amount_out_min,
-      tokenOutInfo.decimals
-    );
+    const config = getNetworkConfig();
 
-    console.log("🔢 Contract amounts:", {
-      amountIn: `${swapParams.amount_in} ${
-        tokenInInfo.symbol
-      } = ${amountInContract.toString()}`,
-      amountOutMin: `${swapParams.amount_out_min} ${
-        tokenOutInfo.symbol
-      } = ${amountOutMinContract.toString()}`
-    });
+    try {
+      const testingKeypair = await getKeypair();
 
-    // Build swap transaction via contract client
-    const swapTx = await buildSwapTransactionUtils(
-      config.poolRouter,
-      {
-        user: keypair.publicKey(),
+      if (!testingKeypair) {
+        throw new Error("No wallet found");
+      }
+
+      const testingSource = new Account(testingKeypair.publicKey(), "0");
+
+      const networkConfig = {
+        rpcUrl: config.rpcUrl,
+        networkPassphrase: config.networkPassphrase,
+        testingSource
+      };
+
+      console.log("🏊 Calling Pool Router estimate_swap...");
+
+      // Convert amount to contract format using swap operations utilities
+      const amountInContract = swapOps.toContractAmount(
+        request.amountIn,
+        tokenInInfo.decimals
+      );
+
+      const estimateArgs = {
         asset_in: formatNormalToken(tokenInInfo.symbol, "without-n"),
         asset_out: formatNormalToken(tokenOutInfo.symbol, "without-n"),
-        amount_in: amountInContract,
-        amount_out_min: amountOutMinContract
-      },
-      sourceAccount,
-      {
-        networkPassphrase: config.networkPassphrase,
-        rpcUrl: config.rpcUrl
-      }
-    );
+        amount_in: amountInContract
+      };
 
-    console.log("✅ Pool Router transaction assembled successfully!");
-
-    await swapTx.simulate();
-
-    console.log("✅ Pool Router transaction simulated successfully!");
-
-    // Step 3: Sign transaction locally using assembled transaction
-    console.log("✍️ Signing transaction...");
-    await swapTx.sign({
-      signTransaction: async (xdr) => {
-        const txn = TransactionBuilder.fromXDR(xdr, config.networkPassphrase);
-        txn.sign(keypair);
-        return { signedTxXdr: txn.toXDR() };
-      }
-    });
-
-    const signedXdr = swapTx.signed?.toXDR();
-    console.log("📝 Signed XDR", signedXdr);
-
-    if (!signedXdr) {
-      throw new Error("No signed XDR");
-    }
-
-    return signedXdr;
-  } catch (error) {
-    console.error("❌ Error building transaction:", error);
-    throw error;
-  }
-};
-
-// Send signed XDR to backend (same flow as web app)
-const submitSwapToBackend = async (
-  signedXdr: string,
-  swapParams: SwapParams
-): Promise<SwapResult> => {
-  console.log("🚀 Submitting swap to backend...");
-  console.log("📄 Signed XDR length:", signedXdr.length);
-
-  try {
-    // Use localhost backend for development (same endpoint as web app)
-    const backendUrl = "http://localhost:8090/api/transaction";
-
-    const keypair = await getKeypair();
-    const walletAddress = keypair?.publicKey();
-
-    // Match web app payload format exactly
-    const payload = {
-      walletAddress,
-      signedTransactionXDR: signedXdr,
-      transactionType: "Pool Router Swap"
-    };
-
-    console.log(
-      "📦 Backend payload (web app format):",
-      JSON.stringify(payload, null, 2)
-    );
-    console.log("🌐 Submitting to backend URL:", backendUrl);
-
-    // Actual API call to your backend (same as web app)
-    const response = await fetch(backendUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(payload)
-    });
-
-    if (!response.ok) {
-      throw new Error(
-        `Backend request failed: ${response.status} ${response.statusText}`
+      const swapEstimate = await swapOps.estimateSwap(
+        config.poolRouter,
+        estimateArgs,
+        networkConfig
       );
+
+      console.log("✅ Pool Router estimate success:", {
+        amount_out: swapEstimate.amount_out.toString(),
+        spread_amount: swapEstimate.spread_amount.toString()
+      });
+
+      // Convert back to display amounts using swap operations utilities
+      const amountOut = swapOps.fromContractAmount(
+        swapEstimate.amount_out,
+        tokenOutInfo.decimals
+      );
+      const amountOutMin = (
+        parseFloat(amountOut) *
+        (1 - (request.slippageTolerance || 0.5) / 100)
+      ).toString();
+
+      console.log(
+        `💱 Exchange rate: 1 ${tokenInInfo.symbol} = ${(
+          parseFloat(amountOut) / amountInNum
+        ).toFixed(8)} ${tokenOutInfo.symbol}`
+      );
+      console.log(`📤 Amount out: ${amountOut} ${tokenOutInfo.symbol}`);
+      console.log(
+        `📉 Min amount (with slippage): ${amountOutMin} ${tokenOutInfo.symbol}`
+      );
+
+      const distribution: DexDistribution = {
+        parts: "10000",
+        path: `${request.tokenIn},${request.tokenOut}`,
+        protocol_id: "normal_pool_router"
+      };
+
+      const deadline = Math.floor(Date.now() / 1000) + 300; // 5 minutes
+
+      const keypair = await getKeypair();
+      const userAddress = keypair?.publicKey() || "USER_WALLET_ADDRESS";
+
+      const swapParams: SwapParams = {
+        amount_in: request.amountIn,
+        amount_out_min: amountOutMin,
+        deadline,
+        distribution: [distribution],
+        to: userAddress,
+        token_in: request.tokenIn,
+        token_out: request.tokenOut
+      };
+
+      return {
+        amountIn: request.amountIn,
+        amountOut,
+        amountOutMin,
+        route: [distribution],
+        deadline,
+        swapParams
+      };
+    } catch (error) {
+      console.error("❌ Error getting swap quote:", error);
+      throw error;
     }
-
-    const responseData = await response.json();
-    console.log("✅ Backend response:", responseData);
-
-    return {
-      transactionHash:
-        responseData.hash ||
-        responseData.transactionHash ||
-        `tx_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      amountIn: swapParams.amount_in,
-      amountOut: responseData.amountOut || swapParams.amount_out_min,
-      tokenIn: swapParams.token_in,
-      tokenOut: swapParams.token_out,
-      timestamp: Date.now(),
-      backendResponse: responseData as TransactionResponse
-    };
-  } catch (error) {
-    console.error("❌ Backend submission failed:", error);
-    throw error;
-  }
+  };
 };
 
-const executeSwap = async (swapParams: SwapParams): Promise<SwapResult> => {
-  console.log("🎯 Starting swap execution...");
-
-  try {
-    // Step 1: Build and sign transaction locally
-    const signedXdr = await buildSwapTransaction(swapParams);
-
-    // Step 2: Send signed XDR to backend for submission
-    const result = await submitSwapToBackend(signedXdr, swapParams);
-
-    console.log("🎉 Swap completed successfully:", result);
-    return result;
-  } catch (error) {
-    console.error("💥 Swap execution failed:", error);
-    throw error;
-  }
-};
-
-// Get available tokens for swapping
+// Utility functions for token operations
 export const getAvailableTokens = async (): Promise<TokenInfo[]> => {
   return AVAILABLE_SWAP_TOKENS;
 };
 
-// Find token info by address
 export const findTokenByAddress = (address: string): TokenInfo | undefined => {
   return AVAILABLE_SWAP_TOKENS.find((token) => token.address === address);
 };
 
-// Find token info by symbol
 export const findTokenBySymbol = (symbol: string): TokenInfo | undefined => {
   return AVAILABLE_SWAP_TOKENS.find((token) => token.symbol === symbol);
+};
+
+export const parseTokenAmount = (amount: string, decimals: number): string => {
+  const num = parseFloat(amount);
+  if (isNaN(num)) return "0";
+  return (num * Math.pow(10, decimals)).toString();
 };
 
 // Query Keys
@@ -525,11 +203,13 @@ export const swapQueryKeys = {
   tokens: () => [...swapQueryKeys.all, "tokens"] as const
 };
 
-// Custom Hooks
 export const useSwapQuote = (
   request: SwapQuoteRequest,
   enabled: boolean = true
 ) => {
+  const swapOps = useSwap();
+  const calculateSwapQuote = createSwapQuoteCalculator(swapOps);
+
   return useQuery({
     queryKey: swapQueryKeys.quote(request),
     queryFn: () => calculateSwapQuote(request),
@@ -546,8 +226,10 @@ export const useSwapQuote = (
 };
 
 export const useExecuteSwap = () => {
+  const { executeSwap } = useSwap();
+
   return useMutation({
-    mutationFn: executeSwap,
+    mutationFn: (swapParams: SwapParams) => executeSwap(swapParams),
     onSuccess: (result) => {
       console.log("Swap executed successfully:", result);
     },
@@ -563,12 +245,4 @@ export const useAvailableTokens = () => {
     queryFn: getAvailableTokens,
     staleTime: STALE_TIMES.LONG
   });
-};
-
-export const parseTokenAmount = (amount: string, decimals: number): string => {
-  const num = parseFloat(amount);
-  if (isNaN(num)) return "0";
-
-  // Convert to smallest unit (like wei for ETH)
-  return (num * Math.pow(10, decimals)).toString();
 };

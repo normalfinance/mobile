@@ -189,7 +189,7 @@ export async function buildSwapTransaction(
     swapArgs.asset_in
   );
 
-  return poolRouterClient.swap(
+  const transaction = await poolRouterClient.swap(
     {
       user: swapArgs.user,
       asset: swapArgs.asset_out,
@@ -197,8 +197,14 @@ export async function buildSwapTransaction(
       in_amount: swapArgs.amount_in,
       out_min: swapArgs.amount_out_min
     },
-    { simulate: false, fee: 1000 }
+    { fee: 1000 }
   );
+
+  if (!transaction.built) {
+    await transaction.simulate();
+  }
+
+  return transaction;
 }
 
 export function getAssetAddress(symbol: string, issuer?: string): string {

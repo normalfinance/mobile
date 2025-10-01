@@ -1,92 +1,26 @@
-import { Networks } from "@stellar/stellar-sdk";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { getWallet, getKeypair, walletQueryKeys } from "./wallet.service";
+import { getWallet, walletQueryKeys } from "./wallet.service";
+import { STELLAR_ERRORS } from "../lib/constants/stellar.constants";
 import {
-  NETWORK_PASSPHRASE,
-  STELLAR_ERRORS
-} from "../lib/constants/stellar.constants";
-import {
-  parseTransaction,
   getTransactionDetails as getTransactionDetailsUtil,
-  verifyTransactionSignature,
-  signTransactionWithKeypair,
   TransactionDetails
 } from "../lib/utils/stellar.utils";
 import { STALE_TIMES } from "../lib/utils/query.utils";
+import { useTransactionOperations } from "../hooks/use-transaction";
+import {
+  SignedTransactionResult,
+  GenerateXDRParams,
+  SubmitTransactionParams
+} from "../lib/types/transaction.types";
 
+// Legacy interface for backward compatibility
 export interface SignedTransaction {
   signedXDR: string;
   transactionHash: string;
   walletAddress: string;
 }
 
-// Core transaction functions
-export const signTransaction = async (
-  unsignedXDR: string
-): Promise<SignedTransaction> => {
-  try {
-    // Get the user's keypair
-    const keypair = await getKeypair();
-    if (!keypair) {
-      throw new Error(STELLAR_ERRORS.NO_WALLET);
-    }
-
-    // Get wallet info for the address
-    const walletInfo = await getWallet();
-    if (!walletInfo) {
-      throw new Error(STELLAR_ERRORS.NO_WALLET_INFO);
-    }
-
-    // Parse the transaction from XDR
-    const transaction = parseTransaction(unsignedXDR);
-
-    // Sign the transaction
-    signTransactionWithKeypair(transaction, keypair);
-
-    // Get the signed XDR
-    const signedXDR = transaction.toXDR();
-
-    // Calculate transaction hash
-    const transactionHash = transaction.hash().toString("hex");
-
-    return {
-      signedXDR,
-      transactionHash,
-      walletAddress: walletInfo.publicKey
-    };
-  } catch (error) {
-    throw new Error(`${STELLAR_ERRORS.SIGN_FAILED}: ${error}`);
-  }
-};
-
-export const verifyTransaction = async (
-  signedXDR: string,
-  expectedWalletAddress: string
-): Promise<boolean> => {
-  try {
-    // Parse the signed transaction
-    const transaction = parseTransaction(signedXDR);
-
-    // Get the wallet info
-    const walletInfo = await getWallet();
-    if (!walletInfo || walletInfo.publicKey !== expectedWalletAddress) {
-      return false;
-    }
-
-    // Get the keypair for verification
-    const keypair = await getKeypair();
-    if (!keypair) {
-      return false;
-    }
-
-    // Verify signature
-    return verifyTransactionSignature(transaction, keypair);
-  } catch (error) {
-    console.error(STELLAR_ERRORS.VERIFY_FAILED, error);
-    return false;
-  }
-};
-
+// Utility function for getting transaction details
 export const getTransactionDetails = (xdr: string): TransactionDetails => {
   return getTransactionDetailsUtil(xdr);
 };
@@ -100,36 +34,93 @@ export const transactionQueryKeys = {
     [...transactionQueryKeys.all, "verification", signedXDR, address] as const
 };
 
-// Custom Hooks
-export const useSignTransaction = () => {
+export const useTransactionsService = () => {
+  const transactionOps = useTransactionOperations();
   const queryClient = useQueryClient();
 
-  return useMutation({
-    mutationFn: ({ unsignedXDR }: { unsignedXDR: string }) =>
-      signTransaction(unsignedXDR),
+  const generateAndSignTransaction = useMutation({
+    mutationFn: async (
+      params: GenerateXDRParams
+    ): Promise<SignedTransactionResult> => {
+      console.log("🔧 Generating and signing transaction...");
+
+      const unsignedXDR = await transactionOps.generateTransactionXDR(params);
+      const signedResult = await transactionOps.signTransaction(unsignedXDR);
+
+      return signedResult;
+    },
     onSuccess: (data) => {
-      // Invalidate wallet queries in case balance changed
+      console.log(
+        "✅ Transaction generated and signed successfully:",
+        data.transactionHash
+      );
+      // Invalidate wallet queries in case balance will change
       queryClient.invalidateQueries({ queryKey: walletQueryKeys.all });
     },
     onError: (error) => {
-      console.error("Transaction signing failed:", error);
+      console.error("❌ Transaction generation/signing failed:", error);
     }
   });
-};
 
-export const useVerifyTransaction = (
-  signedXDR?: string,
-  expectedAddress?: string
-) => {
-  return useQuery({
-    queryKey: transactionQueryKeys.verification(
-      signedXDR || "",
-      expectedAddress || ""
-    ),
-    queryFn: () => verifyTransaction(signedXDR!, expectedAddress!),
-    enabled: Boolean(signedXDR && expectedAddress),
-    staleTime: STALE_TIMES.MEDIUM
+  const submitTransaction = useMutation({
+    mutationFn: async (params: SubmitTransactionParams) => {
+      console.log("🚀 Submitting transaction to backend...");
+
+      return await transactionOps.submitTransactionToBackend(params);
+    },
+    onSuccess: (data) => {
+      console.log("✅ Transaction submitted successfully:", data);
+      // Invalidate wallet queries since balance has likely changed
+      queryClient.invalidateQueries({ queryKey: walletQueryKeys.all });
+    },
+    onError: (error) => {
+      console.error("❌ Transaction submission failed:", error);
+    }
   });
+
+  const generateSignAndSubmit = useMutation({
+    mutationFn: async (params: {
+      generateParams: GenerateXDRParams;
+      transactionType: string;
+    }) => {
+      console.log("🎯 Executing full transaction flow...");
+
+      // Step 1: Generate and sign
+      const signedResult = await generateAndSignTransaction.mutateAsync(
+        params.generateParams
+      );
+
+      // Step 2: Submit to backend
+      const submitResult = await submitTransaction.mutateAsync({
+        signedXDR: signedResult.signedXDR,
+        transactionType: params.transactionType,
+        walletAddress: signedResult.walletAddress
+      });
+
+      return {
+        signedResult,
+        submitResult
+      };
+    },
+    onSuccess: (data) => {
+      console.log("🎉 Full transaction flow completed:", data);
+    },
+    onError: (error) => {
+      console.error("💥 Full transaction flow failed:", error);
+    }
+  });
+
+  return {
+    // Individual operations
+    generateAndSignTransaction,
+    submitTransaction,
+
+    // Combined operation
+    generateSignAndSubmit,
+
+    // Direct access to core transaction operations
+    ...transactionOps
+  };
 };
 
 export const useTransactionDetails = (xdr?: string) => {
@@ -141,13 +132,4 @@ export const useTransactionDetails = (xdr?: string) => {
   });
 };
 
-// Utility hook for processing transactions (sign + submit)
-export const useProcessTransaction = () => {
-  const signMutation = useSignTransaction();
-
-  return {
-    ...signMutation,
-    signTransaction: signMutation.mutate,
-    signTransactionAsync: signMutation.mutateAsync
-  };
-};
+export const useTransactions = useTransactionsService;
