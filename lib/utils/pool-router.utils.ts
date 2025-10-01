@@ -192,7 +192,7 @@ export async function buildSwapTransaction(
   return poolRouterClient.swap(
     {
       user: swapArgs.user,
-      asset: swapArgs.asset_in,
+      asset: swapArgs.asset_out,
       direction: direction as ContractSwapDirection,
       in_amount: swapArgs.amount_in,
       out_min: swapArgs.amount_out_min

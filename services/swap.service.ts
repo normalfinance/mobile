@@ -8,7 +8,8 @@ import {
   SwapQuote,
   SwapResult,
   DexDistribution,
-  TokenInfo
+  TokenInfo,
+  TransactionResponse
 } from "../lib/types/swap.types";
 import { AVAILABLE_SWAP_TOKENS } from "../lib/constants/tokens.constants";
 import { getKeypair } from "./wallet.service";
@@ -327,19 +328,24 @@ const buildSwapTransaction = async (
     }
 
     // Step 2: Build Pool Router swap transaction via contract client
-    console.log("🔨 Building Pool Router swap transaction...");
+    console.log("🔨 Building Pool Router swap transaction...", swapParams);
 
     // Find token info for decimal conversion
     const tokenInInfo = AVAILABLE_SWAP_TOKENS.find(
       (t) =>
-        t.address === swapParams.token_in ||
+        t.symbol === swapParams.token_in ||
         (swapParams.token_in === "native" && t.symbol === "XLM")
     );
     const tokenOutInfo = AVAILABLE_SWAP_TOKENS.find(
       (t) =>
-        t.address === swapParams.token_out ||
+        t.symbol === formatNormalToken(swapParams.token_out, "with-n") ||
         (swapParams.token_out === "native" && t.symbol === "XLM")
     );
+
+    console.log("🔢 Token info:", {
+      tokenInInfo,
+      tokenOutInfo
+    });
 
     if (!tokenInInfo || !tokenOutInfo) {
       throw new Error(
@@ -461,13 +467,15 @@ const submitSwapToBackend = async (
 
     return {
       transactionHash:
+        responseData.hash ||
         responseData.transactionHash ||
         `tx_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       amountIn: swapParams.amount_in,
       amountOut: responseData.amountOut || swapParams.amount_out_min,
       tokenIn: swapParams.token_in,
       tokenOut: swapParams.token_out,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      backendResponse: responseData as TransactionResponse
     };
   } catch (error) {
     console.error("❌ Backend submission failed:", error);

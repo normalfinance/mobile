@@ -11,6 +11,11 @@ import {
 import { SwapFormData, SwapQuoteRequest } from "@/lib/types/swap.types";
 import { DisplayAsset } from "@/lib/types/balance.types";
 import { formatNormalToken } from "@/lib/utils/format.utils";
+import { useToast } from "@/hooks/useToast";
+import {
+  openStellarExpert,
+  getCurrentNetwork
+} from "@/lib/utils/stellar.utils";
 
 const SwapCard = () => {
   const [formData, setFormData] = useState<SwapFormData>({
@@ -26,6 +31,7 @@ const SwapCard = () => {
   const { data: availableTokens = [], isLoading: isLoadingTokens } =
     useAvailableTokens();
   const executeSwapMutation = useExecuteSwap();
+  const { showToast } = useToast();
 
   const sellableAssets = useMemo(() => {
     return walletBalances.filter((asset) => parseFloat(asset.balance) > 0);
@@ -161,7 +167,29 @@ const SwapCard = () => {
     if (!quote) return;
 
     try {
-      await executeSwapMutation.mutateAsync(quote.swapParams);
+      const result = await executeSwapMutation.mutateAsync(quote.swapParams);
+
+      console.log("🔢 Result from executeSwapMutation:", result);
+
+      // Check if the swap was successful and has a pending status with hash
+      if (
+        result.backendResponse?.result?.status === "PENDING" &&
+        result.backendResponse?.result?.hash
+      ) {
+        console.log("now show toast");
+        const network = getCurrentNetwork();
+
+        showToast({
+          message: "Swap transaction submitted successfully!",
+          type: "success",
+          actionText: "View Transaction",
+          onActionPress: () => {
+            openStellarExpert(result.backendResponse!.hash!, network);
+          },
+          duration: 7000
+        });
+      }
+
       setFormData({
         sellAsset: null,
         buyAsset: null,
@@ -171,6 +199,11 @@ const SwapCard = () => {
       });
     } catch (error) {
       console.error("Swap failed:", error);
+      showToast({
+        message: "Swap transaction failed. Please try again.",
+        type: "error",
+        duration: 5000
+      });
     }
   };
 

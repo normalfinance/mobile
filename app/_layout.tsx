@@ -15,6 +15,7 @@ import { TamaguiProvider, createTamagui } from "@tamagui/core";
 import { PortalProvider } from "tamagui";
 import { defaultConfig } from "@tamagui/config/v4";
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ToastProvider } from "@/hooks/useToast";
 
 import { useColorScheme } from "@/hooks/use-color-scheme";
 
@@ -49,32 +50,34 @@ export default function RootLayout() {
     <QueryClientProvider client={queryClient}>
       <TamaguiProvider config={config}>
         <PortalProvider>
-          <ClerkProvider
-            tokenCache={tokenCache}
-            publishableKey={process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY}
-          >
-            <ThemeProvider
-              value={colorScheme === "dark" ? DarkTheme : DefaultTheme}
+          <ToastProvider>
+            <ClerkProvider
+              tokenCache={tokenCache}
+              publishableKey={process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY}
             >
-            <Stack>
-              <Stack.Screen name='(tabs)' options={{ headerShown: false }} />
-              <Stack.Screen name='(auth)' options={{ headerShown: false }} />
-              <Stack.Screen
-                name='wallet-setup'
-                options={{ headerShown: false, presentation: "modal" }}
-              />
-              <Stack.Screen
-                name='verify-magic-link'
-                options={{ headerShown: false, presentation: "modal" }}
-              />
-              <Stack.Screen
-                name='modal'
-                options={{ presentation: "modal", title: "Modal" }}
-              />
-            </Stack>
-              <StatusBar style='auto' />
-            </ThemeProvider>
-          </ClerkProvider>
+              <ThemeProvider
+                value={colorScheme === "dark" ? DarkTheme : DefaultTheme}
+              >
+              <Stack>
+                <Stack.Screen name='(tabs)' options={{ headerShown: false }} />
+                <Stack.Screen name='(auth)' options={{ headerShown: false }} />
+                <Stack.Screen
+                  name='wallet-setup'
+                  options={{ headerShown: false, presentation: "modal" }}
+                />
+                <Stack.Screen
+                  name='verify-magic-link'
+                  options={{ headerShown: false, presentation: "modal" }}
+                />
+                <Stack.Screen
+                  name='modal'
+                  options={{ presentation: "modal", title: "Modal" }}
+                />
+              </Stack>
+                <StatusBar style='auto' />
+              </ThemeProvider>
+            </ClerkProvider>
+          </ToastProvider>
         </PortalProvider>
       </TamaguiProvider>
     </QueryClientProvider>
