@@ -222,7 +222,7 @@ const ImportMnemonicForm: React.FC<ImportMnemonicFormProps> = ({
     }
 
     if (!isMnemonicComplete(wordsToMnemonic(finalWords))) {
-      setMnemonicError("Recovery phrase must contain exactly 24 words");
+      setMnemonicError("Recovery phrase must contain exactly 12 or 24 words");
       return;
     }
 
@@ -236,7 +236,7 @@ const ImportMnemonicForm: React.FC<ImportMnemonicFormProps> = ({
     onImport(normalizedMnemonic);
   };
 
-  const isValidWordCount = wordCount === 24;
+  const isValidWordCount = wordCount === 12 || wordCount === 24;
   const hasValidMnemonic =
     isValidWordCount &&
     normalizeMnemonic(normalizedMnemonic).trim().length > 0 &&
@@ -257,7 +257,7 @@ const ImportMnemonicForm: React.FC<ImportMnemonicFormProps> = ({
             🔐 Recovery Phrase Import
           </Text>
           <Text color='$blue11' fontSize='$3' lineHeight='$1'>
-            Enter your 24-word recovery phrase to restore your wallet. Make sure
+            Enter your 12 or 24-word recovery phrase to restore your wallet. Make sure
             to enter the words in the correct order.
           </Text>
         </Card>
@@ -359,7 +359,7 @@ const ImportMnemonicForm: React.FC<ImportMnemonicFormProps> = ({
 
             {wordLimitWarning && (
               <Text color='$yellow10' fontSize='$3'>
-                Recovery phrase accepts exactly 24 words. Remove a word before
+                Recovery phrase accepts exactly 12 or 24 words. Remove a word before
                 adding more.
               </Text>
             )}
@@ -371,7 +371,7 @@ const ImportMnemonicForm: React.FC<ImportMnemonicFormProps> = ({
             alignItems='center'
           >
             <Text fontSize='$3' color='$color10'>
-              Words: {wordCount}/24
+              Words: {wordCount}/{wordCount <= 12 ? '12' : '24'}
             </Text>
             {hasValidMnemonic && (
               <XStack
@@ -394,8 +394,12 @@ const ImportMnemonicForm: React.FC<ImportMnemonicFormProps> = ({
 
           {remainingSlots > 0 && !mnemonicError && !wordLimitWarning && (
             <Text fontSize='$3' color='$color10'>
-              {remainingSlots} more {remainingSlots === 1 ? "word" : "words"}{" "}
-              needed to complete your phrase.
+              {wordCount < 12 
+                ? `${12 - wordCount} more ${12 - wordCount === 1 ? "word" : "words"} needed for 12-word phrase (or ${24 - wordCount} for 24-word)`
+                : wordCount === 12
+                ? "12-word phrase complete! You can add 12 more words for a 24-word phrase."
+                : `${remainingSlots} more ${remainingSlots === 1 ? "word" : "words"} needed to complete your 24-word phrase.`
+              }
             </Text>
           )}
         </YStack>
