@@ -1,10 +1,11 @@
 import * as React from "react";
-import { Text, TextInput, TouchableOpacity, View } from "react-native";
-import { useSignUp } from "@clerk/clerk-expo";
+import { Text, TextInput, TouchableOpacity, View, Alert } from "react-native";
+import { useSignUp, useOAuth } from "@clerk/clerk-expo";
 import { Link, useRouter } from "expo-router";
 
 export default function SignUpScreen() {
   const { isLoaded, signUp, setActive } = useSignUp();
+  const { startOAuthFlow: startAppleOAuthFlow } = useOAuth({ strategy: "oauth_apple" });
   const router = useRouter();
 
   const [emailAddress, setEmailAddress] = React.useState("");
@@ -37,6 +38,23 @@ export default function SignUpScreen() {
       console.error(JSON.stringify(err, null, 2));
     }
   };
+
+  // Handle Apple OAuth sign-up
+  const onAppleSignUpPress = React.useCallback(async () => {
+    console.log("onAppleSignUpPress");
+    try {
+      const { createdSessionId, setActive } = await startAppleOAuthFlow({});
+
+      if (createdSessionId) {
+        console.log("createdSessionId", createdSessionId);
+        setActive!({ session: createdSessionId });
+        router.replace("/");
+      }
+    } catch (err) {
+      console.error("Apple OAuth error", err);
+      Alert.alert("Error", "Failed to sign up with Apple");
+    }
+  }, [startAppleOAuthFlow, router]);
 
   // Handle submission of verification form
   const onVerifyPress = async () => {
@@ -100,6 +118,22 @@ export default function SignUpScreen() {
         <TouchableOpacity onPress={onSignUpPress}>
           <Text>Continue</Text>
         </TouchableOpacity>
+        
+        <Text style={{ textAlign: "center", marginVertical: 10, color: "#666" }}>OR</Text>
+        
+        <TouchableOpacity 
+          onPress={onAppleSignUpPress}
+          style={{ 
+            backgroundColor: "#000", 
+            padding: 15, 
+            borderRadius: 5, 
+            marginVertical: 5,
+            alignItems: "center"
+          }}
+        >
+          <Text style={{ color: "#fff", fontWeight: "bold" }}>Continue with Apple</Text>
+        </TouchableOpacity>
+        
         <View style={{ display: "flex", flexDirection: "row", gap: 3 }}>
           <Text>Already have an account?</Text>
           <Link href='/sign-in'>
