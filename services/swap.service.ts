@@ -8,9 +8,9 @@ import {
   SwapQuote,
   SwapResult,
   DexDistribution,
-  TokenInfo,
-  AVAILABLE_SWAP_TOKENS
+  TokenInfo
 } from "../lib/types/swap.types";
+import { AVAILABLE_SWAP_TOKENS } from "../lib/constants/tokens.constants";
 import { getKeypair } from "./wallet.service";
 import { STALE_TIMES } from "../lib/utils/query.utils";
 import {
@@ -495,19 +495,6 @@ const executeSwap = async (swapParams: SwapParams): Promise<SwapResult> => {
 
 // Get available tokens for swapping
 export const getAvailableTokens = async (): Promise<TokenInfo[]> => {
-  console.log("🪙 Available tokens for swapping:");
-  console.log("==================================================");
-
-  AVAILABLE_SWAP_TOKENS.forEach((token, index) => {
-    console.log(`${index + 1}. Token: ${token.name} (${token.symbol})`);
-    console.log(`   Asset Address: ${token.address}`);
-    console.log(`   Decimals: ${token.decimals}`);
-    console.log("---");
-  });
-
-  console.log("==================================================");
-  console.log(`Total available tokens: ${AVAILABLE_SWAP_TOKENS.length}`);
-
   return AVAILABLE_SWAP_TOKENS;
 };
 
@@ -566,7 +553,7 @@ export const useAvailableTokens = () => {
   return useQuery({
     queryKey: swapQueryKeys.tokens(),
     queryFn: getAvailableTokens,
-    staleTime: STALE_TIMES.LONG // Token list doesn't change often
+    staleTime: STALE_TIMES.LONG
   });
 };
 
