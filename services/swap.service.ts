@@ -201,15 +201,11 @@ const calculateSwapQuote = async (
       (1 - (request.slippageTolerance || 0.5) / 100)
     ).toString();
 
-    // Calculate price impact
+    // Calculate total fees for display
     const totalFeeDisplay = fromContractAmount(
       swapEstimate.spread_amount,
       tokenInInfo.decimals
     );
-    const priceImpact = (
-      (parseFloat(totalFeeDisplay) / amountInNum) *
-      100
-    ).toFixed(3);
 
     console.log(
       `💱 Real exchange rate: 1 ${tokenInInfo.symbol} = ${(
@@ -220,7 +216,6 @@ const calculateSwapQuote = async (
     console.log(
       `📉 Min amount (with slippage): ${amountOutMin} ${tokenOutInfo.symbol}`
     );
-    console.log(`💸 Price impact: ${priceImpact}%`);
 
     const distribution: DexDistribution = {
       parts: "10000",
@@ -247,7 +242,6 @@ const calculateSwapQuote = async (
       amountIn: request.amountIn,
       amountOut,
       amountOutMin,
-      priceImpact,
       route: [distribution],
       deadline,
       swapParams
@@ -583,8 +577,3 @@ export const parseTokenAmount = (amount: string, decimals: number): string => {
   return (num * Math.pow(10, decimals)).toString();
 };
 
-export const formatPriceImpact = (priceImpact: string): string => {
-  const impact = parseFloat(priceImpact);
-  if (isNaN(impact)) return "0%";
-  return `${impact.toFixed(2)}%`;
-};

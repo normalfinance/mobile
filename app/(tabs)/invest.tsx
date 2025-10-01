@@ -269,17 +269,6 @@ const SwapCard = () => {
           </XStack>
           <XStack justifyContent='space-between'>
             <Text fontSize='$3' color='$gray11'>
-              Price Impact
-            </Text>
-            <Text
-              fontSize='$3'
-              color={parseFloat(quote.priceImpact) > 3 ? "$red10" : "$gray12"}
-            >
-              {quote.priceImpact}%
-            </Text>
-          </XStack>
-          <XStack justifyContent='space-between'>
-            <Text fontSize='$3' color='$gray11'>
               Minimum Received
             </Text>
             <Text fontSize='$3'>

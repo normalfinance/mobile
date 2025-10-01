@@ -27,7 +27,6 @@ export interface SwapQuote {
   amountIn: string;
   amountOut: string;
   amountOutMin: string;
-  priceImpact: string;
   route: DexDistribution[];
   deadline: number;
   swapParams: SwapParams;
