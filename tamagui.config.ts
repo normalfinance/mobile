@@ -208,16 +208,34 @@ const tokens = {
     success: "#12B76A",
     warning: "#F79009",
     danger: "#F04438",
-    buttonColor: "#FF6E86"
+    buttonColor: "#FF6E86",
+    // Purple color palette for swap interface
+    purple500: "#8B5CF6",
+    purple600: "#7C3AED",
+    purple700: "#6D28D9",
+    purple50: "#F3F4F6",
+    purple100: "#E5E7EB",
+    // Light grays for cards and backgrounds
+    cardBackground: "#FFFFFF",
+    pageBackground: "#F8FAFC",
+    sectionBackground: "#F3F4F6",
+    inputBackground: "#FFFFFF",
+    textPrimary: "#111827",
+    textSecondary: "#6B7280",
+    textTertiary: "#9CA3AF"
   },
   space: {
     ...baseTokens.space,
     section: 24,
-    page: 32
+    page: 32,
+    cardPadding: 20,
+    sectionPadding: 16
   },
   radius: {
     ...baseTokens.radius,
-    card: 16
+    card: 16,
+    button: 12,
+    input: 8
   }
 } as BaseTokens;
 
@@ -225,18 +243,24 @@ const themes = {
   ...baseThemes,
   light: {
     ...baseThemes.light,
-    background: "#FFFFFF",
+    background: "#F8FAFC",
     backgroundHover: "#F8FAFC",
     backgroundPress: "#EEF2FF",
     backgroundFocus: "#E6F4FE",
-    color: "#11181C",
+    color: "#111827",
     colorHover: "#0A7EA4",
     colorPress: "#086080",
     colorFocus: "#0A7EA4",
-    borderColor: "#CBD5F5",
+    borderColor: "#919eab1f",
     shadowColor: "#0A7EA433",
-    accentColor: "#0A7EA4",
-    buttonColor: "#FF6E86"
+    accentColor: "#8B5CF6",
+    buttonColor: "#8B5CF6",
+    cardBackground: "#FFFFFF",
+    pageBackground: "#F8FAFC",
+    sectionBackground: "#F3F4F6",
+    textPrimary: "#111827",
+    textSecondary: "#6B7280",
+    textTertiary: "#9CA3AF"
   },
   dark: {
     ...baseThemes.dark,

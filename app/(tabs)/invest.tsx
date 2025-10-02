@@ -1,5 +1,15 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { YStack, XStack, H2, Text, Button, Spacer } from "tamagui";
+import {
+  YStack,
+  XStack,
+  H2,
+  Text,
+  Button,
+  Spacer,
+  Circle,
+  View
+} from "tamagui";
+import { ArrowDown } from "lucide-react-native";
 import { SwapSection } from "@/components/swap/SwapSection";
 import { SwapButton } from "@/components/swap/SwapButton";
 import { useWalletBalances } from "@/services/balance.service";
@@ -239,78 +249,54 @@ const SwapCard = () => {
   return (
     <YStack space='$4'>
       {/* Sell Section */}
-      <SwapSection
-        label='Sell'
-        asset={formData.sellAsset}
-        amount={formData.sellAmount}
-        onAmountChange={handleSellAmountChange}
-        availableAssets={sellableAssets}
-        // @ts-ignore
-        onAssetSelect={handleSellAssetSelect}
-        placeholder='Select token'
-        showMaxButton={true}
-        onMaxPress={handleMaxPress}
-        balance={selectedAssetBalance}
-      />
+      <View marginBottom='$-5'>
+        <SwapSection
+          label='Sell'
+          asset={formData.sellAsset}
+          amount={formData.sellAmount}
+          onAmountChange={handleSellAmountChange}
+          availableAssets={sellableAssets}
+          // @ts-ignore
+          onAssetSelect={handleSellAssetSelect}
+          placeholder='Select token'
+          showMaxButton={true}
+          onMaxPress={handleMaxPress}
+          balance={selectedAssetBalance}
+        />
+      </View>
 
       {/* Swap Direction Button */}
-      <XStack justifyContent='center'>
-        <Button
+      <XStack justifyContent='center' marginVertical='$-2'>
+        <Circle
+          size={40}
+          backgroundColor='#DFE3E8'
+          opacity={1}
+          zIndex={2}
+          borderWidth={3}
+          borderRadius={10}
+          borderColor='#ffffff'
+          pressStyle={{ scale: 0.95 }}
           onPress={handleSwapDirections}
-          backgroundColor='$gray4'
-          borderRadius='$4'
-          padding='$2'
           disabled={!formData.sellAsset || !formData.buyAsset}
         >
-          <Text>↕</Text>
-        </Button>
+          <ArrowDown size={20} color='#252525' />
+        </Circle>
       </XStack>
 
       {/* Buy Section */}
-      <SwapSection
-        label='Buy'
-        asset={formData.buyAsset}
-        amount={formData.buyAmount}
-        onAmountChange={handleBuyAmountChange}
-        availableAssets={buyableTokens}
-        // @ts-ignore
-        onAssetSelect={handleBuyAssetSelect}
-        placeholder='Select token'
-        readOnly={true}
-      />
-
-      {/* Quote Information */}
-      {quote && !isLoadingQuote && (
-        <YStack
+      <View marginTop='$-6'>
+        <SwapSection
+          label='Buy'
+          asset={formData.buyAsset}
+          amount={formData.buyAmount}
+          onAmountChange={handleBuyAmountChange}
+          availableAssets={buyableTokens}
           // @ts-ignore
-          backgroundColor='$gray2'
-          borderRadius='$4'
-          padding='$3'
-          space='$2'
-        >
-          <XStack justifyContent='space-between'>
-            <Text fontSize='$3' color='$gray11'>
-              Rate
-            </Text>
-            <Text fontSize='$3'>
-              1 {formData.sellAsset?.asset_code} ={" "}
-              {(
-                parseFloat(quote.amountOut) / parseFloat(quote.amountIn)
-              ).toFixed(6)}{" "}
-              {formData.buyAsset?.asset_code}
-            </Text>
-          </XStack>
-          <XStack justifyContent='space-between'>
-            <Text fontSize='$3' color='$gray11'>
-              Minimum Received
-            </Text>
-            <Text fontSize='$3'>
-              {parseFloat(quote.amountOutMin).toFixed(6)}{" "}
-              {formData.buyAsset?.asset_code}
-            </Text>
-          </XStack>
-        </YStack>
-      )}
+          onAssetSelect={handleBuyAssetSelect}
+          placeholder='Select token'
+          readOnly={true}
+        />
+      </View>
 
       {/* Swap Button */}
       <SwapButton
@@ -319,6 +305,86 @@ const SwapCard = () => {
         loading={executeSwapMutation.isPending}
         text={getSwapButtonText()}
       />
+
+      {/* Transaction Summary */}
+      {formData.sellAsset && formData.buyAsset && formData.sellAmount && (
+        <Text
+          fontSize='$1'
+          color='$textSecondary'
+          textAlign='center'
+          paddingHorizontal='$4'
+        >
+          Swapping {formData.sellAmount} {formData.sellAsset.asset_code} for{" "}
+          {formData.buyAmount} {formData.buyAsset.asset_code} (1{" "}
+          {formData.buyAsset.asset_code} = ${(1000 * 0.2039).toFixed(1)})
+        </Text>
+      )}
+
+      {/* Transaction Details */}
+      {quote && !isLoadingQuote && (
+        <YStack space='$3' paddingTop='$3'>
+          <Text
+            fontSize='$3'
+            color='$textSecondary'
+            textAlign='center'
+            textDecorationLine='underline'
+          >
+            Show less ↑
+          </Text>
+
+          <YStack space='$2'>
+            <XStack justifyContent='space-between' alignItems='center'>
+              <Text fontSize='$3' color='$textSecondary'>
+                Fee (0.3%)
+              </Text>
+              <Text fontSize='$3' color='$textPrimary'>
+                $3.00
+              </Text>
+            </XStack>
+
+            <XStack justifyContent='space-between' alignItems='center'>
+              <Text fontSize='$3' color='$textSecondary'>
+                Network cost
+              </Text>
+              <Text fontSize='$3' color='$textPrimary'>
+                $1.08
+              </Text>
+            </XStack>
+
+            <XStack justifyContent='space-between' alignItems='center'>
+              <Text fontSize='$3' color='$textSecondary'>
+                Rate
+              </Text>
+              <Text fontSize='$3' color='$textPrimary'>
+                1 {formData.sellAsset?.asset_code} ={" "}
+                {formData.buyAsset?.asset_code &&
+                  (
+                    parseFloat(quote.amountOut) / parseFloat(quote.amountIn)
+                  ).toFixed(6)}{" "}
+                {formData.buyAsset?.asset_code}
+              </Text>
+            </XStack>
+
+            <XStack justifyContent='space-between' alignItems='center'>
+              <Text fontSize='$3' color='$textSecondary'>
+                Max slippage
+              </Text>
+              <Text fontSize='$3' color='$textPrimary'>
+                0.50%
+              </Text>
+            </XStack>
+
+            <XStack justifyContent='space-between' alignItems='center'>
+              <Text fontSize='$3' color='$textSecondary'>
+                Price impact
+              </Text>
+              <Text fontSize='$3' color='$textPrimary'>
+                ~0.02%
+              </Text>
+            </XStack>
+          </YStack>
+        </YStack>
+      )}
 
       {/* Error Display */}
       {(quoteError || executeSwapMutation.error) && (
@@ -334,11 +400,18 @@ const SwapCard = () => {
 
 export default function InvestScreen() {
   return (
-    <YStack flex={1} padding='$4' backgroundColor='$background'>
-      {/* @ts-ignore */}
-      <H2 marginBottom='$4'>Invest</H2>
-      {/* @ts-ignore */}
-      <Text marginBottom='$4'>Swap between different assets</Text>
+    <YStack flex={1} padding='$4' backgroundColor='$pageBackground'>
+      {/* Header */}
+      <XStack
+        justifyContent='space-between'
+        alignItems='center'
+        paddingBottom='$4'
+      >
+        <Text fontSize='$6' fontWeight='600' color='$textPrimary'>
+          Swap
+        </Text>
+      </XStack>
+
       <SwapCard />
     </YStack>
   );
