@@ -1,5 +1,5 @@
 // Initialize Node.js polyfills - MUST be first import
-import '../shim';
+import "../shim";
 
 import {
   DarkTheme,
@@ -11,44 +11,50 @@ import { tokenCache } from "@clerk/clerk-expo/token-cache";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import "react-native-reanimated";
-import { TamaguiProvider, createTamagui } from "@tamagui/core";
-import { PortalProvider } from "tamagui";
-import { defaultConfig } from "@tamagui/config/v4";
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { TamaguiProvider, PortalProvider } from "tamagui";
+import tamaguiConfig from "../tamagui.config";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ToastProvider } from "@/hooks/useToast";
 
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { loadFonts } from "@/lib/fonts";
+import { useFonts } from "expo-font";
+import * as SplashScreen from "expo-splash-screen";
+import { useEffect } from "react";
 
 export const unstable_settings = {
   anchor: "(tabs)"
 };
 
-const config = createTamagui(defaultConfig);
-
-type Conf = typeof config;
-
-declare module "@tamagui/core" {
-  interface TamaguiCustomConfig extends Conf {}
-}
-
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: 2,
-      staleTime: 5 * 60 * 1000, // 5 minutes
+      staleTime: 5 * 60 * 1000 // 5 minutes
     },
     mutations: {
-      retry: 1,
-    },
-  },
+      retry: 1
+    }
+  }
 });
+
+SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  
+  useEffect(() => {
+    loadFonts().then(() => {
+      SplashScreen.hideAsync();
+    });
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>
-      <TamaguiProvider config={config}>
+      <TamaguiProvider
+        config={tamaguiConfig}
+        defaultTheme={colorScheme === "dark" ? "dark" : "light"}
+      >
         <PortalProvider>
           <ToastProvider>
             <ClerkProvider
@@ -58,22 +64,28 @@ export default function RootLayout() {
               <ThemeProvider
                 value={colorScheme === "dark" ? DarkTheme : DefaultTheme}
               >
-              <Stack>
-                <Stack.Screen name='(tabs)' options={{ headerShown: false }} />
-                <Stack.Screen name='(auth)' options={{ headerShown: false }} />
-                <Stack.Screen
-                  name='wallet-setup'
-                  options={{ headerShown: false, presentation: "modal" }}
-                />
-                <Stack.Screen
-                  name='verify-magic-link'
-                  options={{ headerShown: false, presentation: "modal" }}
-                />
-                <Stack.Screen
-                  name='modal'
-                  options={{ presentation: "modal", title: "Modal" }}
-                />
-              </Stack>
+                <Stack>
+                  <Stack.Screen
+                    name='(tabs)'
+                    options={{ headerShown: false }}
+                  />
+                  <Stack.Screen
+                    name='(auth)'
+                    options={{ headerShown: false }}
+                  />
+                  <Stack.Screen
+                    name='wallet-setup'
+                    options={{ headerShown: false, presentation: "modal" }}
+                  />
+                  <Stack.Screen
+                    name='verify-magic-link'
+                    options={{ headerShown: false, presentation: "modal" }}
+                  />
+                  <Stack.Screen
+                    name='modal'
+                    options={{ presentation: "modal", title: "Modal" }}
+                  />
+                </Stack>
                 <StatusBar style='auto' />
               </ThemeProvider>
             </ClerkProvider>
