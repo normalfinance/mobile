@@ -108,7 +108,7 @@ export const useTransactionOperations = () => {
         const config = getNetworkConfig();
         const passphrase = networkPassphrase || config.networkPassphrase;
 
-        const transaction = parseTransaction(unsignedXDR);
+        const transaction = parseTransaction(unsignedXDR, passphrase);
 
         signTransactionWithKeypair(transaction, keypair);
 
