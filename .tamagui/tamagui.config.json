@@ -28268,7 +28268,36 @@
   "tamaguiConfig": {
     "fonts": {
       "body": {
-        "family": "Satoshi",
+        "family": "Satoshi-Regular",
+        "face": {
+          "100": {
+            "normal": "Satoshi-Regular"
+          },
+          "200": {
+            "normal": "Satoshi-Regular"
+          },
+          "300": {
+            "normal": "Satoshi-Light"
+          },
+          "400": {
+            "normal": "Satoshi-Regular"
+          },
+          "500": {
+            "normal": "Satoshi-Medium"
+          },
+          "600": {
+            "normal": "Satoshi-Medium"
+          },
+          "700": {
+            "normal": "Satoshi-Bold"
+          },
+          "800": {
+            "normal": "Satoshi-Bold"
+          },
+          "900": {
+            "normal": "Satoshi-Black"
+          }
+        },
         "size": {
           "1": 12,
           "2": 14,
@@ -28319,7 +28348,36 @@
         }
       },
       "heading": {
-        "family": "Satoshi",
+        "family": "Satoshi-Regular",
+        "face": {
+          "100": {
+            "normal": "Satoshi-Regular"
+          },
+          "200": {
+            "normal": "Satoshi-Regular"
+          },
+          "300": {
+            "normal": "Satoshi-Light"
+          },
+          "400": {
+            "normal": "Satoshi-Regular"
+          },
+          "500": {
+            "normal": "Satoshi-Medium"
+          },
+          "600": {
+            "normal": "Satoshi-Medium"
+          },
+          "700": {
+            "normal": "Satoshi-Bold"
+          },
+          "800": {
+            "normal": "Satoshi-Bold"
+          },
+          "900": {
+            "normal": "Satoshi-Black"
+          }
+        },
         "size": {
           "1": 14,
           "2": 16,
@@ -28370,7 +28428,36 @@
         }
       },
       "text": {
-        "family": "Satoshi",
+        "family": "Satoshi-Regular",
+        "face": {
+          "100": {
+            "normal": "Satoshi-Regular"
+          },
+          "200": {
+            "normal": "Satoshi-Regular"
+          },
+          "300": {
+            "normal": "Satoshi-Light"
+          },
+          "400": {
+            "normal": "Satoshi-Regular"
+          },
+          "500": {
+            "normal": "Satoshi-Medium"
+          },
+          "600": {
+            "normal": "Satoshi-Medium"
+          },
+          "700": {
+            "normal": "Satoshi-Bold"
+          },
+          "800": {
+            "normal": "Satoshi-Bold"
+          },
+          "900": {
+            "normal": "Satoshi-Black"
+          }
+        },
         "size": {
           "1": 14,
           "2": 16,
@@ -28421,7 +28508,36 @@
         }
       },
       "numeric": {
-        "family": "Barlow",
+        "family": "Barlow-Regular",
+        "face": {
+          "100": {
+            "normal": "Barlow-Thin"
+          },
+          "200": {
+            "normal": "Barlow-ExtraLight"
+          },
+          "300": {
+            "normal": "Barlow-Light"
+          },
+          "400": {
+            "normal": "Barlow-Regular"
+          },
+          "500": {
+            "normal": "Barlow-Medium"
+          },
+          "600": {
+            "normal": "Barlow-SemiBold"
+          },
+          "700": {
+            "normal": "Barlow-Bold"
+          },
+          "800": {
+            "normal": "Barlow-ExtraBold"
+          },
+          "900": {
+            "normal": "Barlow-Black"
+          }
+        },
         "size": {
           "1": 12,
           "2": 14,
@@ -28472,7 +28588,36 @@
         }
       },
       "mono": {
-        "family": "Barlow",
+        "family": "Barlow-Regular",
+        "face": {
+          "100": {
+            "normal": "Barlow-Thin"
+          },
+          "200": {
+            "normal": "Barlow-ExtraLight"
+          },
+          "300": {
+            "normal": "Barlow-Light"
+          },
+          "400": {
+            "normal": "Barlow-Regular"
+          },
+          "500": {
+            "normal": "Barlow-Medium"
+          },
+          "600": {
+            "normal": "Barlow-SemiBold"
+          },
+          "700": {
+            "normal": "Barlow-Bold"
+          },
+          "800": {
+            "normal": "Barlow-ExtraBold"
+          },
+          "900": {
+            "normal": "Barlow-Black"
+          }
+        },
         "size": {
           "1": 12,
           "2": 14,

@@ -207,7 +207,8 @@ const tokens = {
     brandSurface: "#E6F4FE",
     success: "#12B76A",
     warning: "#F79009",
-    danger: "#F04438"
+    danger: "#F04438",
+    buttonColor: "#FF6E86"
   },
   space: {
     ...baseTokens.space,
@@ -234,7 +235,8 @@ const themes = {
     colorFocus: "#0A7EA4",
     borderColor: "#CBD5F5",
     shadowColor: "#0A7EA433",
-    accentColor: "#0A7EA4"
+    accentColor: "#0A7EA4",
+    buttonColor: "#FF6E86"
   },
   dark: {
     ...baseThemes.dark,
@@ -248,7 +250,8 @@ const themes = {
     colorFocus: "#38BDF8",
     borderColor: "#1E293B",
     shadowColor: "#0A7EA480",
-    accentColor: "#38BDF8"
+    accentColor: "#38BDF8",
+    buttonColor: "#FF6E86"
   },
   brand: {
     ...baseThemes.light,
