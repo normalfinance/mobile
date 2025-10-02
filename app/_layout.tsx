@@ -17,6 +17,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ToastProvider } from "@/hooks/useToast";
 
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { loadFonts } from "@/lib/fonts";
+import { useFonts } from "expo-font";
+import * as SplashScreen from "expo-splash-screen";
+import { useEffect } from "react";
 
 export const unstable_settings = {
   anchor: "(tabs)"
@@ -34,8 +38,16 @@ const queryClient = new QueryClient({
   }
 });
 
+SplashScreen.preventAutoHideAsync();
+
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  
+  useEffect(() => {
+    loadFonts().then(() => {
+      SplashScreen.hideAsync();
+    });
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>

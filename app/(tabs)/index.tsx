@@ -7,7 +7,7 @@ export default function HomeScreen() {
     // @ts-ignore
     <YStack flex={1} padding='$4' backgroundColor='$background'>
       {/* @ts-ignore */}
-      <H2 marginBottom='$4'>Home</H2>
+      <H2 marginBottom='$4'>RagGy</H2>
       <Text>Welcome to Normal Finance</Text>
       <Spacer size='$4' />
       <SignOutButton />

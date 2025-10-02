@@ -16,8 +16,15 @@ const baseColorTokens =
   (baseTokens as BaseTokens & { color?: BaseColorTokens }).color ??
   ({} as BaseColorTokens);
 
-const headingFont = createFont({
-  family: "Inter",
+const satoshiFont = createFont({
+  family: "Satoshi-Regular",
+  face: {
+    300: { normal: "Satoshi-Light" },
+    400: { normal: "Satoshi-Regular" },
+    500: { normal: "Satoshi-Medium" },
+    700: { normal: "Satoshi-Bold" },
+    900: { normal: "Satoshi-Black" }
+  },
   size: {
     1: 14,
     2: 16,
@@ -43,16 +50,16 @@ const headingFont = createFont({
     10: 58
   },
   weight: {
-    1: "500",
-    2: "600",
-    3: "600",
-    4: "600",
-    5: "700",
-    6: "700",
+    1: "300",
+    2: "300",
+    3: "400",
+    4: "400",
+    5: "500",
+    6: "500",
     7: "700",
     8: "700",
-    9: "800",
-    10: "800"
+    9: "900",
+    10: "900"
   },
   letterSpacing: {
     1: 0,
@@ -68,8 +75,15 @@ const headingFont = createFont({
   }
 });
 
-const bodyFont = createFont({
-  family: "Inter",
+const satoshiBodyFont = createFont({
+  family: "Satoshi-Regular",
+  face: {
+    300: { normal: "Satoshi-Light" },
+    400: { normal: "Satoshi-Regular" },
+    500: { normal: "Satoshi-Medium" },
+    700: { normal: "Satoshi-Bold" },
+    900: { normal: "Satoshi-Black" }
+  },
   size: {
     1: 12,
     2: 14,
@@ -95,16 +109,16 @@ const bodyFont = createFont({
     10: 50
   },
   weight: {
-    1: "400",
-    2: "400",
-    3: "500",
-    4: "500",
-    5: "600",
-    6: "600",
-    7: "600",
+    1: "300",
+    2: "300",
+    3: "400",
+    4: "400",
+    5: "500",
+    6: "500",
+    7: "700",
     8: "700",
-    9: "700",
-    10: "700"
+    9: "900",
+    10: "900"
   },
   letterSpacing: {
     1: 0.1,
@@ -120,23 +134,67 @@ const bodyFont = createFont({
   }
 });
 
-const monoFont = createFont({
-  family: "Menlo",
-  size: bodyFont.size,
-  lineHeight: bodyFont.lineHeight,
+const barlowFont = createFont({
+  family: "Barlow-Regular",
+  face: {
+    100: { normal: "Barlow-Thin" },
+    200: { normal: "Barlow-ExtraLight" },
+    300: { normal: "Barlow-Light" },
+    400: { normal: "Barlow-Regular" },
+    500: { normal: "Barlow-Medium" },
+    600: { normal: "Barlow-SemiBold" },
+    700: { normal: "Barlow-Bold" },
+    800: { normal: "Barlow-ExtraBold" },
+    900: { normal: "Barlow-Black" }
+  },
+  size: {
+    1: 12,
+    2: 14,
+    3: 16,
+    4: 18,
+    5: 20,
+    6: 24,
+    7: 28,
+    8: 32,
+    9: 36,
+    10: 40
+  },
+  lineHeight: {
+    1: 18,
+    2: 20,
+    3: 24,
+    4: 28,
+    5: 30,
+    6: 34,
+    7: 38,
+    8: 42,
+    9: 46,
+    10: 50
+  },
   weight: {
-    1: "400",
-    2: "400",
-    3: "500",
-    4: "500",
-    5: "600",
+    1: "100",
+    2: "200",
+    3: "300",
+    4: "400",
+    5: "500",
     6: "600",
     7: "700",
-    8: "700",
-    9: "700",
-    10: "700"
+    8: "800",
+    9: "900",
+    10: "900"
   },
-  letterSpacing: bodyFont.letterSpacing
+  letterSpacing: {
+    1: 0.05,
+    2: 0.1,
+    3: 0.15,
+    4: 0.2,
+    5: 0.25,
+    6: 0.3,
+    7: 0.35,
+    8: 0.4,
+    9: 0.45,
+    10: 0.5
+  }
 });
 
 const tokens = {
@@ -210,9 +268,11 @@ const themes = {
 
 const fonts = {
   ...baseFonts,
-  heading: headingFont,
-  body: bodyFont,
-  mono: monoFont
+  heading: satoshiFont,
+  body: satoshiBodyFont,
+  text: satoshiFont,
+  numeric: barlowFont,
+  mono: barlowFont
 };
 
 export const config = createTamagui({
