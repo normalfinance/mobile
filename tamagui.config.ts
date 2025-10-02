@@ -1,4 +1,4 @@
-import { createTamagui, createFont } from "tamagui";
+import { createTamagui, createFont, CreateTamaguiProps } from "tamagui";
 import { defaultConfig } from "@tamagui/config/v4";
 
 const {
@@ -280,7 +280,7 @@ export const config = createTamagui({
   fonts,
   tokens,
   themes
-});
+} as CreateTamaguiProps);
 
 export type AppConfig = typeof config;
 
