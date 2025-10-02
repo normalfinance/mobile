@@ -40,6 +40,15 @@ export interface SwapFormData {
   slippageTolerance: number;
 }
 
+export interface TransactionResponse {
+  result: {
+    status: "PENDING" | "SUCCESS" | "FAILED";
+    hash?: string;
+    latestLedger?: number;
+    latestLedgerCloseTime?: string;
+  };
+}
+
 export interface SwapResult {
   transactionHash: string;
   amountIn: string;
@@ -47,6 +56,7 @@ export interface SwapResult {
   tokenIn: string;
   tokenOut: string;
   timestamp: number;
+  backendResponse?: TransactionResponse;
 }
 
 export interface SwapError {
@@ -62,6 +72,3 @@ export interface TokenInfo {
   decimals: number;
   logoUrl?: string;
 }
-
-
-

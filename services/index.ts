@@ -27,16 +27,11 @@ export {
   useImportFromMnemonic
 } from "./wallet.service";
 
-// Transaction Service - Core functions and hooks
 export {
-  signTransaction,
-  verifyTransaction,
   getTransactionDetails,
   transactionQueryKeys,
-  useSignTransaction,
-  useVerifyTransaction,
-  useTransactionDetails,
-  useProcessTransaction
+  useTransactions,
+  useTransactionDetails
 } from "./transaction.service";
 
 // API Service - Core functions and hooks
@@ -77,3 +72,21 @@ export type {
   CheckWalletResponse
 } from "./api.service";
 export type { AuthCredentials, AuthStatus } from "./auth.service";
+
+export {
+  useSwapQuote,
+  useExecuteSwap,
+  useAvailableTokens,
+  getAvailableTokens,
+  findTokenByAddress,
+  findTokenBySymbol,
+  parseTokenAmount,
+  swapQueryKeys
+} from "./swap.service";
+
+// Export swap operation types for advanced usage
+export type {
+  EstimateSwapArgs,
+  SwapEstimateResult,
+  SwapDirection
+} from "../hooks/use-swap";

@@ -1,6 +1,6 @@
 import { Networks } from "@stellar/stellar-sdk";
 
-export const NETWORK_PASSPHRASE = Networks.PUBLIC;
+export const NETWORK_PASSPHRASE = Networks.TESTNET;
 
 export const STELLAR_CONFIG = {
   TESTNET_PASSPHRASE: Networks.TESTNET,
