@@ -42,7 +42,7 @@ export async function getOraclePrice(
     new Contract(oracle_address).call("lastprice", asset)
   );
 
-  const stellar_rpc = new rpc.Server(STELLAR_CONFIG.HORIZON_URLS.TESTNET);
+  const stellar_rpc = new rpc.Server(STELLAR_CONFIG.SOROBAN_RPC_URLS.TESTNET);
   const result = await stellar_rpc.simulateTransaction(tx_builder.build());
 
   if (rpc.Api.isSimulationSuccess(result)) {
@@ -80,7 +80,7 @@ export async function getOracleDecimals(
   });
   tx_builder.addOperation(new Contract(oracle_id).call("decimals"));
 
-  const stellar_rpc = new rpc.Server(STELLAR_CONFIG.HORIZON_URLS.TESTNET);
+  const stellar_rpc = new rpc.Server(STELLAR_CONFIG.SOROBAN_RPC_URLS.TESTNET);
   const result = await stellar_rpc.simulateTransaction(tx_builder.build());
 
   if (rpc.Api.isSimulationSuccess(result)) {

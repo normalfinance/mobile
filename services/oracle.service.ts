@@ -1,5 +1,5 @@
-import { getOraclePrice, formatTokenAmount } from "@/lib/utils/oracle.utils";
-import { STELLAR_CONFIG } from "@/lib/constants/stellar.constants";
+import { getOraclePrice } from "@/lib/contracts/oracle/oracle";
+import { formatTokenAmount } from "@/lib/utils/oracle.utils";
 import { cacheStorage } from "@/lib/utils/storage.utils";
 import type {
   PriceData,
@@ -9,8 +9,7 @@ import type {
   TokenPriceResult,
   OracleServiceConfig,
   CacheStats,
-  BackgroundUpdateStatus,
-  NetworkConfig
+  BackgroundUpdateStatus
 } from "@/lib/types/oracle.types";
 
 // Service configuration
@@ -24,13 +23,6 @@ const CONFIG: OracleServiceConfig = {
 
 // Global state for background updates
 let backgroundConfig: BackgroundUpdateConfig | null = null;
-
-// Helper function to get network config
-const getNetworkConfig = (): NetworkConfig => ({
-  rpcUrl: STELLAR_CONFIG.HORIZON_URLS.TESTNET,
-  networkPassphrase: STELLAR_CONFIG.TESTNET_PASSPHRASE,
-  testingSource: null
-});
 
 // Cache operations
 export const getCachedPrice = async (
@@ -106,8 +98,7 @@ export const updateRateLimit = async (): Promise<void> => {
 export const fetchPriceFromOracle = async (
   asset: string
 ): Promise<PriceData> => {
-  const networkConfig = getNetworkConfig();
-  return await getOraclePrice(CONFIG.oracleAddress, asset, networkConfig);
+  return await getOraclePrice(CONFIG.oracleAddress, asset);
 };
 
 /**
