@@ -8,6 +8,10 @@ export const STELLAR_CONFIG = {
   HORIZON_URLS: {
     TESTNET: "https://horizon-testnet.stellar.org",
     PUBLIC: "https://horizon.stellar.org"
+  },
+  SOROBAN_RPC_URLS: {
+    TESTNET: "https://soroban-testnet.stellar.org",
+    PUBLIC: "https://soroban.stellar.org"
   }
 } as const;
 

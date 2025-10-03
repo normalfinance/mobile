@@ -39,10 +39,10 @@ export async function getOraclePrice(
   ]);
 
   tx_builder.addOperation(
-    new Contract(oracle_address).call("lastprice", asset)
+    new Contract(oracle_address).call("get_last_price", asset)
   );
 
-  const stellar_rpc = new rpc.Server(STELLAR_CONFIG.HORIZON_URLS.TESTNET);
+  const stellar_rpc = new rpc.Server(STELLAR_CONFIG.SOROBAN_RPC_URLS.TESTNET);
   const result = await stellar_rpc.simulateTransaction(tx_builder.build());
 
   if (rpc.Api.isSimulationSuccess(result)) {
@@ -60,7 +60,7 @@ export async function getOraclePrice(
     }
     throw new Error("Unable to decode oracle price result");
   } else {
-    throw new Error(`Failed to fetch oralce price: ${result.error}`);
+    throw new Error(`Failed to fetch oracle price: ${result.error}`);
   }
 }
 
@@ -78,18 +78,18 @@ export async function getOracleDecimals(
     timebounds: { minTime: 0, maxTime: 0 },
     networkPassphrase: STELLAR_CONFIG.TESTNET_PASSPHRASE
   });
-  tx_builder.addOperation(new Contract(oracle_id).call("decimals"));
+  tx_builder.addOperation(new Contract(oracle_id).call("get_oracle"));
 
-  const stellar_rpc = new rpc.Server(STELLAR_CONFIG.HORIZON_URLS.TESTNET);
+  const stellar_rpc = new rpc.Server(STELLAR_CONFIG.SOROBAN_RPC_URLS.TESTNET);
   const result = await stellar_rpc.simulateTransaction(tx_builder.build());
 
   if (rpc.Api.isSimulationSuccess(result)) {
-    const val = scValToNative((result as any).result.retval);
+    const oracleInfo = scValToNative((result as any).result.retval);
     return {
-      decimals: val,
+      decimals: oracleInfo.decimals,
       latestLedger: result.latestLedger
     };
   } else {
-    throw new Error(`Failed to fetch oralce decimals: ${result.error}`);
+    throw new Error(`Failed to fetch oracle decimals: ${result.error}`);
   }
 }

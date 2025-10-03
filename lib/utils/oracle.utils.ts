@@ -35,6 +35,8 @@ export async function getOraclePrice(
 
   let formattedAsset = formatNormalToken(asset, "without-n");
 
+  console.log("formattedAsset", formattedAsset);
+
   // const assetParam: Asset = { tag: "Other", values: [formattedAsset] };
 
   const tx = await oracleClient.get_last_price(
