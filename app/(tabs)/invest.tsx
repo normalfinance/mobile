@@ -9,7 +9,7 @@ import {
   Circle,
   View
 } from "tamagui";
-import { ArrowDown } from "lucide-react-native";
+import { ArrowDown, ChevronsUpDown } from "lucide-react-native";
 import { SwapSection } from "@/components/swap/SwapSection";
 import { SwapButton } from "@/components/swap/SwapButton";
 import { useWalletBalances } from "@/services/balance.service";
@@ -315,47 +315,70 @@ const SwapCard = () => {
           paddingHorizontal='$4'
         >
           Swapping {formData.sellAmount} {formData.sellAsset.asset_code} for{" "}
-          {formData.buyAmount} {formData.buyAsset.asset_code} (1{" "}
-          {formData.buyAsset.asset_code} = ${(1000 * 0.2039).toFixed(1)})
+          {formData.buyAmount} {formData.buyAsset.asset_code}{" "}
+          <Text fontSize='$1' color='#1C252E' fontWeight='700'>
+            {" "}
+            (1 {formData.buyAsset.asset_code} = ${(1000 * 0.2039).toFixed(1)})
+          </Text>
         </Text>
       )}
 
       {/* Transaction Details */}
       {quote && !isLoadingQuote && (
         <YStack space='$3' paddingTop='$3'>
-          <Text
-            fontSize='$3'
-            color='$textSecondary'
-            textAlign='center'
-            textDecorationLine='underline'
-          >
-            Show less ↑
-          </Text>
+          <XStack alignItems='center' justifyContent='center' space='$2'>
+            {/* Left line */}
+            <View flex={1} height={1} backgroundColor='#737381' />
+
+            {/* Center text */}
+            <XStack alignItems='center' justifyContent='center' space='$2'>
+              <Text
+                fontSize='$3'
+                color='$textSecondary'
+                textAlign='center'
+                justifyContent='center'
+                alignItems='center'
+              >
+                Show More
+              </Text>
+              <YStack justifyContent='center' alignItems='center' space='$1'>
+                <ChevronsUpDown
+                  size={10}
+                  color='#737381'
+                  margin='0'
+                  padding='0'
+                />
+              </YStack>
+            </XStack>
+
+            {/* Right line */}
+            <View flex={1} height={1} backgroundColor='#737381' />
+          </XStack>
 
           <YStack space='$2'>
             <XStack justifyContent='space-between' alignItems='center'>
-              <Text fontSize='$3' color='$textSecondary'>
+              <Text fontSize='$1' color='#637381'>
                 Fee (0.3%)
               </Text>
-              <Text fontSize='$3' color='$textPrimary'>
+              <Text fontSize='$1' color='#1C252E' fontWeight='700'>
                 $3.00
               </Text>
             </XStack>
 
             <XStack justifyContent='space-between' alignItems='center'>
-              <Text fontSize='$3' color='$textSecondary'>
+              <Text fontSize='$1' color='#637381'>
                 Network cost
               </Text>
-              <Text fontSize='$3' color='$textPrimary'>
+              <Text fontSize='$1' color='#1C252E' fontWeight='700'>
                 $1.08
               </Text>
             </XStack>
 
             <XStack justifyContent='space-between' alignItems='center'>
-              <Text fontSize='$3' color='$textSecondary'>
+              <Text fontSize='$1' color='#637381'>
                 Rate
               </Text>
-              <Text fontSize='$3' color='$textPrimary'>
+              <Text fontSize='$1' color='#1C252E' fontWeight='700'>
                 1 {formData.sellAsset?.asset_code} ={" "}
                 {formData.buyAsset?.asset_code &&
                   (
@@ -366,19 +389,19 @@ const SwapCard = () => {
             </XStack>
 
             <XStack justifyContent='space-between' alignItems='center'>
-              <Text fontSize='$3' color='$textSecondary'>
+              <Text fontSize='$1' color='#637381'>
                 Max slippage
               </Text>
-              <Text fontSize='$3' color='$textPrimary'>
+              <Text fontSize='$1' color='#1C252E' fontWeight='700'>
                 0.50%
               </Text>
             </XStack>
 
             <XStack justifyContent='space-between' alignItems='center'>
-              <Text fontSize='$3' color='$textSecondary'>
+              <Text fontSize='$1' color='#637381'>
                 Price impact
               </Text>
-              <Text fontSize='$3' color='$textPrimary'>
+              <Text fontSize='$1' color='#1C252E' fontWeight='700'>
                 ~0.02%
               </Text>
             </XStack>
