@@ -29,7 +29,7 @@ export const secureStorage = {
   },
 
   async setJSON<T>(key: string, value: T): Promise<void> {
-    await this.setItem(key, JSON.stringify(value));
+    await this.setItem(key, JSON.stringify(Number(value)));
   },
 
   async getJSON<T>(key: string): Promise<T | null> {

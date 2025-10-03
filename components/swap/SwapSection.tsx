@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { XStack, YStack, Text, Input, Button } from "tamagui";
 import { DisplayAsset } from "@/lib/types/balance.types";
 import { TokenInfo } from "@/lib/types/swap.types";
@@ -32,6 +32,8 @@ export const SwapSection: React.FC<SwapSectionProps> = ({
   balance,
   readOnly = false
 }) => {
+  const [usdValue, setUsdValue] = useState("0.00");
+
   const asset_symbol =
     asset && "asset_code" in asset ? asset.asset_code : asset?.symbol;
 
@@ -41,12 +43,12 @@ export const SwapSection: React.FC<SwapSectionProps> = ({
     fetchOnMount: true,
     backgroundFetch: false
   });
-  console.log("tokenPrice type", typeof tokenPrice);
-
-  // mock usd value
-  const usdValue = amount
-    ? (parseFloat(amount) * Number(tokenPrice)).toFixed(2)
-    : "0.00";
+  console.log("tokenPrice", tokenPrice);
+  useEffect(() => {
+    setUsdValue(
+      amount ? (parseFloat(amount) * Number(tokenPrice)).toFixed(6) : "0.00"
+    );
+  }, [amount, tokenPrice]);
 
   return (
     <YStack

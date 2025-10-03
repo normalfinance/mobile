@@ -1,4 +1,4 @@
-import { getOraclePrice } from "@/lib/contracts/oracle/oracle";
+import { getOraclePrice } from "@/lib/utils/oracle.utils";
 import { formatTokenAmount } from "@/lib/utils/oracle.utils";
 import { cacheStorage } from "@/lib/utils/storage.utils";
 import type {
@@ -11,6 +11,9 @@ import type {
   CacheStats,
   BackgroundUpdateStatus
 } from "@/lib/types/oracle.types";
+import { STELLAR_CONFIG } from "@/lib/constants/stellar.constants";
+import { getKeypair } from "./wallet.service";
+import { Account } from "@stellar/stellar-sdk";
 
 // Service configuration
 const CONFIG: OracleServiceConfig = {
@@ -98,7 +101,16 @@ export const updateRateLimit = async (): Promise<void> => {
 export const fetchPriceFromOracle = async (
   asset: string
 ): Promise<PriceData> => {
-  return await getOraclePrice(CONFIG.oracleAddress, asset);
+  const keypair = await getKeypair();
+  if (!keypair) {
+    throw new Error("No wallet found in secure storage");
+  }
+  const networkConfig = {
+    rpcUrl: STELLAR_CONFIG.SOROBAN_RPC_URLS.TESTNET,
+    networkPassphrase: STELLAR_CONFIG.TESTNET_PASSPHRASE,
+    testingSource: new Account(keypair.publicKey(), "0")
+  };
+  return await getOraclePrice(CONFIG.oracleAddress, asset, networkConfig);
 };
 
 /**
