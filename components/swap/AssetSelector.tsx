@@ -1,6 +1,7 @@
 import React from "react";
 import { FlatList } from "react-native";
-import { XStack, YStack, Text, Button, Sheet } from "tamagui";
+import { XStack, YStack, Text, Button, Sheet, Circle } from "tamagui";
+import { ChevronDown } from "lucide-react-native";
 import { DisplayAsset } from "@/lib/types/balance.types";
 import { TokenInfo } from "@/lib/types/swap.types";
 
@@ -65,25 +66,43 @@ export const AssetSelector: React.FC<AssetSelectorProps> = ({
     <>
       <Button
         onPress={() => setOpen(true)}
-        backgroundColor='$background'
+        backgroundColor='$sectionBackground'
         borderColor='$borderColor'
         borderWidth={1}
-        borderRadius='$4'
-        padding='$3'
+        borderRadius='$input'
+        padding='$1'
+        minWidth={120}
       >
-        <XStack alignItems='center' space='$2'>
+        <XStack
+          alignItems='center'
+          space='$2'
+          justifyContent='space-between'
+          height='100%'
+        >
           {selectedAsset ? (
-            <Text fontSize='$4' fontWeight='600'>
-              {"asset_code" in selectedAsset
-                ? selectedAsset.asset_code
-                : selectedAsset.symbol}
-            </Text>
+            <>
+              <Circle size={24} backgroundColor='$purple500' marginRight='$2'>
+                <Text fontSize='$2' color='white' fontWeight='700'>
+                  {("asset_code" in selectedAsset
+                    ? selectedAsset.asset_code
+                    : selectedAsset.symbol
+                  ).charAt(0)}
+                </Text>
+              </Circle>
+              <Text fontSize='$4' fontWeight='600' color='$textPrimary'>
+                {"asset_code" in selectedAsset
+                  ? selectedAsset.asset_code
+                  : selectedAsset.symbol}
+              </Text>
+            </>
           ) : (
-            <Text fontSize='$4' color='$gray10'>
-              {placeholder}
+            <Text fontSize='$4' color='$textTertiary'>
+              {availableAssets.length > 0
+                ? availableAssets[0].display_name
+                : placeholder}
             </Text>
           )}
-          ChevronDown
+          <ChevronDown size={24} color='#1C252E' />
         </XStack>
       </Button>
 
@@ -96,10 +115,10 @@ export const AssetSelector: React.FC<AssetSelectorProps> = ({
       >
         <Sheet.Overlay />
         <Sheet.Handle />
-        <Sheet.Frame padding='$4'>
-          <YStack space='$4'>
+        <Sheet.Frame padding='$3'>
+          <YStack space='$3'>
             <Text fontSize='$6' fontWeight='600'>
-              Select Token
+              123
             </Text>
             <FlatList
               data={availableAssets}
