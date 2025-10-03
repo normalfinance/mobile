@@ -254,7 +254,7 @@ const SwapCard = () => {
   return (
     <YStack space='$4'>
       {/* Sell Section */}
-      <View marginBottom='$-5'>
+      <View marginBottom='$-6'>
         <SwapSection
           label='Sell'
           asset={formData.sellAsset}
@@ -273,12 +273,12 @@ const SwapCard = () => {
       {/* Swap Direction Button */}
       <XStack justifyContent='center' marginVertical='$-2'>
         <Circle
-          size={40}
+          size={52}
           backgroundColor='#DFE3E8'
           opacity={1}
           zIndex={2}
           borderWidth={3}
-          borderRadius={10}
+          borderRadius={16}
           borderColor='#ffffff'
           pressStyle={{ scale: 0.95 }}
           onPress={handleSwapDirections}
@@ -289,7 +289,7 @@ const SwapCard = () => {
       </XStack>
 
       {/* Buy Section */}
-      <View marginTop='$-6'>
+      <View marginTop='$-7'>
         <SwapSection
           label='Buy'
           asset={formData.buyAsset}
