@@ -113,18 +113,7 @@ export const useTokenPrice = (
         isActiveRef.current = false;
       };
 
-      document.addEventListener("visibilitychange", handleVisibilityChange);
-      window.addEventListener("focus", handleFocus);
-      window.addEventListener("blur", handleBlur);
-
-      return () => {
-        document.removeEventListener(
-          "visibilitychange",
-          handleVisibilityChange
-        );
-        window.removeEventListener("focus", handleFocus);
-        window.removeEventListener("blur", handleBlur);
-      };
+      return () => {};
     }
   }, [asset, refreshInterval, fetchPrice]);
 

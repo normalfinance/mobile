@@ -3,6 +3,7 @@ import { XStack, YStack, Text, Input, Button } from "tamagui";
 import { DisplayAsset } from "@/lib/types/balance.types";
 import { TokenInfo } from "@/lib/types/swap.types";
 import { AssetSelector } from "./AssetSelector";
+import { useTokenPrice } from "@/hooks/use-token-price";
 
 interface SwapSectionProps {
   label: string;
@@ -31,14 +32,25 @@ export const SwapSection: React.FC<SwapSectionProps> = ({
   balance,
   readOnly = false
 }) => {
-  // Calculate USD value (placeholder calculation)
-  const usdValue = amount ? (parseFloat(amount) * 1000).toFixed(2) : "0.00";
+  const asset_symbol =
+    asset && "asset_code" in asset ? asset.asset_code : asset?.symbol;
+
+  const { price: tokenPrice } = useTokenPrice(asset_symbol || "", {
+    cacheDuration: 30000,
+    refreshInterval: 30000,
+    fetchOnMount: true,
+    backgroundFetch: false
+  });
+  console.log("tokenPrice type", typeof tokenPrice);
+
+  // mock usd value
+  const usdValue = amount
+    ? (parseFloat(amount) * Number(tokenPrice)).toFixed(2)
+    : "0.00";
 
   return (
     <YStack
-      backgroundColor={
-        label === "Buy" ? "#ffffff" : "#919eab14"
-      }
+      backgroundColor={label === "Buy" ? "#ffffff" : "#919eab14"}
       borderRadius='$card'
       padding='$cardPadding'
       space='$3'
