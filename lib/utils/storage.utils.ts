@@ -97,3 +97,167 @@ export const walletStorage = {
     await this.setUserId(userId);
   }
 };
+
+// Cache management utilities for oracle service
+export const cacheStorage = {
+  // Get the list of all cache keys
+  async getCacheKeysList(): Promise<string[]> {
+    try {
+      const keys = await secureStorage.getJSON<string[]>(STORAGE_KEYS.ORACLE_CACHE_KEYS);
+      return keys || [];
+    } catch (error) {
+      console.error("Failed to get cache keys list:", error);
+      return [];
+    }
+  },
+
+  // Update the master list of cache keys
+  async updateCacheKeysList(keys: string[]): Promise<void> {
+    try {
+      await secureStorage.setJSON(STORAGE_KEYS.ORACLE_CACHE_KEYS, keys);
+    } catch (error) {
+      console.error(`${STORAGE_ERRORS.FAILED_TO_MANAGE_CACHE}:`, error);
+      throw error;
+    }
+  },
+
+  // Add a key to the cache keys list
+  async addCacheKey(key: string): Promise<void> {
+    try {
+      const keys = await this.getCacheKeysList();
+      if (!keys.includes(key)) {
+        keys.push(key);
+        await this.updateCacheKeysList(keys);
+      }
+    } catch (error) {
+      console.error(`${STORAGE_ERRORS.FAILED_TO_MANAGE_CACHE}:`, error);
+      throw error;
+    }
+  },
+
+  // Remove a key from the cache keys list
+  async removeCacheKey(key: string): Promise<void> {
+    try {
+      const keys = await this.getCacheKeysList();
+      const filteredKeys = keys.filter(k => k !== key);
+      await this.updateCacheKeysList(filteredKeys);
+    } catch (error) {
+      console.error(`${STORAGE_ERRORS.FAILED_TO_MANAGE_CACHE}:`, error);
+      throw error;
+    }
+  },
+
+  // Get all keys that start with a specific prefix
+  async getKeysWithPrefix(prefix: string): Promise<string[]> {
+    try {
+      const keys = await this.getCacheKeysList();
+      return keys.filter(key => key.startsWith(prefix));
+    } catch (error) {
+      console.error("Failed to get keys with prefix:", error);
+      return [];
+    }
+  },
+
+  // Set cache item and track the key
+  async setCacheItem<T>(key: string, value: T): Promise<void> {
+    try {
+      await secureStorage.setJSON(key, value);
+      await this.addCacheKey(key);
+    } catch (error) {
+      console.error("Failed to set cache item:", error);
+      throw error;
+    }
+  },
+
+  // Get cache item
+  async getCacheItem<T>(key: string): Promise<T | null> {
+    try {
+      return await secureStorage.getJSON<T>(key);
+    } catch (error) {
+      console.error("Failed to get cache item:", error);
+      return null;
+    }
+  },
+
+  // Remove cache item and untrack the key
+  async removeCacheItem(key: string): Promise<void> {
+    try {
+      await secureStorage.deleteItem(key);
+      await this.removeCacheKey(key);
+    } catch (error) {
+      console.error("Failed to remove cache item:", error);
+      throw error;
+    }
+  },
+
+  // Remove multiple cache items
+  async multiRemove(keys: string[]): Promise<void> {
+    try {
+      // Remove all items from secure storage
+      const removePromises = keys.map(key => secureStorage.deleteItem(key));
+      await Promise.all(removePromises);
+
+      // Update the cache keys list by removing all the deleted keys
+      const currentKeys = await this.getCacheKeysList();
+      const remainingKeys = currentKeys.filter(key => !keys.includes(key));
+      await this.updateCacheKeysList(remainingKeys);
+    } catch (error) {
+      console.error("Failed to remove multiple cache items:", error);
+      throw error;
+    }
+  },
+
+  // Clear all keys with a specific prefix
+  async clearKeysWithPrefix(prefix: string): Promise<void> {
+    try {
+      const keysToRemove = await this.getKeysWithPrefix(prefix);
+      if (keysToRemove.length > 0) {
+        await this.multiRemove(keysToRemove);
+      }
+    } catch (error) {
+      console.error(`${STORAGE_ERRORS.FAILED_TO_CLEAR_CACHE}:`, error);
+      throw error;
+    }
+  },
+
+  // Get cache statistics
+  async getCacheStats(): Promise<{
+    totalCachedItems: number;
+    keysWithPrefix: (prefix: string) => Promise<number>;
+    allKeys: string[];
+  }> {
+    try {
+      const keys = await this.getCacheKeysList();
+      return {
+        totalCachedItems: keys.length,
+        keysWithPrefix: async (prefix: string) => {
+          const prefixKeys = await this.getKeysWithPrefix(prefix);
+          return prefixKeys.length;
+        },
+        allKeys: [...keys] // Return a copy
+      };
+    } catch (error) {
+      console.error("Failed to get cache stats:", error);
+      return {
+        totalCachedItems: 0,
+        keysWithPrefix: async () => 0,
+        allKeys: []
+      };
+    }
+  },
+
+  // Clear all cache (useful for debugging or reset)
+  async clearAllCache(): Promise<void> {
+    try {
+      const keys = await this.getCacheKeysList();
+      if (keys.length > 0) {
+        await this.multiRemove(keys);
+      }
+      // Also clear the keys list itself
+      await secureStorage.deleteItem(STORAGE_KEYS.ORACLE_CACHE_KEYS);
+    } catch (error) {
+      console.error(`${STORAGE_ERRORS.FAILED_TO_CLEAR_CACHE}:`, error);
+      throw error;
+    }
+  }
+};
