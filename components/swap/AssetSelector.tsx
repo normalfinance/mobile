@@ -132,11 +132,11 @@ export const AssetSelector: React.FC<AssetSelectorProps> = ({
     const logoUrl = "logo_url" in item ? item.logo_url : item.logoUrl;
 
     // Mock USD values for demo - in real app this would come from props or API
-    const mockUsdValues: Record<string, { price: string; amount: string }> = {
-      XLM: { price: "$4,060.41", amount: "9949.784541" },
-      nBTC: { price: "$4.9", amount: "0.0000403" },
-      nETH: { price: "$7.11", amount: "0.0015611" },
-      nSOL: { price: "$8.57", amount: "0.0339722" }
+    const mockUsdValues: Record<string, { price: string }> = {
+      XLM: { price: "$4,060.41" },
+      nBTC: { price: "$4.9" },
+      nETH: { price: "$7.11" },
+      nSOL: { price: "$8.57" }
     };
 
     const usdData = mockUsdValues[symbol];
@@ -171,11 +171,11 @@ export const AssetSelector: React.FC<AssetSelectorProps> = ({
           <YStack alignItems='flex-end'>
             {usdData && (
               <>
-                <Text fontSize='$4' fontWeight='600' color='$textPrimary'>
+                {/* <Text fontSize='$4' fontWeight='600' color='$textPrimary'>
                   {usdData.price}
-                </Text>
-                <Text fontSize='$3' color='$gray11'>
-                  {usdData.amount}
+                </Text> */}
+                <Text fontSize='$1' color='$gray11'>
+                  {parseFloat(balance).toFixed(4)}
                 </Text>
               </>
             )}
