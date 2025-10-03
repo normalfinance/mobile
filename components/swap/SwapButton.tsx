@@ -23,8 +23,9 @@ export const SwapButton: React.FC<SwapButtonProps> = ({
       fontSize='$5'
       fontWeight='600'
       // padding='$4'
-      borderRadius='$button'
+      borderRadius='$card'
       width='100%'
+      height={54}
       opacity={disabled ? 0.6 : 1}
       pressStyle={{
         backgroundColor: "$purple600",

@@ -304,12 +304,14 @@ const SwapCard = () => {
       </View>
 
       {/* Swap Button */}
-      <SwapButton
-        onPress={handleExecuteSwap}
-        disabled={isSwapDisabled}
-        loading={executeSwapMutation.isPending}
-        text={getSwapButtonText()}
-      />
+      <View marginTop='$-3'>
+        <SwapButton
+          onPress={handleExecuteSwap}
+          disabled={isSwapDisabled}
+          loading={executeSwapMutation.isPending}
+          text={getSwapButtonText()}
+        />
+      </View>
 
       {/* Transaction Summary */}
       {formData.sellAsset && formData.buyAsset && formData.sellAmount && (
@@ -331,9 +333,9 @@ const SwapCard = () => {
       {/* Transaction Details */}
       {quote && !isLoadingQuote && (
         <YStack space='$3' paddingTop='$3'>
-          <XStack 
-            alignItems='center' 
-            justifyContent='center' 
+          <XStack
+            alignItems='center'
+            justifyContent='center'
             space='$2'
             pressStyle={{ opacity: 0.7 }}
             onPress={handleToggleDetails}
@@ -344,7 +346,7 @@ const SwapCard = () => {
             {/* Center text */}
             <XStack alignItems='center' space='$1'>
               <Text fontSize='$1' color='#737381' fontWeight='600'>
-                {showTransactionDetails ? 'Show Less' : 'Show More'}
+                {showTransactionDetails ? "Show Less" : "Show More"}
               </Text>
               <ChevronsUpDown size={10} color='#737381' marginTop='2' />
             </XStack>

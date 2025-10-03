@@ -233,7 +233,7 @@ const tokens = {
   },
   radius: {
     ...baseTokens.radius,
-    card: 16,
+    card: 20,
     button: 12,
     input: 8
   }

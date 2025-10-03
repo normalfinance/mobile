@@ -36,7 +36,9 @@ export const SwapSection: React.FC<SwapSectionProps> = ({
 
   return (
     <YStack
-      backgroundColor='#919eab14'
+      backgroundColor={
+        label === "Buy" ? "#ffffff" : "#919eab14"
+      }
       borderRadius='$card'
       padding='$cardPadding'
       space='$3'
