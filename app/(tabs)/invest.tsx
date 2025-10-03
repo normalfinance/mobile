@@ -35,6 +35,7 @@ const SwapCard = () => {
     buyAmount: "",
     slippageTolerance: 0.5
   });
+  const [showTransactionDetails, setShowTransactionDetails] = useState(true);
 
   const { data: walletBalances = [], isLoading: isLoadingBalances } =
     useWalletBalances();
@@ -171,6 +172,10 @@ const SwapCard = () => {
       sellAmount: prev.buyAmount,
       buyAmount: prev.sellAmount
     }));
+  };
+
+  const handleToggleDetails = () => {
+    setShowTransactionDetails((prev) => !prev);
   };
 
   const handleExecuteSwap = async () => {
@@ -326,86 +331,81 @@ const SwapCard = () => {
       {/* Transaction Details */}
       {quote && !isLoadingQuote && (
         <YStack space='$3' paddingTop='$3'>
-          <XStack alignItems='center' justifyContent='center' space='$2'>
+          <XStack 
+            alignItems='center' 
+            justifyContent='center' 
+            space='$2'
+            pressStyle={{ opacity: 0.7 }}
+            onPress={handleToggleDetails}
+          >
             {/* Left line */}
             <View flex={1} height={1} backgroundColor='#737381' />
 
             {/* Center text */}
-            <XStack alignItems='center' justifyContent='center' space='$2'>
-              <Text
-                fontSize='$3'
-                color='$textSecondary'
-                textAlign='center'
-                justifyContent='center'
-                alignItems='center'
-              >
-                Show More
+            <XStack alignItems='center' space='$1'>
+              <Text fontSize='$1' color='#737381' fontWeight='600'>
+                {showTransactionDetails ? 'Show Less' : 'Show More'}
               </Text>
-              <YStack justifyContent='center' alignItems='center' space='$1'>
-                <ChevronsUpDown
-                  size={10}
-                  color='#737381'
-                  margin='0'
-                  padding='0'
-                />
-              </YStack>
+              <ChevronsUpDown size={10} color='#737381' marginTop='2' />
             </XStack>
 
             {/* Right line */}
             <View flex={1} height={1} backgroundColor='#737381' />
           </XStack>
 
-          <YStack space='$2'>
-            <XStack justifyContent='space-between' alignItems='center'>
-              <Text fontSize='$1' color='#637381'>
-                Fee (0.3%)
-              </Text>
-              <Text fontSize='$1' color='#1C252E' fontWeight='700'>
-                $3.00
-              </Text>
-            </XStack>
+          {showTransactionDetails && (
+            <YStack space='$2'>
+              <XStack justifyContent='space-between' alignItems='center'>
+                <Text fontSize='$1' color='#637381'>
+                  Fee (0.3%)
+                </Text>
+                <Text fontSize='$1' color='#1C252E' fontWeight='700'>
+                  $3.00
+                </Text>
+              </XStack>
 
-            <XStack justifyContent='space-between' alignItems='center'>
-              <Text fontSize='$1' color='#637381'>
-                Network cost
-              </Text>
-              <Text fontSize='$1' color='#1C252E' fontWeight='700'>
-                $1.08
-              </Text>
-            </XStack>
+              <XStack justifyContent='space-between' alignItems='center'>
+                <Text fontSize='$1' color='#637381'>
+                  Network cost
+                </Text>
+                <Text fontSize='$1' color='#1C252E' fontWeight='700'>
+                  $1.08
+                </Text>
+              </XStack>
 
-            <XStack justifyContent='space-between' alignItems='center'>
-              <Text fontSize='$1' color='#637381'>
-                Rate
-              </Text>
-              <Text fontSize='$1' color='#1C252E' fontWeight='700'>
-                1 {formData.sellAsset?.asset_code} ={" "}
-                {formData.buyAsset?.asset_code &&
-                  (
-                    parseFloat(quote.amountOut) / parseFloat(quote.amountIn)
-                  ).toFixed(6)}{" "}
-                {formData.buyAsset?.asset_code}
-              </Text>
-            </XStack>
+              <XStack justifyContent='space-between' alignItems='center'>
+                <Text fontSize='$1' color='#637381'>
+                  Rate
+                </Text>
+                <Text fontSize='$1' color='#1C252E' fontWeight='700'>
+                  1 {formData.sellAsset?.asset_code} ={" "}
+                  {formData.buyAsset?.asset_code &&
+                    (
+                      parseFloat(quote.amountOut) / parseFloat(quote.amountIn)
+                    ).toFixed(6)}{" "}
+                  {formData.buyAsset?.asset_code}
+                </Text>
+              </XStack>
 
-            <XStack justifyContent='space-between' alignItems='center'>
-              <Text fontSize='$1' color='#637381'>
-                Max slippage
-              </Text>
-              <Text fontSize='$1' color='#1C252E' fontWeight='700'>
-                0.50%
-              </Text>
-            </XStack>
+              <XStack justifyContent='space-between' alignItems='center'>
+                <Text fontSize='$1' color='#637381'>
+                  Max slippage
+                </Text>
+                <Text fontSize='$1' color='#1C252E' fontWeight='700'>
+                  0.50%
+                </Text>
+              </XStack>
 
-            <XStack justifyContent='space-between' alignItems='center'>
-              <Text fontSize='$1' color='#637381'>
-                Price impact
-              </Text>
-              <Text fontSize='$1' color='#1C252E' fontWeight='700'>
-                ~0.02%
-              </Text>
-            </XStack>
-          </YStack>
+              <XStack justifyContent='space-between' alignItems='center'>
+                <Text fontSize='$1' color='#637381'>
+                  Price impact
+                </Text>
+                <Text fontSize='$1' color='#1C252E' fontWeight='700'>
+                  ~0.02%
+                </Text>
+              </XStack>
+            </YStack>
+          )}
         </YStack>
       )}
 
