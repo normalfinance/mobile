@@ -90,6 +90,10 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
           hideYAxisText
           backgroundColor="transparent"
           spacing={chartWidth / Math.max(1, chartData.length - 1)}
+          areaChart
+          startFillColor="rgba(45, 223, 107, 0.3)"
+          endFillColor="rgba(255, 255, 255, 0)"
+          gradientDirection="vertical"
         />
       </YStack>
       
