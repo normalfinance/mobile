@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { FlatList } from "react-native";
-import { YStack, XStack, Text, Button, Circle, Tabs } from "tamagui";
+import { YStack, XStack, Text, Button, Circle } from "tamagui";
+import { ArrowUpRight, ArrowDownRight } from "lucide-react-native";
 import { DisplayAsset } from "@/lib/types/balance.types";
 
 interface AssetWithPrice extends DisplayAsset {
@@ -44,51 +45,112 @@ const getTokenIcon = (symbol: string) => {
 const AssetItem: React.FC<{ asset: AssetWithPrice }> = ({ asset }) => {
   const tokenIcon = getTokenIcon(asset.asset_code);
   const isPositive = (asset.priceChange24h || 0) >= 0;
+  const formattedBalance = new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(parseFloat(asset.balance));
+  const formattedUsdValue = asset.usdValue.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+  const formattedUsdPrice = asset.usdPrice.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
 
   return (
-    <XStack
-      alignItems='center'
-      justifyContent='space-between'
-      paddingVertical='$3'
-      paddingHorizontal='$2'
+    <YStack
+      space='$3'
+      paddingVertical='$4'
+      paddingHorizontal='$3'
+      borderBottomColor='#919EAB1F'
+      borderBottomWidth={1}
     >
-      <XStack alignItems='center' space='$3' flex={1}>
-        <Circle size={40} backgroundColor={tokenIcon.bgColor}>
-          <Text fontSize='$4' fontWeight='700' color='white'>
-            {tokenIcon.icon}
+      <XStack alignItems='center' justifyContent='space-between' width='100%'>
+        <XStack alignItems='center' space='$3'>
+          <Circle size={44} backgroundColor={tokenIcon.bgColor}>
+            <Text fontSize='$4' fontWeight='700' color='white'>
+              {tokenIcon.icon}
+            </Text>
+          </Circle>
+          <YStack>
+            <Text
+              fontSize='$2'
+              fontWeight='700'
+              color='#1C252E'
+              marginBottom='$2'
+            >
+              {asset.display_name}
+            </Text>
+            <Text
+              fontSize='$1'
+              color='#637381'
+              fontWeight='700'
+              fontFamily='$numeric'
+            >
+              {formattedBalance} {asset.asset_code}
+            </Text>
+          </YStack>
+        </XStack>
+
+        <YStack alignItems='flex-end' space='$1' gap='$1'>
+          <Text
+            fontSize='$3'
+            fontWeight='700'
+            color='#1C252E'
+            fontFamily='$numeric'
+          >
+            ${formattedUsdValue}
           </Text>
-        </Circle>
-        <YStack alignItems='flex-start' flex={1}>
-          <Text fontSize='$4' fontWeight='600' color='$textPrimary'>
-            {asset.display_name}
-          </Text>
-          <Text fontSize='$3' color='$gray11'>
-            {parseFloat(asset.balance).toFixed(4)} {asset.asset_code}
+          {asset.priceChange24h !== undefined && (
+            <XStack alignItems='center' space='$1'>
+              {isPositive ? (
+                <ArrowUpRight size={14} color='#22C55E' />
+              ) : (
+                <ArrowDownRight size={14} color='#EF4444' />
+              )}
+              <Text
+                fontSize='$1'
+                color='#637381'
+                fontWeight='600'
+                fontFamily='$numeric'
+              >
+                {isPositive ? "+" : ""}
+                {asset.priceChange24h.toFixed(2)}%
+              </Text>
+            </XStack>
+          )}
+          <Text
+            fontSize='$2'
+            color='#637381'
+            fontWeight='600'
+            fontFamily='$numeric'
+          >
+            1 {asset.asset_code} = ${formattedUsdPrice}
           </Text>
         </YStack>
       </XStack>
 
-      <YStack alignItems='flex-end'>
-        <Text fontSize='$4' fontWeight='600' color='$textPrimary'>
-          ${asset.usdValue.toFixed(2)}
-        </Text>
-        {asset.priceChange24h !== undefined && (
-          <XStack alignItems='center' space='$1'>
-            <Text fontSize='$2' color='$gray11'>
-              ${asset.usdPrice.toFixed(2)}
-            </Text>
-            <Text
-              fontSize='$2'
-              color={isPositive ? "$green10" : "$red10"}
-              fontWeight='500'
-            >
-              {isPositive ? "+" : ""}
-              {asset.priceChange24h.toFixed(2)}%
-            </Text>
-          </XStack>
-        )}
-      </YStack>
-    </XStack>
+      <XStack justifyContent='flex-end' space='$2'>
+        <Button
+          color='white'
+          borderRadius='$10'
+          fontSize='$1'
+          fontWeight='800'
+          backgroundColor='#1C252E'
+        >
+          <Text color='white'>Trade</Text>
+        </Button>
+        <Button
+          backgroundColor='#919EAB'
+          borderRadius='$10'
+          fontSize='$1'
+          fontWeight='800'
+        >
+          <Text color='#FFFFFF'>Stats</Text>
+        </Button>
+      </XStack>
+    </YStack>
   );
 };
 
@@ -187,7 +249,7 @@ export const AssetList: React.FC<AssetListProps> = ({
       </XStack>
 
       {/* Asset list */}
-      <YStack>
+      <YStack space='$3'>
         {filteredAssets.map((asset, index) => (
           <AssetItem
             key={`${asset.asset_code}-${asset.asset_issuer || "native"}`}
