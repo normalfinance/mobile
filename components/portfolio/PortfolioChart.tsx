@@ -22,7 +22,7 @@ const periods = [
   { label: "30D", value: "30D" },
   { label: "180D", value: "180D" },
   { label: "365D", value: "365D" },
-  { label: "All", value: "All" }
+  { label: "ALL", value: "All" }
 ];
 
 export const PortfolioChart: React.FC<PortfolioChartProps> = ({
@@ -42,27 +42,27 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
 
   if (isLoading) {
     return (
-      <YStack space="$4" marginBottom="$4">
-        <YStack 
-          height={200} 
-          backgroundColor="$gray2" 
-          borderRadius="$4"
-          justifyContent="center"
-          alignItems="center"
+      <YStack space='$4' marginBottom='$4'>
+        <YStack
+          height={200}
+          backgroundColor='$gray2'
+          borderRadius='$4'
+          justifyContent='center'
+          alignItems='center'
         >
-          <Text color="$textSecondary">Loading chart...</Text>
+          <Text color='$textSecondary'>Loading chart...</Text>
         </YStack>
-        
+
         {/* Time period selector */}
-        <XStack justifyContent="space-between" paddingHorizontal="$2">
+        <XStack justifyContent='space-between' paddingHorizontal='$2'>
           {periods.map((period) => (
             <Button
               key={period.value}
-              size="$2"
-              backgroundColor="transparent"
-              color="$textSecondary"
-              fontSize="$3"
-              fontWeight="500"
+              size='$2'
+              backgroundColor='transparent'
+              color='$textSecondary'
+              fontSize='$3'
+              fontWeight='500'
               onPress={() => onPeriodChange(period.value)}
               disabled
             >
@@ -75,42 +75,57 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
   }
 
   return (
-    <YStack space="$4" marginBottom="$4">
+    <YStack marginBottom='$4'>
       {/* Chart container */}
-      <YStack height={200} backgroundColor="$background" paddingHorizontal="$2">
+      <YStack height={200} backgroundColor='$background' space='$0'>
         <LineChart
           data={chartData}
           width={chartWidth}
           height={180}
-          color="#22c55e"
+          color='#22c55e'
           thickness={2}
           curved
           hideDataPoints
           hideAxesAndRules
           hideYAxisText
-          backgroundColor="transparent"
+          backgroundColor='transparent'
           spacing={chartWidth / Math.max(1, chartData.length - 1)}
           areaChart
-          startFillColor="rgba(45, 223, 107, 0.3)"
-          endFillColor="rgba(255, 255, 255, 0)"
-          gradientDirection="vertical"
+          startFillColor='#C5FDE500'
+          endFillColor='#ffffff'
+          gradientDirection='vertical'
+          initialSpacing={0}
+          endSpacing={0}
+          xAxisLabelTextStyle={{
+            color: "transparent", // hide text
+            fontSize: 0,
+            lineHeight: 0,
+            height: 0,
+            margin: 0,
+            padding: 0
+          }}
         />
       </YStack>
-      
+
       {/* Time period selector */}
-      <XStack justifyContent="space-between" paddingHorizontal="$2">
+      <XStack justifyContent='space-between' paddingHorizontal='$2'>
         {periods.map((period) => (
           <Button
             key={period.value}
-            size="$2"
-            backgroundColor={selectedPeriod === period.value ? "$gray4" : "transparent"}
-            color={selectedPeriod === period.value ? "$textPrimary" : "$textSecondary"}
-            fontSize="$3"
-            fontWeight="500"
-            borderRadius="$3"
-            paddingHorizontal="$3"
-            paddingVertical="$2"
+            size='$2'
+            backgroundColor={
+              selectedPeriod === period.value ? "#919EAB1F" : "transparent"
+            }
+            color={"#1C252E"}
+            borderColor={
+              selectedPeriod === period.value ? "#919EAB1F" : "transparent"
+            }
+            fontSize='$2'
+            fontWeight='500'
+            borderRadius='$8'
+            paddingHorizontal='$3'
             onPress={() => onPeriodChange(period.value)}
+            fontFamily='$numericl'
           >
             {period.label}
           </Button>

@@ -5,6 +5,7 @@ interface ActionButtonProps {
   label: string;
   icon: string;
   backgroundColor: string;
+  borderColor: string;
   onPress: () => void;
 }
 
@@ -12,22 +13,30 @@ const ActionButton: React.FC<ActionButtonProps> = ({
   label,
   icon,
   backgroundColor,
+  borderColor,
   onPress
 }) => (
   <Button
     onPress={onPress}
-    backgroundColor="transparent"
-    padding="$0"
+    backgroundColor='transparent'
+    padding='$0'
+    borderColor={borderColor}
     borderWidth={0}
     unstyled
   >
-    <YStack alignItems="center" space="$2">
-      <Circle size={48} backgroundColor={backgroundColor}>
-        <Text fontSize="$5" color="white" fontWeight="700">
+    <YStack alignItems='center' space='$2'>
+      <Circle
+        size={48}
+        backgroundColor={backgroundColor}
+        borderColor={borderColor}
+        borderRadius='$4'
+        borderWidth={1}
+      >
+        <Text fontSize='$5' color='white' fontWeight='700'>
           {icon}
         </Text>
       </Circle>
-      <Text fontSize="$2" color="$textPrimary" fontWeight="500">
+      <Text fontSize='$2' color='#1C252E' fontWeight='500'>
         {label}
       </Text>
     </YStack>
@@ -53,7 +62,8 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
     {
       label: "Swap",
       icon: "⇄",
-      backgroundColor: "$blue9",
+      backgroundColor: "#2DE9C833",
+      borderColor: "#2DE9C81F",
       onPress: onSwap
     },
     {
@@ -83,11 +93,11 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
   ];
 
   return (
-    <XStack 
-      justifyContent="space-between" 
-      paddingVertical="$4"
-      paddingHorizontal="$2"
-      marginBottom="$4"
+    <XStack
+      justifyContent='space-between'
+      paddingVertical='$4'
+      paddingHorizontal='$2'
+      marginBottom='$4'
     >
       {actions.map((action) => (
         <ActionButton
@@ -95,6 +105,7 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
           label={action.label}
           icon={action.icon}
           backgroundColor={action.backgroundColor}
+          borderColor={action.borderColor}
           onPress={action.onPress}
         />
       ))}
