@@ -1,18 +1,10 @@
 import React from "react";
 import { FlatList, ScrollView } from "react-native";
-import {
-  XStack,
-  YStack,
-  Text,
-  Button,
-  Sheet,
-  Circle,
-  Input,
-  Grid
-} from "tamagui";
+import { XStack, YStack, Text, Button, Sheet, Circle, Input } from "tamagui";
 import { ChevronDown, Search } from "lucide-react-native";
 import { DisplayAsset } from "@/lib/types/balance.types";
 import { TokenInfo } from "@/lib/types/swap.types";
+import { AssetIcon } from "@/components/ui/AssetIcon";
 
 interface AssetSelectorProps {
   selectedAsset: DisplayAsset | TokenInfo | null;
@@ -77,23 +69,8 @@ export const AssetSelector: React.FC<AssetSelectorProps> = ({
     });
   }, [filteredAssets, userTokens]);
 
-  // Token icon mapping based on symbol
-  const getTokenIcon = (symbol: string) => {
-    const iconMap: Record<string, { bgColor: string; icon: string }> = {
-      XLM: { bgColor: "$black", icon: "✦" },
-      nBTC: { bgColor: "#f7931a", icon: "₿" },
-      nETH: { bgColor: "#627eea", icon: "Ξ" },
-      nSOL: { bgColor: "#9945ff", icon: "S" },
-      BTC: { bgColor: "#f7931a", icon: "₿" },
-      ETH: { bgColor: "#627eea", icon: "Ξ" },
-      SOL: { bgColor: "#9945ff", icon: "S" }
-    };
-    return iconMap[symbol] || { bgColor: "$purple500", icon: symbol.charAt(0) };
-  };
-
   const renderFeaturedToken = (item: DisplayAsset | TokenInfo) => {
     const symbol = "asset_code" in item ? item.asset_code : item.symbol;
-    const tokenIcon = getTokenIcon(symbol);
 
     return (
       <Button
@@ -112,11 +89,7 @@ export const AssetSelector: React.FC<AssetSelectorProps> = ({
         aspectRatio={1}
       >
         <YStack alignItems='center' justifyContent='center' space='$2'>
-          <Circle size={32} backgroundColor={tokenIcon.bgColor}>
-            <Text fontSize='$3' fontWeight='700' color='white'>
-              {tokenIcon.icon}
-            </Text>
-          </Circle>
+          <AssetIcon symbol={symbol} size={32} fontSize='$3' />
           <Text fontSize='$2' fontWeight='600' textAlign='center'>
             {symbol}
           </Text>
@@ -154,11 +127,7 @@ export const AssetSelector: React.FC<AssetSelectorProps> = ({
       >
         <XStack alignItems='center' justifyContent='space-between' width='100%'>
           <XStack alignItems='center' space='$3' flex={1}>
-            <Circle size={40} backgroundColor={getTokenIcon(symbol).bgColor}>
-              <Text fontSize='$4' fontWeight='700' color='white'>
-                {getTokenIcon(symbol).icon}
-              </Text>
-            </Circle>
+            <AssetIcon symbol={symbol} size={40} fontSize='$4' />
             <YStack alignItems='flex-start' flex={1}>
               <Text fontSize='$4' fontWeight='600' color='$textPrimary'>
                 {name}
@@ -209,27 +178,15 @@ export const AssetSelector: React.FC<AssetSelectorProps> = ({
         >
           {selectedAsset ? (
             <>
-              <Circle
-                size={24}
-                backgroundColor={
-                  getTokenIcon(
-                    "asset_code" in selectedAsset
-                      ? selectedAsset.asset_code
-                      : selectedAsset.symbol
-                  ).bgColor
+              <AssetIcon
+                symbol={
+                  "asset_code" in selectedAsset
+                    ? selectedAsset.asset_code
+                    : selectedAsset.symbol
                 }
-                marginRight='$2'
-              >
-                <Text fontSize='$2' color='white' fontWeight='700'>
-                  {
-                    getTokenIcon(
-                      "asset_code" in selectedAsset
-                        ? selectedAsset.asset_code
-                        : selectedAsset.symbol
-                    ).icon
-                  }
-                </Text>
-              </Circle>
+                size={24}
+                fontSize='$2'
+              />
               <Text fontSize='$4' fontWeight='600' color='$textPrimary'>
                 {"asset_code" in selectedAsset
                   ? selectedAsset.asset_code

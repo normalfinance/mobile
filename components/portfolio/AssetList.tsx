@@ -3,6 +3,7 @@ import { FlatList } from "react-native";
 import { YStack, XStack, Text, Button, Circle } from "tamagui";
 import { ArrowUpRight, ArrowDownRight } from "lucide-react-native";
 import { DisplayAsset } from "@/lib/types/balance.types";
+import { AssetIcon } from "@/components/ui/AssetIcon";
 
 interface AssetWithPrice extends DisplayAsset {
   usdValue: number;
@@ -25,25 +26,8 @@ const categories = [
   { label: "Stocks", value: "stocks" }
 ];
 
-// Token icon mapping based on symbol (reused from AssetSelector)
-const getTokenIcon = (symbol: string) => {
-  const iconMap: Record<string, { bgColor: string; icon: string }> = {
-    XLM: { bgColor: "$black", icon: "✦" },
-    nBTC: { bgColor: "#f7931a", icon: "₿" },
-    nETH: { bgColor: "#627eea", icon: "Ξ" },
-    nSOL: { bgColor: "#9945ff", icon: "S" },
-    BTC: { bgColor: "#f7931a", icon: "₿" },
-    ETH: { bgColor: "#627eea", icon: "Ξ" },
-    SOL: { bgColor: "#9945ff", icon: "S" },
-    nUSD: { bgColor: "$green9", icon: "$" },
-    nTESLA: { bgColor: "$red9", icon: "T" },
-    "nS&P500": { bgColor: "$blue9", icon: "S" }
-  };
-  return iconMap[symbol] || { bgColor: "$purple500", icon: symbol.charAt(0) };
-};
 
 const AssetItem: React.FC<{ asset: AssetWithPrice }> = ({ asset }) => {
-  const tokenIcon = getTokenIcon(asset.asset_code);
   const isPositive = (asset.priceChange24h || 0) >= 0;
   const formattedBalance = new Intl.NumberFormat("en-US", {
     minimumFractionDigits: 2,
@@ -68,11 +52,7 @@ const AssetItem: React.FC<{ asset: AssetWithPrice }> = ({ asset }) => {
     >
       <XStack alignItems='center' justifyContent='space-between' width='100%'>
         <XStack alignItems='center' space='$3'>
-          <Circle size={44} backgroundColor={tokenIcon.bgColor}>
-            <Text fontSize='$4' fontWeight='700' color='white'>
-              {tokenIcon.icon}
-            </Text>
-          </Circle>
+          <AssetIcon symbol={asset.asset_code} size={44} fontSize='$4' />
           <YStack>
             <Text
               fontSize='$2'
