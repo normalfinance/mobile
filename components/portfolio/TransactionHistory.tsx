@@ -273,7 +273,6 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({
     require("@svgs/decrease.svg")
   ]);
 
-
   const increaseAsset = priceChangeAssets?.[0];
   const decreaseAsset = priceChangeAssets?.[1];
 
