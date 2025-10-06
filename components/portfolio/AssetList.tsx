@@ -1,7 +1,8 @@
-import React, { useState } from "react";
-import { FlatList } from "react-native";
-import { YStack, XStack, Text, Button, Circle } from "tamagui";
+import React from "react";
+import { YStack, XStack, Text, Button } from "tamagui";
 import { ArrowUpRight, ArrowDownRight } from "lucide-react-native";
+import { useAssets } from "expo-asset";
+import { SvgUri } from "react-native-svg";
 import { DisplayAsset } from "@/lib/types/balance.types";
 import { AssetIcon } from "@/components/ui/AssetIcon";
 
@@ -26,8 +27,11 @@ const categories = [
   { label: "Stocks", value: "stocks" }
 ];
 
-
-const AssetItem: React.FC<{ asset: AssetWithPrice }> = ({ asset }) => {
+const AssetItem: React.FC<{
+  asset: AssetWithPrice;
+  increaseIconUri?: string;
+  decreaseIconUri?: string;
+}> = ({ asset, increaseIconUri, decreaseIconUri }) => {
   const isPositive = (asset.priceChange24h || 0) >= 0;
   const formattedBalance = new Intl.NumberFormat("en-US", {
     minimumFractionDigits: 2,
@@ -85,7 +89,13 @@ const AssetItem: React.FC<{ asset: AssetWithPrice }> = ({ asset }) => {
           {asset.priceChange24h !== undefined && (
             <XStack alignItems='center' space='$1'>
               {isPositive ? (
-                <ArrowUpRight size={14} color='#22C55E' />
+                increaseIconUri ? (
+                  <SvgUri width={16} height={16} uri={increaseIconUri} />
+                ) : (
+                  <ArrowUpRight size={14} color='#22C55E' />
+                )
+              ) : decreaseIconUri ? (
+                <SvgUri width={16} height={16} uri={decreaseIconUri} />
               ) : (
                 <ArrowDownRight size={14} color='#EF4444' />
               )}
@@ -140,6 +150,22 @@ export const AssetList: React.FC<AssetListProps> = ({
   onCategoryChange,
   isLoading = false
 }) => {
+  const [priceChangeAssets] = useAssets([
+    require("@svgs/increase.svg"),
+    require("@svgs/decrease.svg")
+  ]);
+
+  const increaseAsset = priceChangeAssets?.[0];
+  const decreaseAsset = priceChangeAssets?.[1];
+
+  const increaseIconUri =
+    increaseAsset != null
+      ? increaseAsset.localUri ?? increaseAsset.uri
+      : undefined;
+  const decreaseIconUri =
+    decreaseAsset != null
+      ? decreaseAsset.localUri ?? decreaseAsset.uri
+      : undefined;
   // Filter assets based on selected category
   const filteredAssets = React.useMemo(() => {
     if (selectedCategory === "all") return assets;
@@ -230,10 +256,12 @@ export const AssetList: React.FC<AssetListProps> = ({
 
       {/* Asset list */}
       <YStack space='$3'>
-        {filteredAssets.map((asset, index) => (
+        {filteredAssets.map((asset) => (
           <AssetItem
             key={`${asset.asset_code}-${asset.asset_issuer || "native"}`}
             asset={asset}
+            increaseIconUri={increaseIconUri}
+            decreaseIconUri={decreaseIconUri}
           />
         ))}
         {filteredAssets.length === 0 && (

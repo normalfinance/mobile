@@ -1,6 +1,8 @@
 import React from "react";
 import { YStack, XStack, Text } from "tamagui";
 import { AssetIcon } from "@/components/ui/AssetIcon";
+import { SvgUri } from "react-native-svg";
+import { useAssets } from "expo-asset";
 
 interface Transaction {
   id: string;
@@ -38,9 +40,11 @@ const getTransactionIcon = (
   };
 };
 
-const TransactionItem: React.FC<{ transaction: Transaction }> = ({
-  transaction
-}) => {
+const TransactionItem: React.FC<{
+  transaction: Transaction;
+  increaseIconUri?: string;
+  decreaseIconUri?: string;
+}> = ({ transaction, increaseIconUri, decreaseIconUri }) => {
   const { color } = getTransactionIcon(transaction.type, transaction.status);
   const priceUsd = transaction.usdValue;
   const changePercent = transaction.change;
@@ -180,13 +184,37 @@ const TransactionItem: React.FC<{ transaction: Transaction }> = ({
           </Text>
           {changePercent !== undefined ? (
             <XStack alignItems='center' space='$2'>
+              {isChangePositive ? (
+                increaseIconUri ? (
+                  <SvgUri width={16} height={16} uri={increaseIconUri} />
+                ) : (
+                  <Text
+                    fontSize='$2'
+                    fontWeight='600'
+                    color='$green10'
+                    fontFamily='$numeric'
+                  >
+                    ↑
+                  </Text>
+                )
+              ) : decreaseIconUri ? (
+                <SvgUri width={16} height={16} uri={decreaseIconUri} />
+              ) : (
+                <Text
+                  fontSize='$2'
+                  fontWeight='600'
+                  color='$red10'
+                  fontFamily='$numeric'
+                >
+                  ↓
+                </Text>
+              )}
               <Text
                 fontSize='$2'
                 fontWeight='600'
-                color={isChangePositive ? "$green10" : "$red10"}
+                color={isChangePositive ? "#00A76F" : "$red10"}
                 fontFamily='$numeric'
               >
-                {isChangePositive ? "↑" : "↓"}{" "}
                 {Math.abs(changePercent).toFixed(2)}%
               </Text>
               {changeUsd !== undefined && (
@@ -240,6 +268,24 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({
   transactions,
   isLoading = false
 }) => {
+  const [priceChangeAssets] = useAssets([
+    require("@svgs/increase.svg"),
+    require("@svgs/decrease.svg")
+  ]);
+
+
+  const increaseAsset = priceChangeAssets?.[0];
+  const decreaseAsset = priceChangeAssets?.[1];
+
+  const increaseIconUri =
+    increaseAsset != null
+      ? increaseAsset.localUri ?? increaseAsset.uri
+      : undefined;
+  const decreaseIconUri =
+    decreaseAsset != null
+      ? decreaseAsset.localUri ?? decreaseAsset.uri
+      : undefined;
+
   if (isLoading) {
     return (
       <YStack space='$3'>
@@ -278,7 +324,12 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({
       </Text>
       <YStack space='$2'>
         {transactions.slice(0, 5).map((transaction) => (
-          <TransactionItem key={transaction.id} transaction={transaction} />
+          <TransactionItem
+            key={transaction.id}
+            transaction={transaction}
+            increaseIconUri={increaseIconUri}
+            decreaseIconUri={decreaseIconUri}
+          />
         ))}
         {transactions.length > 5 && (
           <XStack justifyContent='center' paddingTop='$3'>
