@@ -22,7 +22,7 @@ export interface ChartDataPoint {
 
 export interface Transaction {
   id: string;
-  type: "swap" | "send" | "receive" | "buy" | "sell";
+  type: "send" | "receive" | "buy" | "sell";
   asset: string;
   amount: number;
   usdValue: number;
@@ -82,10 +82,10 @@ export const generateChartData = (
 ): ChartDataPoint[] => {
   const now = Date.now();
   const dataPoints: ChartDataPoint[] = [];
-  
+
   let points: number;
   let intervalMs: number;
-  
+
   switch (period) {
     case "1D":
       points = 24;
@@ -118,10 +118,10 @@ export const generateChartData = (
 
   // Generate mock data with some variation
   for (let i = points - 1; i >= 0; i--) {
-    const timestamp = now - (i * intervalMs);
+    const timestamp = now - i * intervalMs;
     const variation = (Math.random() - 0.5) * 0.1; // ±5% variation
     const value = currentValue * (1 + variation);
-    
+
     dataPoints.push({
       timestamp,
       value: Math.max(0, value),
@@ -139,14 +139,14 @@ export const generateMockTransactions = (): Transaction[] => {
       type: "receive",
       asset: "nETH",
       amount: 0.5,
-      usdValue: 1600.50,
+      usdValue: 1600.5,
       change: 2.3,
       timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
       status: "completed"
     },
     {
       id: "tx2",
-      type: "swap",
+      type: "sell",
       asset: "XLM",
       amount: 1000,
       usdValue: 708.14,
@@ -157,9 +157,9 @@ export const generateMockTransactions = (): Transaction[] => {
     {
       id: "tx3",
       type: "send",
-      asset: "nTOPIO",
+      asset: "nSOL",
       amount: 0.5,
-      usdValue: 800.50,
+      usdValue: 800.5,
       change: 0.64,
       timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000), // 1 day ago
       status: "completed"
@@ -167,7 +167,7 @@ export const generateMockTransactions = (): Transaction[] => {
     {
       id: "tx4",
       type: "buy",
-      asset: "nSTPN",
+      asset: "nBTC",
       amount: 5,
       usdValue: 280.33,
       timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 2 days ago
@@ -175,30 +175,32 @@ export const generateMockTransactions = (): Transaction[] => {
     }
   ];
 
-  return mockTransactions.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+  return mockTransactions.sort(
+    (a, b) => b.timestamp.getTime() - a.timestamp.getTime()
+  );
 };
 
 const formatDateForPeriod = (timestamp: number, period: string): string => {
   const date = new Date(timestamp);
-  
+
   switch (period) {
     case "1D":
-      return date.toLocaleTimeString("en-US", { 
-        hour: "2-digit", 
-        minute: "2-digit" 
+      return date.toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit"
       });
     case "7D":
     case "30D":
-      return date.toLocaleDateString("en-US", { 
-        month: "short", 
-        day: "numeric" 
+      return date.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric"
       });
     case "180D":
     case "365D":
     case "All":
-      return date.toLocaleDateString("en-US", { 
-        month: "short", 
-        year: "2-digit" 
+      return date.toLocaleDateString("en-US", {
+        month: "short",
+        year: "2-digit"
       });
     default:
       return date.toLocaleDateString();
