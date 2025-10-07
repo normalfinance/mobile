@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { ScrollView } from "react-native";
+import { ScrollView, TouchableOpacity } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useAssets } from "expo-asset";
@@ -54,7 +54,7 @@ const assetClassStyles: Record<
   Commodity: { color: "#D2B100", backgroundColor: "#FFE13D33" }
 };
 
-const createChartSeries = (values: number[]): ChartDataPoint[] => {
+const createChartSeries = (values: number[]): ChartDataPoint[] => { 
   const now = Date.now();
   return values.map((value, index) => ({
     timestamp: now - (values.length - index) * 60 * 60 * 1000,
@@ -117,6 +117,7 @@ export default function AssetDetailScreen() {
   const normalizedSymbol = (symbol ?? "nETH").toString().toUpperCase();
   const asset = assetDetailsMock[normalizedSymbol] ?? defaultAssetDetail;
   const [selectedPeriod, setSelectedPeriod] = useState<ChartPeriod>("1D");
+  const [infoExpanded, setInfoExpanded] = useState(true);
   const [changeIcons] = useAssets([
     require("@svgs/increase.svg"),
     require("@svgs/decrease.svg")
@@ -239,39 +240,52 @@ export default function AssetDetailScreen() {
             padding={20}
             space='$3'
           >
-            <XStack justifyContent='space-between' alignItems='center'>
-              <Text fontSize='$3' fontWeight='700' color='#1C252E'>
-                Asset Information
-              </Text>
-              <ChevronDown size={18} color='#919EAB' />
-            </XStack>
-            <YStack space='$3'>
-              {asset.details.map((detail) => (
-                <XStack
-                  key={`${asset.symbol}-${detail.label}`}
-                  justifyContent='space-between'
-                  alignItems='center'
-                >
-                  <Text
-                    fontSize='$2'
-                    color='#637381'
-                    fontWeight='600'
-                    fontFamily='$numeric'
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => setInfoExpanded((prev) => !prev)}
+            >
+              <XStack justifyContent='space-between' alignItems='center'>
+                <Text fontSize='$3' fontWeight='700' color='#1C252E'>
+                  Asset Information
+                </Text>
+                <ChevronDown
+                  size={18}
+                  color='#919EAB'
+                  style={{
+                    transform: [{ rotate: infoExpanded ? "0deg" : "-90deg" }]
+                  }}
+                />
+              </XStack>
+            </TouchableOpacity>
+            {infoExpanded ? (
+              <YStack space='$3'>
+                {asset.details.map((detail) => (
+                  <XStack
+                    key={`${asset.symbol}-${detail.label}`}
+                    justifyContent='space-between'
+                    alignItems='center'
                   >
-                    {detail.label}
-                  </Text>
-                  <Text
-                    fontSize='$2'
-                    color='#1C252E'
-                    fontWeight='600'
-                    fontFamily='$numeric'
-                    textAlign='right'
-                  >
-                    {detail.value}
-                  </Text>
-                </XStack>
-              ))}
-            </YStack>
+                    <Text
+                      fontSize='$2'
+                      color='#637381'
+                      fontWeight='600'
+                      fontFamily='$numeric'
+                    >
+                      {detail.label}
+                    </Text>
+                    <Text
+                      fontSize='$2'
+                      color='#1C252E'
+                      fontWeight='600'
+                      fontFamily='$numeric'
+                      textAlign='right'
+                    >
+                      {detail.value}
+                    </Text>
+                  </XStack>
+                ))}
+              </YStack>
+            ) : null}
           </YStack>
         </YStack>
       </ScrollView>
