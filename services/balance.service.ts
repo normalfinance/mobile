@@ -51,6 +51,18 @@ export const fetchAccountBalances = async (
   }
 };
 
+function getDisplayName(assetCode: string): string {
+  switch (assetCode) {
+    case "nBTC":
+      return "Normal Bitcoin";
+    case "nETH":
+      return "Normal Ethereum";
+    case "nSOL":
+      return "Normal Solana";
+  }
+  return assetCode;
+}
+
 export const transformBalancesToDisplayAssets = (
   balances: AssetBalance[]
 ): DisplayAsset[] => {
@@ -62,7 +74,7 @@ export const transformBalancesToDisplayAssets = (
       displayName = "Stellar Lumens";
       assetCode = "XLM";
     } else if (balance.asset_code) {
-      displayName = balance.asset_code;
+      displayName = getDisplayName(balance.asset_code);
       assetCode = balance.asset_code;
     }
 
