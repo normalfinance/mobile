@@ -1,6 +1,6 @@
 export type AssetCategory = "Trending" | "Crypto" | "Indexes" | "RWAs" | "Stocks" ;
 
-export type AssetClass = "Crypto" | "Stock" | "Index" | "RWA";
+export type AssetClass = "Crypto" | "Stock" | "Index" | "ETF" | "Crypto Index" | "Commodity";
 
 export interface AssetDetail {
   label: string;
@@ -11,7 +11,7 @@ export interface AssetDetail {
 
 export interface FeaturedAsset {
   name: string;
-  symbol: string;
+  symbol: string; 
   price: number;
   changePercent: number;
   class: AssetClass;
@@ -94,7 +94,7 @@ const collectionAssetsMock: CollectionAsset[] = [
     symbol: "nSPYOn",
     price: 421.22,
     changePercent: 1.28,
-    class: "Index",
+    class: "Commodity",
     categories: ["Trending", "Indexes"],
     details: [{ label: "AUM", value: "$420B", numeric: true }]
   },
@@ -103,7 +103,7 @@ const collectionAssetsMock: CollectionAsset[] = [
     symbol: "nREIT",
     price: 128.45,
     changePercent: 0.85,
-    class: "RWA",
+    class: "ETF",
     categories: ["RWAs", "Trending"],
     details: [
       { label: "12m yield", value: "5.20%", numeric: true },
