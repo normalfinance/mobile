@@ -7,6 +7,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import HomeScreen from "./index";
 import InvestScreen from "./invest";
 import AssetsScreen from "./assets";
+import PricesScreen from "./prices";
 import SettingsScreen from "./settings";
 import {
   useHasWallet,
@@ -76,6 +77,8 @@ export default function TabLayout() {
     switch (activeTab) {
       case "home":
         return <HomeScreen />;
+      case "prices":
+        return <PricesScreen />;
       case "invest":
         return <InvestScreen />;
       case "assets":
@@ -109,6 +112,9 @@ export default function TabLayout() {
             >
               <Tabs.Tab value='home' flex={1}>
                 <Text>Home</Text>
+              </Tabs.Tab>
+              <Tabs.Tab value='prices' flex={1}>
+                <Text>Prices</Text>
               </Tabs.Tab>
               <Tabs.Tab value='invest' flex={1}>
                 <Text>Invest</Text>
