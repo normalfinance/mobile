@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from "react";
 import { ScrollView } from "react-native";
-import { SvgUri } from "react-native-svg";
 import { useAssets } from "expo-asset";
-import { YStack, XStack, Text, Button } from "tamagui";
+import { SvgUri } from "react-native-svg";
+import { YStack, XStack, Text, Button, Card } from "tamagui";
+import { useRouter } from "expo-router";
 
 import { AssetIcon } from "@/components/ui/AssetIcon";
 import {
@@ -46,12 +47,14 @@ type FilteredAssetCardProps = {
   asset: CollectionAsset;
   increaseIconUri?: string;
   decreaseIconUri?: string;
+  onPress?: () => void;
 };
 
 const FilteredAssetCard: React.FC<FilteredAssetCardProps> = ({
   asset,
   increaseIconUri,
-  decreaseIconUri
+  decreaseIconUri,
+  onPress
 }) => {
   const classStyle = assetClassStyles[asset.class];
   const isPositive = asset.changePercent >= 0;
@@ -153,7 +156,15 @@ const FilteredAssetCard: React.FC<FilteredAssetCardProps> = ({
   ];
 
   return (
-    <YStack borderRadius={16} padding={16} backgroundColor='#F9FAFB'>
+    <Card
+      borderRadius={16}
+      padding={16}
+      backgroundColor='#F9FAFB'
+      onPress={onPress}
+      pressable={onPress != null}
+      borderBottomWidth={1}
+      borderBottomColor='#919EAB1F'
+    >
       <XStack alignItems='flex-start' space='$3' width='100%'>
         <AssetIcon
           symbol={asset.symbol}
@@ -177,11 +188,12 @@ const FilteredAssetCard: React.FC<FilteredAssetCardProps> = ({
           ))}
         </YStack>
       </XStack>
-    </YStack>
+    </Card>
   );
 };
 
 export default function PricesScreen() {
+  const router = useRouter();
   const [selectedCategory, setSelectedCategory] =
     useState<AssetCategory>("Trending");
   const [changeIcons] = useAssets([
@@ -261,7 +273,7 @@ export default function PricesScreen() {
                 asset.changePercent === 0 ? "" : isPositive ? "+" : "-";
 
               return (
-                <YStack
+                <Card
                   key={asset.symbol}
                   width={200}
                   padding='$4'
@@ -270,6 +282,10 @@ export default function PricesScreen() {
                   borderWidth={1}
                   borderColor={"#919EAB1F"}
                   space='$3'
+                  onPress={() =>
+                    router.push(`/asset/${asset.symbol.toLowerCase()}`)
+                  }
+                  pressable
                 >
                   <XStack alignItems='center' justifyContent='space-between'>
                     <AssetIcon
@@ -327,7 +343,7 @@ export default function PricesScreen() {
                       </Text>
                     </XStack>
                   </YStack>
-                </YStack>
+                </Card>
               );
             })}
           </ScrollView>
@@ -387,6 +403,9 @@ export default function PricesScreen() {
                   asset={asset}
                   increaseIconUri={increaseIconUri}
                   decreaseIconUri={decreaseIconUri}
+                  onPress={() =>
+                    router.push(`/asset/${asset.symbol.toLowerCase()}`)
+                  }
                 />
               ))}
             </YStack>

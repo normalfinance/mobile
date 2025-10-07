@@ -1,8 +1,9 @@
 import React from "react";
-import { YStack, XStack, Text, Button } from "tamagui";
+import { YStack, XStack, Text, Button, Card } from "tamagui";
 import { ArrowUpRight, ArrowDownRight } from "lucide-react-native";
 import { useAssets } from "expo-asset";
 import { SvgUri } from "react-native-svg";
+import { useRouter } from "expo-router";
 import { DisplayAsset } from "@/lib/types/balance.types";
 import { AssetIcon } from "@/components/ui/AssetIcon";
 
@@ -31,7 +32,8 @@ const AssetItem: React.FC<{
   asset: AssetWithPrice;
   increaseIconUri?: string;
   decreaseIconUri?: string;
-}> = ({ asset, increaseIconUri, decreaseIconUri }) => {
+  onPress?: () => void;
+}> = ({ asset, increaseIconUri, decreaseIconUri, onPress }) => {
   const isPositive = (asset.priceChange24h || 0) >= 0;
   const formattedBalance = new Intl.NumberFormat("en-US", {
     minimumFractionDigits: 2,
@@ -47,12 +49,15 @@ const AssetItem: React.FC<{
   });
 
   return (
-    <YStack
-      space='$3'
+    <Card
+      borderRadius='$6'
       paddingVertical='$4'
       paddingHorizontal='$3'
       borderBottomColor='#919EAB1F'
       borderBottomWidth={1}
+      backgroundColor='#F9FAFB'
+      onPress={onPress}
+      pressable={onPress != null}
     >
       <XStack alignItems='center' justifyContent='space-between' width='100%'>
         <XStack alignItems='center' space='$3'>
@@ -121,7 +126,7 @@ const AssetItem: React.FC<{
         </YStack>
       </XStack>
 
-      <XStack justifyContent='flex-end' space='$2'>
+      <XStack justifyContent='flex-end' space='$2' marginVertical='$2'>
         <Button
           color='white'
           borderRadius='$10'
@@ -140,7 +145,7 @@ const AssetItem: React.FC<{
           <Text color='#FFFFFF'>Stats</Text>
         </Button>
       </XStack>
-    </YStack>
+    </Card>
   );
 };
 
@@ -150,6 +155,7 @@ export const AssetList: React.FC<AssetListProps> = ({
   onCategoryChange,
   isLoading = false
 }) => {
+  const router = useRouter();
   const [priceChangeAssets] = useAssets([
     require("@svgs/increase.svg"),
     require("@svgs/decrease.svg")
@@ -262,6 +268,9 @@ export const AssetList: React.FC<AssetListProps> = ({
             asset={asset}
             increaseIconUri={increaseIconUri}
             decreaseIconUri={decreaseIconUri}
+            onPress={() =>
+              router.push(`/asset/${asset.asset_code.toLowerCase()}`)
+            }
           />
         ))}
         {filteredAssets.length === 0 && (
