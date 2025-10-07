@@ -1,16 +1,21 @@
 import React, { useMemo, useState } from "react";
-import { ScrollView, Pressable } from "react-native";
-import { YStack, XStack, Text, View, Button } from "tamagui";
+import { ScrollView } from "react-native";
+import { YStack, XStack, Text, Button } from "tamagui";
 
 import { AssetIcon } from "@/components/ui/AssetIcon";
 import {
   type AssetCategory,
   type AssetClass,
+  type CollectionAsset,
   getAssetCategories,
   getCollectionAssets,
   getFeaturedAssets
 } from "@/services/prices.service";
-import { ChevronRightIcon } from "lucide-react-native";
+import {
+  ArrowDownRightIcon,
+  ArrowUpRightIcon,
+  ChevronRightIcon
+} from "lucide-react-native";
 
 const assetClassStyles: Record<
   AssetClass,
@@ -39,6 +44,121 @@ const secondaryTextColor = "#637381";
 const positiveChangeColor = "#00A76F";
 const negativeChangeColor = "$red10";
 
+type FilteredAssetCardProps = {
+  asset: CollectionAsset;
+};
+
+const FilteredAssetCard: React.FC<FilteredAssetCardProps> = ({ asset }) => {
+  const classStyle = assetClassStyles[asset.class];
+  const isPositive = asset.changePercent >= 0;
+
+  return (
+    <YStack borderRadius={16} padding={16} backgroundColor='#F9FAFB' space='$3'>
+      <XStack
+        alignItems='flex-start'
+        justifyContent='space-between'
+        space='$3'
+        width='100%'
+      >
+        <AssetIcon
+          symbol={asset.symbol}
+          size={42}
+          backgroundColor={classStyle.color}
+          fontSize='$4'
+          fontWeight='700'
+        />
+
+        <YStack flex={1} space='$2'>
+          <Text fontSize='$3' fontWeight='700' color={cardTextColor}>
+            {asset.name}
+          </Text>
+
+          <YStack space='$1'>
+            <Text
+              fontSize='$2'
+              color={secondaryTextColor}
+              fontWeight='600'
+              fontFamily='$numeric'
+            >
+              {asset.symbol}
+            </Text>
+            {asset.details.map((detail) => (
+              <Text
+                key={`${asset.symbol}-${detail.label}-label`}
+                fontSize='$2'
+                color={secondaryTextColor}
+                fontWeight={detail.emphasize ? "700" : "600"}
+                fontFamily='$numeric'
+              >
+                {detail.label}
+              </Text>
+            ))}
+          </YStack>
+        </YStack>
+
+        <YStack alignItems='flex-end' space='$3'>
+          <YStack alignItems='flex-end' space='$1'>
+            <Text
+              fontSize='$3'
+              fontWeight='700'
+              color={cardTextColor}
+              fontFamily='$numeric'
+            >
+              {formatCurrency(asset.price)}
+            </Text>
+            <XStack alignItems='center' space='$1'>
+              {isPositive ? (
+                <ArrowUpRightIcon size={14} color={positiveChangeColor} />
+              ) : (
+                <ArrowDownRightIcon size={14} color={negativeChangeColor} />
+              )}
+              <Text
+                fontSize='$2'
+                fontWeight='600'
+                color={isPositive ? positiveChangeColor : negativeChangeColor}
+                fontFamily='$numeric'
+              >
+                {isPositive ? "+" : "-"}
+                {formatPercent(asset.changePercent)}
+              </Text>
+            </XStack>
+          </YStack>
+
+          {asset.details.length > 0 && (
+            <YStack alignItems='flex-end' space='$1'>
+              {asset.details.map((detail) => (
+                <Text
+                  key={`${asset.symbol}-${detail.label}-value`}
+                  fontSize='$2'
+                  color={detail.emphasize ? cardTextColor : secondaryTextColor}
+                  fontWeight={detail.emphasize ? "700" : "600"}
+                  fontFamily='$numeric'
+                >
+                  {detail.value}
+                </Text>
+              ))}
+            </YStack>
+          )}
+
+          <Text
+            fontSize='$2'
+            fontWeight='700'
+            color={classStyle.color}
+            backgroundColor={classStyle.backgroundColor}
+            paddingVertical={4}
+            paddingHorizontal={10}
+            borderRadius={10}
+            textTransform='capitalize'
+            fontFamily='$numeric'
+          >
+            {asset.class}
+          </Text>
+        </YStack>
+      </XStack>
+    </YStack>
+  );
+};
+
 export default function PricesScreen() {
   const [selectedCategory, setSelectedCategory] =
     useState<AssetCategory>("Trending");
@@ -62,15 +182,20 @@ export default function PricesScreen() {
         <YStack space='$4'>
           <YStack space='$2'>
             <XStack justifyContent='space-between' alignItems='center'>
-              <Text fontSize='$4' fontWeight='700' color={cardTextColor}>
+              <Text fontSize='$4' fontWeight='500' color={"#1C252E"}>
                 Featured
               </Text>
               <XStack alignItems='center' space='$0'>
                 <Text
                   fontSize='$2'
-                  fontWeight='600'
-                  color={secondaryTextColor}
-                  textDecorationLine='underline'
+                  fontWeight='400'
+                  color={"#1C252E"}
+                  // textDecorationLine='underline'
+                  // @ts-ignore
+                  style={{
+                    textDecorationLine: "underline",
+                    textDecorationThickness: 0.5
+                  }}
                 >
                   See more
                 </Text>
@@ -160,7 +285,7 @@ export default function PricesScreen() {
         <YStack marginTop={32} space='$4'>
           <YStack space='$2'>
             <XStack justifyContent='space-between' alignItems='center'>
-              <Text fontSize='$4' fontWeight='700' color={cardTextColor}>
+              <Text fontSize='$4' fontWeight='500' color={"#1C252E"}>
                 Collection
               </Text>
             </XStack>
@@ -169,6 +294,8 @@ export default function PricesScreen() {
           <YStack
             backgroundColor='#F9FAFB'
             borderRadius={24}
+            borderWidth={1}
+            borderColor={"#919EAB1F"}
             paddingHorizontal={8}
             paddingVertical={18}
             space='$4'
@@ -203,123 +330,12 @@ export default function PricesScreen() {
             </YStack>
 
             <YStack space='$3'>
-              {filteredAssets.map((asset) => {
-                const classStyle = assetClassStyles[asset.class];
-                const isPositive = asset.changePercent >= 0;
-                const assetKey = `${asset.symbol}-${selectedCategory}`;
-
-                return (
-                  <YStack
-                    key={assetKey}
-                    borderRadius={16}
-                    padding={16}
-                    backgroundColor='#F9FAFB'
-                    space='$3'
-                  >
-                    <XStack
-                      alignItems='center'
-                      justifyContent='space-between'
-                      width='100%'
-                    >
-                      <XStack alignItems='center' space='$3'>
-                        <AssetIcon
-                          symbol={asset.symbol}
-                          size={48}
-                          backgroundColor={classStyle.color}
-                          fontSize='$4'
-                          fontWeight='700'
-                        />
-                        <YStack>
-                          <Text
-                            fontSize='$3'
-                            fontWeight='700'
-                            color={cardTextColor}
-                          >
-                            {asset.name}
-                          </Text>
-                          <Text
-                            fontSize='$2'
-                            color={secondaryTextColor}
-                            fontFamily='$numeric'
-                          >
-                            {asset.symbol}
-                          </Text>
-                        </YStack>
-                      </XStack>
-
-                      <YStack alignItems='flex-end' space='$1'>
-                        <Text
-                          fontSize='$3'
-                          fontWeight='700'
-                          color={cardTextColor}
-                          fontFamily='$numeric'
-                        >
-                          {formatCurrency(asset.price)}
-                        </Text>
-                        <Text
-                          fontSize='$2'
-                          fontWeight='600'
-                          color={
-                            isPositive
-                              ? positiveChangeColor
-                              : negativeChangeColor
-                          }
-                          fontFamily='$numeric'
-                        >
-                          {isPositive ? "+" : "-"}
-                          {formatPercent(asset.changePercent)}
-                        </Text>
-                      </YStack>
-                    </XStack>
-
-                    <XStack>
-                      <Text
-                        fontSize='$2'
-                        fontWeight='700'
-                        color={classStyle.color}
-                        backgroundColor={classStyle.backgroundColor}
-                        paddingVertical={4}
-                        paddingHorizontal={10}
-                        borderRadius={10}
-                        textTransform='capitalize'
-                      >
-                        {asset.class}
-                      </Text>
-                    </XStack>
-
-                    <YStack space='$2'>
-                      {asset.details.map((detail) => (
-                        <XStack
-                          key={`${asset.symbol}-${detail.label}`}
-                          alignItems='center'
-                          justifyContent='space-between'
-                        >
-                          <Text
-                            fontSize='$2'
-                            color={secondaryTextColor}
-                            fontWeight='700'
-                            fontFamily={detail.numeric ? "$numeric" : undefined}
-                          >
-                            {detail.label}:
-                          </Text>
-                          <Text
-                            fontSize='$2'
-                            color={
-                              detail.emphasize
-                                ? cardTextColor
-                                : secondaryTextColor
-                            }
-                            fontWeight={detail.emphasize ? "700" : "600"}
-                            fontFamily={detail.numeric ? "$numeric" : undefined}
-                          >
-                            {detail.value}
-                          </Text>
-                        </XStack>
-                      ))}
-                    </YStack>
-                  </YStack>
-                );
-              })}
+              {filteredAssets.map((asset) => (
+                <FilteredAssetCard
+                  key={`${asset.symbol}-${selectedCategory}`}
+                  asset={asset}
+                />
+              ))}
             </YStack>
           </YStack>
         </YStack>
