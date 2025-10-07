@@ -84,6 +84,12 @@ export {
   swapQueryKeys
 } from "./swap.service";
 
+export {
+  getFeaturedAssets,
+  getCollectionAssets,
+  getAssetCategories
+} from "./prices.service";
+
 // Export swap operation types for advanced usage
 export type {
   EstimateSwapArgs,
