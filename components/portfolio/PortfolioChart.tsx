@@ -77,7 +77,7 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
   return (
     <YStack marginBottom='$4'>
       {/* Chart container */}
-      <YStack height={200} backgroundColor='$background' space='$0'>
+      <YStack height={200} space='$0'>
         <LineChart
           data={chartData}
           width={chartWidth}

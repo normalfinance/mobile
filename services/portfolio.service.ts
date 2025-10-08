@@ -20,13 +20,16 @@ export interface ChartDataPoint {
   date: string;
 }
 
+export type TransactionType = "swap" | "send" | "receive" | "buy" | "sell";
+
 export interface Transaction {
   id: string;
-  type: "send" | "receive" | "buy" | "sell";
+  type: TransactionType;
   asset: string;
   amount: number;
   usdValue: number;
   change?: number;
+  changeUsd?: number;
   timestamp: Date;
   status: "completed" | "pending" | "failed";
 }
@@ -147,19 +150,20 @@ export const generateMockTransactions = (): Transaction[] => {
     {
       id: "tx2",
       type: "sell",
-      asset: "XLM",
-      amount: 1000,
-      usdValue: 708.14,
+      asset: "nETH",
+      amount: 0.2,
+      usdValue: 780.14,
       change: -0.52,
+      changeUsd: -4.06,
       timestamp: new Date(Date.now() - 5 * 60 * 60 * 1000), // 5 hours ago
       status: "completed"
     },
     {
       id: "tx3",
-      type: "send",
-      asset: "nSOL",
-      amount: 0.5,
-      usdValue: 800.5,
+      type: "swap",
+      asset: "nETH",
+      amount: 0.3,
+      usdValue: 1175.4,
       change: 0.64,
       timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000), // 1 day ago
       status: "completed"
@@ -168,7 +172,7 @@ export const generateMockTransactions = (): Transaction[] => {
       id: "tx4",
       type: "buy",
       asset: "nBTC",
-      amount: 5,
+      amount: 0.05,
       usdValue: 280.33,
       timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 2 days ago
       status: "pending"

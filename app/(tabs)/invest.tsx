@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { useLocalSearchParams } from "expo-router";
 import {
   YStack,
   XStack,
@@ -28,6 +29,8 @@ import {
 } from "@/lib/utils/stellar.utils";
 
 const SwapCard = () => {
+  const params = useLocalSearchParams<{ sellAsset?: string }>();
+
   const [formData, setFormData] = useState<SwapFormData>({
     sellAsset: null,
     buyAsset: null,
@@ -43,6 +46,22 @@ const SwapCard = () => {
     useAvailableTokens();
   const executeSwapMutation = useExecuteSwap();
   const { showToast } = useToast();
+
+  useEffect(() => {
+    if (!params.sellAsset || !walletBalances.length) return;
+
+    const normalizedSymbol = params.sellAsset.toUpperCase();
+    const initialAsset = walletBalances.find(
+      (asset) => asset.asset_code.toUpperCase() === normalizedSymbol
+    );
+
+    if (initialAsset) {
+      setFormData((prev) => ({
+        ...prev,
+        sellAsset: initialAsset
+      }));
+    }
+  }, [params.sellAsset, walletBalances]);
 
   const sellableAssets = useMemo(() => {
     return walletBalances.filter((asset) => parseFloat(asset.balance) > 0);
