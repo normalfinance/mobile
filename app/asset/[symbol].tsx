@@ -1,14 +1,15 @@
 import React, { useMemo, useState } from "react";
 import { ScrollView, TouchableOpacity } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useAssets } from "expo-asset";
 import { SvgUri } from "react-native-svg";
-import { YStack, XStack, Text, Button, Separator } from "tamagui";
-import { ArrowLeft, ChevronDown, ArrowUpRight } from "lucide-react-native";
+import { YStack, XStack, Text, Button } from "tamagui";
+import { ArrowRight, ChevronDown, ArrowUpRight } from "lucide-react-native";
 
 import { AssetIcon } from "@/components/ui/AssetIcon";
 import { PortfolioChart } from "@/components/portfolio/PortfolioChart";
+import { TransactionHistory } from "@/components/portfolio/TransactionHistory";
+import { usePortfolio } from "@/hooks/use-portfolio";
 
 type DetailRow = {
   label: string;
@@ -54,7 +55,7 @@ const assetClassStyles: Record<
   Commodity: { color: "#D2B100", backgroundColor: "#FFE13D33" }
 };
 
-const createChartSeries = (values: number[]): ChartDataPoint[] => { 
+const createChartSeries = (values: number[]): ChartDataPoint[] => {
   const now = Date.now();
   return values.map((value, index) => ({
     timestamp: now - (values.length - index) * 60 * 60 * 1000,
@@ -122,6 +123,7 @@ export default function AssetDetailScreen() {
     require("@svgs/increase.svg"),
     require("@svgs/decrease.svg")
   ]);
+  const { transactions, isLoading: isTransactionsLoading } = usePortfolio();
 
   const increaseIcon = changeIcons?.[0];
   const increaseIconUri = increaseIcon?.localUri ?? increaseIcon?.uri;
@@ -129,6 +131,7 @@ export default function AssetDetailScreen() {
   const classStyle = assetClassStyles[asset.class];
   const changeIsPositive = asset.changePercent >= 0;
   const changeColor = changeIsPositive ? "#00C48C" : "#FF5630";
+  const assetSymbol = asset.symbol || normalizedSymbol;
   const formattedPrice = useMemo(
     () =>
       new Intl.NumberFormat("en-US", {
@@ -143,6 +146,18 @@ export default function AssetDetailScreen() {
   const chartData = useMemo(() => {
     return asset.chartData[selectedPeriod] ?? asset.chartData["1D"];
   }, [asset.chartData, selectedPeriod]);
+
+  const assetTransactions = useMemo(() => {
+    const targetSymbol = assetSymbol.toLowerCase();
+    return transactions.filter((tx) => tx.asset.toLowerCase() === targetSymbol);
+  }, [transactions, assetSymbol]);
+
+  const handleSwapPress = () => {
+    router.push({
+      pathname: "/(tabs)/invest",
+      params: { sellAsset: assetSymbol }
+    });
+  };
 
   return (
     <YStack flex={1} backgroundColor='#FFFFFF'>
@@ -287,6 +302,24 @@ export default function AssetDetailScreen() {
               </YStack>
             ) : null}
           </YStack>
+
+          <Button
+            backgroundColor='#947BFF33'
+            color='#947BFF'
+            borderRadius={16}
+            fontSize='$3'
+            fontWeight='700'
+            onPress={handleSwapPress}
+          >
+            <Text fontSize='$3' fontWeight='700' color='#947BFF'>
+              Swap {assetSymbol}
+            </Text>
+          </Button>
+
+          <TransactionHistory
+            transactions={assetTransactions}
+            isLoading={isTransactionsLoading}
+          />
         </YStack>
       </ScrollView>
     </YStack>

@@ -1,5 +1,5 @@
-import { Redirect } from "expo-router";
-import React, { useState } from "react";
+import { Redirect, usePathname, useRouter } from "expo-router";
+import React, { useEffect, useState } from "react";
 import { useAuth } from "@clerk/clerk-expo";
 import { Tabs, YStack, H6, Text, View, Spinner } from "tamagui";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -15,9 +15,24 @@ import {
   useAuthCredentials
 } from "@/services";
 
+type TabKey = "home" | "prices" | "invest" | "assets" | "settings";
+
+const tabRoutes: Record<
+  TabKey,
+  `/(${"tabs"})${"" | "/prices" | "/invest" | "/assets" | "/settings"}`
+> = {
+  home: "/(tabs)",
+  prices: "/(tabs)/prices",
+  invest: "/(tabs)/invest",
+  assets: "/(tabs)/assets",
+  settings: "/(tabs)/settings"
+};
+
 export default function TabLayout() {
   const { isSignedIn, userId } = useAuth();
-  const [activeTab, setActiveTab] = useState("home");
+  const router = useRouter();
+  const pathname = usePathname();
+  const [activeTab, setActiveTab] = useState<TabKey>("settings");
   const { data: credentials, isLoading: isLoadingCredentials } =
     useAuthCredentials();
   const { data: hasLocalWallet, isLoading: isCheckingLocalWallet } =
@@ -40,6 +55,21 @@ export default function TabLayout() {
         (!shouldCheckBackend || hasBackendWallet === false)
       ? false
       : undefined;
+
+  useEffect(() => {
+    console.log("pathname", pathname);
+
+    const segments = pathname.split("/").filter(Boolean);
+    const possibleSegment = segments[0];
+    const tabSegment: TabKey =
+      possibleSegment && possibleSegment in tabRoutes
+        ? (possibleSegment as TabKey)
+        : "home";
+
+    if (tabSegment !== activeTab) {
+      setActiveTab(tabSegment);
+    }
+  }, [pathname]);
 
   if (!isSignedIn) {
     return <Redirect href='/sign-in' />;
@@ -73,6 +103,12 @@ export default function TabLayout() {
     console.log("userId", userId, "hasWallet", resolvedHasWallet);
   }
 
+  const handleTabChange = (value: TabKey) => {
+    console.log("handleTabChange", value);
+    setActiveTab(value);
+    router.push(tabRoutes[value]);
+  };
+
   const renderTabContent = () => {
     switch (activeTab) {
       case "home":
@@ -99,7 +135,7 @@ export default function TabLayout() {
 
           <Tabs
             value={activeTab}
-            onValueChange={setActiveTab}
+            onValueChange={handleTabChange}
             orientation='horizontal'
             flexDirection='row'
             width='100%'
