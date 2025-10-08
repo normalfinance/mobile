@@ -21,7 +21,7 @@ import { Adapt } from "@tamagui/adapt";
 import { Sheet } from "@tamagui/sheet";
 
 import { AssetIcon } from "@/components/ui/AssetIcon";
-
+import SemiCircleGauge from "@/components/index/guage";
 type AllocationAsset = {
   id: string;
   symbol: string;
@@ -319,7 +319,17 @@ const CreateIndexScreen: React.FC = () => {
         </YStack>
 
         <Card padding={24} space='$4'>
-          // guage here
+          <SemiCircleGauge
+            size={200}
+            minValue={0}
+            maxValue={100}
+            initialValue={50}
+            strokeWidth={20}
+            activeColor='#4CAF50'
+            inactiveColor='#E0E0E0'
+            knobColor='#2196F3'
+            onValueChange={(value) => console.log("Value:", value)}
+          />
           <YStack space='$3'>
             {assets.map((asset) => (
               <AllocationRow
