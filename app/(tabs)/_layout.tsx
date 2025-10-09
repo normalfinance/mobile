@@ -6,8 +6,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import HomeScreen from "./index";
 import InvestScreen from "./invest";
-import AssetsScreen from "./assets";
 import PricesScreen from "./prices";
+import IndexesScreen from "./indexes";
 import SettingsScreen from "./settings";
 import {
   useHasWallet,
@@ -15,16 +15,16 @@ import {
   useAuthCredentials
 } from "@/services";
 
-type TabKey = "home" | "prices" | "invest" | "assets" | "settings";
+type TabKey = "home" | "prices" | "invest" | "indexes" | "settings";
 
 const tabRoutes: Record<
   TabKey,
-  `/(${"tabs"})${"" | "/prices" | "/invest" | "/assets" | "/settings"}`
+  `/(${"tabs"})${"" | "/prices" | "/invest" | "/indexes" | "/settings"}`
 > = {
   home: "/(tabs)",
   prices: "/(tabs)/prices",
   invest: "/(tabs)/invest",
-  assets: "/(tabs)/assets",
+  indexes: "/(tabs)/indexes",
   settings: "/(tabs)/settings"
 };
 
@@ -117,8 +117,8 @@ export default function TabLayout() {
         return <PricesScreen />;
       case "invest":
         return <InvestScreen />;
-      case "assets":
-        return <AssetsScreen />;
+      case "indexes":
+        return <IndexesScreen />;
       case "settings":
         return <SettingsScreen />;
       default:
@@ -155,8 +155,8 @@ export default function TabLayout() {
               <Tabs.Tab value='invest' flex={1}>
                 <Text>Invest</Text>
               </Tabs.Tab>
-              <Tabs.Tab value='assets' flex={1}>
-                <Text>Assets</Text>
+              <Tabs.Tab value='indexes' flex={1}>
+                <Text>Indexes</Text>
               </Tabs.Tab>
               <Tabs.Tab value='settings' flex={1}>
                 <Text>Settings</Text>

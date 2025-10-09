@@ -7,19 +7,19 @@ import { useRouter } from "expo-router";
 
 import { AssetIcon } from "@/components/ui/AssetIcon";
 import {
-  type AssetCategory,
-  type CollectionAsset,
-  getAssetCategories,
-  getCollectionAssets,
-  getFeaturedAssets
-} from "@/services/prices.service";
+  type IndexCategory,
+  type CollectionIndex,
+  getIndexCategories,
+  getCollectionIndexes,
+  getFeaturedIndexes
+} from "@/services/indexes.service";
 import { ChevronRightIcon } from "lucide-react-native";
 
 import { assetClassStyles } from "@/constants/assetClassStyles";
 
-const featuredAssets = getFeaturedAssets();
-const collectionAssets = getCollectionAssets();
-const categories = getAssetCategories();
+const featuredIndexes = getFeaturedIndexes();
+const collectionIndexes = getCollectionIndexes();
+const categories = getIndexCategories();
 
 const formatPercent = (value: number) => `${Math.abs(value).toFixed(2)}%`;
 
@@ -32,27 +32,37 @@ const formatCurrency = (amount: number) =>
 const cardTextColor = "#1C252E";
 const secondaryTextColor = "#637381";
 
-type FilteredAssetCardProps = {
-  asset: CollectionAsset;
+type FilteredIndexCardProps = {
+  indexAsset: CollectionIndex;
   increaseIconUri?: string;
   decreaseIconUri?: string;
   onPress?: () => void;
 };
 
-const FilteredAssetCard: React.FC<FilteredAssetCardProps> = ({
-  asset,
+const tokenTagStyle = {
+  backgroundColor: "#919EAB14",
+  color: secondaryTextColor,
+  fontSize: "$1",
+  fontWeight: "600" as const,
+  borderRadius: 8,
+  paddingHorizontal: 8,
+  paddingVertical: 4
+};
+
+const FilteredIndexCard: React.FC<FilteredIndexCardProps> = ({
+  indexAsset,
   increaseIconUri,
   decreaseIconUri,
   onPress
 }) => {
-  const classStyle = assetClassStyles[asset.class];
-  const isPositive = asset.changePercent >= 0;
+  const classStyle = assetClassStyles[indexAsset.class];
+  const isPositive = indexAsset.changePercent >= 0;
   const changeIconUri = isPositive ? increaseIconUri : decreaseIconUri;
   const changeTextPrefix =
-    asset.changePercent === 0 ? "" : isPositive ? "+" : "-";
+    indexAsset.changePercent === 0 ? "" : isPositive ? "+" : "-";
 
-  const detailRows = asset.details.map((detail) => ({
-    key: `${asset.symbol}-${detail.label}`,
+  const detailRows = indexAsset.details.map((detail) => ({
+    key: `${indexAsset.symbol}-${detail.label}`,
     left: (
       <Text
         fontSize='$2'
@@ -77,10 +87,10 @@ const FilteredAssetCard: React.FC<FilteredAssetCardProps> = ({
 
   const rows = [
     {
-      key: `${asset.symbol}-name`,
+      key: `${indexAsset.symbol}-name`,
       left: (
         <Text fontSize='$3' fontWeight='700' color={cardTextColor}>
-          {asset.name}
+          {indexAsset.name}
         </Text>
       ),
       right: (
@@ -90,12 +100,12 @@ const FilteredAssetCard: React.FC<FilteredAssetCardProps> = ({
           color={cardTextColor}
           fontFamily='$numeric'
         >
-          {formatCurrency(asset.price)}
+          {formatCurrency(indexAsset.price)}
         </Text>
       )
     },
     {
-      key: `${asset.symbol}-change`,
+      key: `${indexAsset.symbol}-change`,
       left: (
         <Text
           fontSize='$2'
@@ -103,7 +113,7 @@ const FilteredAssetCard: React.FC<FilteredAssetCardProps> = ({
           fontWeight='600'
           fontFamily='$numeric'
         >
-          {asset.symbol}
+          {indexAsset.symbol}
         </Text>
       ),
       right: (
@@ -117,37 +127,48 @@ const FilteredAssetCard: React.FC<FilteredAssetCardProps> = ({
             fontWeight='600'
             fontFamily='$numeric'
           >
-            {`${changeTextPrefix}${formatPercent(asset.changePercent)}`}
+            {`${changeTextPrefix}${formatPercent(indexAsset.changePercent)}`}
           </Text>
         </XStack>
       )
     },
     ...detailRows,
     {
-      key: `${asset.symbol}-class`,
-      left: <YStack minHeight={1} />,
-      right: (
-        <Text
-          fontSize='$1'
-          fontWeight='700'
-          color={classStyle.color}
-          backgroundColor={classStyle.backgroundColor}
-          paddingVertical={4}
-          paddingHorizontal={8}
-          borderRadius={6}
-          // textTransform='capitalize'
-          fontFamily='$numeric'
-        >
-          {asset.class}
-        </Text>
+      key: `${indexAsset.symbol}-class`,
+      left: (
+        <XStack flexWrap='wrap' gap={8} alignItems='flex-start'>
+          {indexAsset.tokens.map((token) => (
+            <Text
+              key={`${indexAsset.symbol}-${token}`}
+              {...tokenTagStyle}
+              minWidth={50}
+            >
+              {token}
+            </Text>
+          ))}
+        </XStack>
       )
+      //   right: (
+      //     <Text
+      //       fontSize='$1'
+      //       fontWeight='700'
+      //       color={classStyle.color}
+      //       backgroundColor={classStyle.backgroundColor}
+      //       paddingVertical={4}
+      //       paddingHorizontal={8}
+      //       borderRadius={6}
+      //       fontFamily='$numeric'
+      //     >
+      //       {indexAsset.class}
+      //     </Text>
+      //   )
     }
   ];
 
   return (
     <Card
       borderRadius={16}
-      padding={16}
+      padding={8}
       backgroundColor='#F9FAFB'
       onPress={onPress}
       pressable={onPress != null}
@@ -156,8 +177,8 @@ const FilteredAssetCard: React.FC<FilteredAssetCardProps> = ({
     >
       <XStack alignItems='flex-start' space='$3' width='100%'>
         <AssetIcon
-          symbol={asset.symbol}
-          size={42}
+          symbol={indexAsset.symbol}
+          size={36}
           backgroundColor={classStyle.color}
           fontSize='$4'
           fontWeight='700'
@@ -170,21 +191,40 @@ const FilteredAssetCard: React.FC<FilteredAssetCardProps> = ({
               alignItems='center'
               justifyContent='space-between'
               gap='$3'
+              marginRight={8}
             >
-              <YStack flexShrink={1}>{row.left}</YStack>
-              <YStack alignItems='flex-end'>{row.right}</YStack>
+              <YStack width='70%'>{row.left}</YStack>
+              <YStack width='30%' alignItems='flex-end'>
+                {row.right}
+              </YStack>
             </XStack>
           ))}
         </YStack>
       </XStack>
+
+      {indexAsset.editable ? (
+        <XStack justifyContent='flex-end' marginTop={8}>
+          <Button
+            size='$2'
+            backgroundColor='#1C252E'
+            color='#FFFFFF'
+            borderRadius={12}
+            paddingHorizontal={12}
+          >
+            <Text fontSize='$3' fontWeight='700' color='#FFFFFF'>
+              Edit
+            </Text>
+          </Button>
+        </XStack>
+      ) : null}
     </Card>
   );
 };
 
-export default function PricesScreen() {
+const IndexesScreen: React.FC = () => {
   const router = useRouter();
   const [selectedCategory, setSelectedCategory] =
-    useState<AssetCategory>("Trending");
+    useState<IndexCategory>("Holding");
   const [changeIcons] = useAssets([
     require("@svgs/increase.svg"),
     require("@svgs/decrease.svg")
@@ -202,8 +242,8 @@ export default function PricesScreen() {
       ? decreaseIcon.localUri ?? decreaseIcon.uri
       : undefined;
 
-  const filteredAssets = useMemo(() => {
-    return collectionAssets.filter((asset) =>
+  const filteredIndexes = useMemo(() => {
+    return collectionIndexes.filter((asset) =>
       asset.categories.includes(selectedCategory)
     );
   }, [selectedCategory]);
@@ -229,8 +269,6 @@ export default function PricesScreen() {
                   fontSize='$2'
                   fontWeight='400'
                   color={"#1C252E"}
-                  // textDecorationLine='underline'
-                  // @ts-ignore
                   style={{
                     textDecorationLine: "underline",
                     textDecorationThickness: 0.5
@@ -252,7 +290,7 @@ export default function PricesScreen() {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={{ gap: 16, paddingRight: 24 }}
           >
-            {featuredAssets.map((asset) => {
+            {featuredIndexes.map((asset) => {
               const classStyle = assetClassStyles[asset.class];
               const isPositive = asset.changePercent >= 0;
               const changeIconUri = isPositive
@@ -338,7 +376,22 @@ export default function PricesScreen() {
           </ScrollView>
         </YStack>
 
-        <YStack marginTop={32} space='$4'>
+        <Button
+          height={48}
+          backgroundColor='#1C252E'
+          color='#FFFFFF'
+          borderRadius={12}
+          fontSize='$3'
+          fontWeight='600'
+          onPress={() => router.push("/indexes/create")}
+          marginVertical={32}
+        >
+          <Text fontSize='$3' fontWeight='700' color='#FFFFFF'>
+            Create Index
+          </Text>
+        </Button>
+
+        <YStack marginTop={0} space='$4'>
           <YStack space='$2'>
             <XStack justifyContent='space-between' alignItems='center'>
               <Text fontSize='$4' fontWeight='500' color={"#1C252E"}>
@@ -386,10 +439,10 @@ export default function PricesScreen() {
             </YStack>
 
             <YStack space='$3'>
-              {filteredAssets.map((asset) => (
-                <FilteredAssetCard
+              {filteredIndexes.map((asset) => (
+                <FilteredIndexCard
                   key={`${asset.symbol}-${selectedCategory}`}
-                  asset={asset}
+                  indexAsset={asset}
                   increaseIconUri={increaseIconUri}
                   decreaseIconUri={decreaseIconUri}
                   onPress={() =>
@@ -403,4 +456,6 @@ export default function PricesScreen() {
       </ScrollView>
     </YStack>
   );
-}
+};
+
+export default IndexesScreen;
