@@ -106,7 +106,7 @@ export default function SignInScreen() {
         // @ts-ignore
         justifyContent='center'
         alignItems='center'
-        mv='$4'
+        mv='$0'
       >
         <Separator flex={1} mr='$3' />
         <Text color='$color10'>OR</Text>
@@ -136,7 +136,7 @@ export default function SignInScreen() {
 
         <Button
           size='$5'
-          backgroundColor='#FFFFFF'
+          backgroundColor='#000000'
           borderColor='$borderColor'
           borderWidth={1}
           borderRadius={6}
@@ -147,7 +147,7 @@ export default function SignInScreen() {
               source={require("@/assets/icons/auth/apple.png")}
               style={{ width: 24, height: 24 }}
             />
-            <Text color='#1C252E' fontWeight='600'>
+            <Text color='#FFFFFF' fontWeight='600'>
               Sign in with Apple
             </Text>
           </XStack>
