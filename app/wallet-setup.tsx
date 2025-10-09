@@ -14,6 +14,7 @@ import {
   ScrollView,
   Separator
 } from "tamagui";
+import { ArrowLeft } from "lucide-react-native";
 import {
   useCreateWallet,
   useImportWallet,
@@ -77,6 +78,7 @@ export default function WalletSetupScreen() {
     Record<number, string>
   >({});
   const [answerErrors, setAnswerErrors] = useState<Record<number, string>>({});
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
 
   const createWallet = useCreateWallet();
   const importWallet = useImportWallet();
@@ -217,6 +219,7 @@ export default function WalletSetupScreen() {
             setVerificationQuestions([]);
             setSelectedAnswers({});
             setAnswerErrors({});
+            setCurrentQuestionIndex(0);
             router.replace("/(tabs)");
           }
         }
@@ -280,6 +283,7 @@ export default function WalletSetupScreen() {
     setVerificationQuestions(questions);
     setSelectedAnswers({});
     setAnswerErrors({});
+    setCurrentQuestionIndex(0);
     setSuccessStage("verify");
   }, [currentMnemonic]);
 
@@ -296,8 +300,15 @@ export default function WalletSetupScreen() {
           [index]: ""
         }));
       }
+
+      // Automatically move to next question after a short delay
+      if (currentQuestionIndex < verificationQuestions.length - 1) {
+        setTimeout(() => {
+          setCurrentQuestionIndex((prev) => prev + 1);
+        }, 300);
+      }
     },
-    [answerErrors]
+    [answerErrors, currentQuestionIndex, verificationQuestions.length]
   );
 
   const handleVerifyBackup = () => {
@@ -341,6 +352,7 @@ export default function WalletSetupScreen() {
             setVerificationQuestions([]);
             setSelectedAnswers({});
             setAnswerErrors({});
+            setCurrentQuestionIndex(0);
             router.replace("/(tabs)");
           }
         }
@@ -355,67 +367,73 @@ export default function WalletSetupScreen() {
           flex={1}
           backgroundColor='#FFFFFF'
           padding='$6'
-          justifyContent='space-between'
+          justifyContent='space-around'
         >
-          <YStack
-            flex={1}
-            justifyContent='center'
-            alignItems='center'
-            space='$6'
-          >
-            <YStack alignItems='center' space='$4'>
-              <Text
-                fontSize='$10'
-                fontWeight='700'
-                color='#1C252E'
-                textAlign='center'
-              >
-                Wallet Created Successfully!
-              </Text>
-              <XStack space='$4' alignItems='center'>
-                <Image
-                  source={require("@/assets/icons/auth/wallet.png")}
-                  style={{ width: 120, height: 120 }}
-                  contentFit='contain'
-                />
-                <Image
-                  source={require("@/assets/icons/auth/check.png")}
-                  style={{ width: 80, height: 80 }}
-                  contentFit='contain'
-                />
-              </XStack>
-              <Text
-                fontSize='$4'
-                color='#637381'
-                textAlign='center'
-                maxWidth={300}
-              >
-                Your wallet has been created. Back it up now to ensure you can
-                recover it later.
-              </Text>
-            </YStack>
+          <YStack alignItems='center' space='$4'>
+            <Text
+              fontSize='$10'
+              fontWeight='700'
+              color='#1C252E'
+              textAlign='center'
+            >
+              Wallet Created Successfully!
+            </Text>
+            <XStack space='$4' alignItems='center' position='relative'>
+              <Image
+                source={require("@/assets/icons/auth/wallet.png")}
+                style={{ width: 120, height: 120 }}
+                contentFit='contain'
+              />
+              <Image
+                source={require("@/assets/icons/auth/check.png")}
+                style={{
+                  width: 80,
+                  height: 80,
+                  position: "absolute",
+                  bottom: 0,
+                  right: 0
+                }}
+                contentFit='contain'
+              />
+            </XStack>
           </YStack>
 
-          <YStack space='$3'>
+          <YStack
+            space='$3'
+            alignItems='flex-start'
+            justifyContent='flex-start'
+            width={"100%"}
+            backgroundColor='#F8FAFC'
+            padding='$4'
+            borderRadius={4}
+          >
+            <Text fontSize='$2' color='#637381' textAlign='left' width={"100%"}>
+              Backup 12 words phrase to ensure you can recover your wallet
+              later.
+            </Text>
             <Button
-              size='$5'
-              backgroundColor='#4B5563'
-              pressStyle={{ backgroundColor: "#374151" }}
+              size='$3'
+              backgroundColor='#1C252E'
+              pressStyle={{ backgroundColor: "#1C252E" }}
               onPress={handleBackupWallet}
+              width={"100%"}
+              borderRadius={4}
             >
-              <Text color='#FFFFFF' fontSize='$5' fontWeight='600'>
-                Back up Wallet
+              <Text color='#FFFFFF' fontSize='$2' fontWeight='600'>
+                Back up
               </Text>
             </Button>
             <Button
-              size='$5'
+              size='$3'
               variant='outlined'
               borderColor='#E5E7EB'
               backgroundColor='transparent'
               pressStyle={{ backgroundColor: "#F9FAFB" }}
               onPress={handleSkipBackup}
+              width={"100%"}
+              borderRadius={4}
             >
-              <Text color='#4B5563' fontSize='$5' fontWeight='600'>
+              <Text color='#4B5563' fontSize='$2' fontWeight='600'>
                 Skip for Now
               </Text>
             </Button>
@@ -428,21 +446,40 @@ export default function WalletSetupScreen() {
       return (
         <ScrollView
           flex={1}
-          backgroundColor='#FFFFFF'
+          backgroundColor='#F8FAFC'
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{
             paddingHorizontal: 24,
-            paddingVertical: 40
+            paddingVertical: 15
           }}
         >
+
           <YStack space='$6'>
-            <YStack space='$3'>
-              <Text fontSize='$9' fontWeight='700' color='#1C252E'>
+            <XStack alignItems='center' space='$3' justifyContent='flex-start'  width='100%'>
+            <Button
+              size='$3'
+              variant='outlined'
+              borderColor='transparent'
+              backgroundColor='transparent'
+              pressStyle={{ opacity: 0.7 }}
+              onPress={() => setSuccessStage("summary")}
+              textAlign='left'
+              padding='0'
+              width={"auto"}
+              height={'auto'}
+            >
+              <ArrowLeft size={24} color='#637381' />
+            </Button>
+            </XStack>
+
+            <YStack space='$3' paddingHorizontal='0'>
+              <Text fontSize='$6' fontWeight='700' color='#1C252E'>
                 Backup Your Wallet
               </Text>
-              <Text fontSize='$4' color='#637381'>
+              <Text fontSize='$2' color='#637381' fontWeight='700'>
                 Write down these words in order and keep them in a safe place.
-                You'll need them to recover your wallet.
+                {"\n"}
+                You will need them to recover your wallet.
               </Text>
             </YStack>
 
@@ -457,16 +494,19 @@ export default function WalletSetupScreen() {
                     <XStack
                       key={item.index}
                       flex={1}
+                      justifyContent='center'
                       alignItems='center'
                       space='$2'
                       padding='$3'
-                      backgroundColor='#F8FAFC'
-                      borderRadius={8}
+                      backgroundColor='#FFFFFF'
+                      borderRadius={6}
+                      borderWidth={1}
+                      borderColor='#919EAB1F'
                     >
-                      <Text fontSize='$2' color='#94A3B8' fontWeight='500'>
+                      {/* <Text fontSize='$2' color='#94A3B8' fontWeight='500'>
                         {item.index}
-                      </Text>
-                      <Text fontSize='$3' color='#1E293B' fontWeight='600'>
+                      </Text> */}
+                      <Text fontSize='$2' color='#1E293B' fontWeight='600'>
                         {item.word}
                       </Text>
                     </XStack>
@@ -477,39 +517,30 @@ export default function WalletSetupScreen() {
 
             <YStack space='$3'>
               <Button
-                size='$4'
-                variant='outlined'
-                borderColor='#E5E7EB'
-                backgroundColor='#F9FAFB'
-                pressStyle={{ backgroundColor: "#F1F3F5" }}
-                onPress={handleCopyMnemonic}
-              >
-                <Text color='#4B5563' fontSize='$4' fontWeight='600'>
-                  Copy to Clipboard
-                </Text>
-              </Button>
-
-              <Button
-                size='$5'
-                backgroundColor='#4B5563'
-                pressStyle={{ backgroundColor: "#374151" }}
+                size='$3'
+                backgroundColor='#1C252E'
+                pressStyle={{ backgroundColor: "#1C252E" }}
                 onPress={startVerification}
+                width={"100%"}
+                borderRadius={4}
               >
-                <Text color='#FFFFFF' fontSize='$5' fontWeight='600'>
+                <Text color='#FFFFFF' fontSize='$2' fontWeight='600'>
                   I've Written It Down
                 </Text>
               </Button>
 
               <Button
-                size='$4'
+                size='$3'
                 variant='outlined'
-                borderColor='transparent'
+                borderColor='#E5E7EB'
                 backgroundColor='transparent'
-                pressStyle={{ opacity: 0.7 }}
-                onPress={() => setSuccessStage("summary")}
+                pressStyle={{ backgroundColor: "#F9FAFB" }}
+                onPress={handleCopyMnemonic}
+                width={"100%"}
+                borderRadius={4}
               >
-                <Text color='#94A3B8' fontSize='$4' fontWeight='500'>
-                  Go Back
+                <Text color='#4B5563' fontSize='$2' fontWeight='600'>
+                  Copy to Clipboard
                 </Text>
               </Button>
             </YStack>
@@ -519,86 +550,116 @@ export default function WalletSetupScreen() {
     }
 
     if (successStage === "verify") {
+      const currentQuestion = verificationQuestions[currentQuestionIndex];
+      const isLastQuestion =
+        currentQuestionIndex === verificationQuestions.length - 1;
+
       return (
-        <ScrollView
+        <YStack
           flex={1}
           backgroundColor='#FFFFFF'
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{
-            paddingHorizontal: 24,
-            paddingVertical: 40
-          }}
+          padding='$6'
+          justifyContent='space-between'
         >
-          <YStack space='$6'>
-            <YStack space='$3'>
-              <Text fontSize='$9' fontWeight='700' color='#1C252E'>
-                Verify Your Backup
-              </Text>
-              <Text fontSize='$4' color='#637381'>
-                Select the correct words to verify your backup phrase.
-              </Text>
-            </YStack>
+          <YStack flex={1} justifyContent='center' space='$8'>
+            {/* Progress Dots */}
+            <XStack justifyContent='center' space='$3'>
+              {verificationQuestions.map((_, index) => (
+                <YStack
+                  key={index}
+                  width={10}
+                  height={10}
+                  borderRadius={5}
+                  backgroundColor={
+                    index === currentQuestionIndex
+                      ? "#4B5563"
+                      : index < currentQuestionIndex
+                      ? "#94A3B8"
+                      : "#E5E7EB"
+                  }
+                />
+              ))}
+            </XStack>
 
-            <YStack space='$5'>
-              {verificationQuestions.map((question, qIndex) => (
-                <YStack key={qIndex} space='$3'>
-                  <Text fontSize='$5' fontWeight='600' color='#1E293B'>
-                    What is word #{question.index}?
+            {/* Question Content */}
+            {currentQuestion && (
+              <YStack space='$5' alignItems='center'>
+                <YStack space='$3' alignItems='center'>
+                  <Text
+                    fontSize='$9'
+                    fontWeight='700'
+                    color='#1C252E'
+                    textAlign='center'
+                  >
+                    Verify Your Backup
                   </Text>
-                  <YStack space='$2'>
-                    {question.options.map((option, optIndex) => {
-                      const isSelected =
-                        selectedAnswers[question.index] === option;
-                      const hasError = answerErrors[question.index];
+                  <Text
+                    fontSize='$5'
+                    fontWeight='600'
+                    color='#1E293B'
+                    textAlign='center'
+                  >
+                    What is word #{currentQuestion.index}?
+                  </Text>
+                </YStack>
 
-                      return (
-                        <Button
-                          key={optIndex}
-                          size='$4'
-                          variant='outlined'
-                          borderColor={
+                <YStack width='100%' space='$2'>
+                  {currentQuestion.options.map((option, optIndex) => {
+                    const isSelected =
+                      selectedAnswers[currentQuestion.index] === option;
+                    const hasError = answerErrors[currentQuestion.index];
+
+                    return (
+                      <Button
+                        key={optIndex}
+                        size='$5'
+                        variant='outlined'
+                        borderColor={
+                          hasError && isSelected
+                            ? "#EF4444"
+                            : isSelected
+                            ? "#4B5563"
+                            : "#E5E7EB"
+                        }
+                        backgroundColor={isSelected ? "#F8FAFC" : "#FFFFFF"}
+                        pressStyle={{
+                          backgroundColor: "#F9FAFB",
+                          borderColor: "#4B5563"
+                        }}
+                        onPress={() =>
+                          handleSelectAnswer(currentQuestion.index, option)
+                        }
+                      >
+                        <Text
+                          color={
                             hasError && isSelected
                               ? "#EF4444"
                               : isSelected
-                              ? "#4B5563"
-                              : "#E5E7EB"
+                              ? "#1E293B"
+                              : "#64748B"
                           }
-                          backgroundColor={isSelected ? "#F8FAFC" : "#FFFFFF"}
-                          pressStyle={{
-                            backgroundColor: "#F9FAFB",
-                            borderColor: "#4B5563"
-                          }}
-                          onPress={() =>
-                            handleSelectAnswer(question.index, option)
-                          }
+                          fontSize='$4'
+                          fontWeight={isSelected ? "600" : "500"}
                         >
-                          <Text
-                            color={
-                              hasError && isSelected
-                                ? "#EF4444"
-                                : isSelected
-                                ? "#1E293B"
-                                : "#64748B"
-                            }
-                            fontSize='$4'
-                            fontWeight={isSelected ? "600" : "500"}
-                          >
-                            {option}
-                          </Text>
-                        </Button>
-                      );
-                    })}
-                  </YStack>
-                  {answerErrors[question.index] && (
-                    <Text fontSize='$3' color='#EF4444'>
-                      {answerErrors[question.index]}
-                    </Text>
-                  )}
+                          {option}
+                        </Text>
+                      </Button>
+                    );
+                  })}
                 </YStack>
-              ))}
-            </YStack>
 
-            <YStack space='$3'>
+                {answerErrors[currentQuestion.index] && (
+                  <Text fontSize='$3' color='#EF4444'>
+                    {answerErrors[currentQuestion.index]}
+                  </Text>
+                )}
+              </YStack>
+            )}
+          </YStack>
+
+          {/* Bottom Buttons */}
+          <YStack space='$3'>
+            {isLastQuestion && (
               <Button
                 size='$5'
                 backgroundColor='#4B5563'
@@ -609,22 +670,42 @@ export default function WalletSetupScreen() {
                   Verify Backup
                 </Text>
               </Button>
+            )}
 
+            {currentQuestionIndex > 0 && !isLastQuestion && (
               <Button
                 size='$4'
                 variant='outlined'
-                borderColor='transparent'
+                borderColor='#E5E7EB'
                 backgroundColor='transparent'
-                pressStyle={{ opacity: 0.7 }}
-                onPress={() => setSuccessStage("backup")}
+                pressStyle={{ backgroundColor: "#F9FAFB" }}
+                onPress={() => setCurrentQuestionIndex((prev) => prev - 1)}
               >
-                <Text color='#94A3B8' fontSize='$4' fontWeight='500'>
-                  Go Back
+                <Text color='#4B5563' fontSize='$4' fontWeight='600'>
+                  Previous Question
                 </Text>
               </Button>
-            </YStack>
+            )}
+
+            <Button
+              size='$4'
+              variant='outlined'
+              borderColor='transparent'
+              backgroundColor='transparent'
+              pressStyle={{ opacity: 0.7 }}
+              onPress={() => {
+                setSuccessStage("backup");
+                setCurrentQuestionIndex(0);
+                setSelectedAnswers({});
+                setAnswerErrors({});
+              }}
+            >
+              <Text color='#94A3B8' fontSize='$4' fontWeight='500'>
+                Go Back
+              </Text>
+            </Button>
           </YStack>
-        </ScrollView>
+        </YStack>
       );
     }
   }
