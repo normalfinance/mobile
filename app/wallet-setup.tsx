@@ -1,7 +1,8 @@
-import React, { useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { useRouter } from "expo-router";
 import { useAuth } from "@clerk/clerk-expo";
 import { Alert } from "react-native";
+import * as Clipboard from "expo-clipboard";
 import { Image } from "expo-image";
 import {
   YStack,
@@ -22,9 +23,33 @@ import {
   useCreateWalletWithMnemonic,
   useImportFromMnemonic
 } from "@/services";
-import BackupPhraseModal from "@/components/wallet/BackupPhraseModal";
-import VerificationModal from "@/components/wallet/VerificationModal";
 import ImportMnemonicForm from "@/components/wallet/ImportMnemonicForm";
+import {
+  formatMnemonicForDisplay,
+  splitMnemonicToWords
+} from "@/lib/utils/mnemonic.utils";
+import { validatePrivateKey } from "@/lib/utils/crypto.utils";
+
+type FormattedMnemonicWord = {
+  index: number;
+  word: string;
+};
+
+interface VerificationQuestion {
+  index: number;
+  correctWord: string;
+  options: string[];
+}
+
+const chunkArray = <T,>(array: T[], size: number): T[][] => {
+  const result: T[][] = [];
+
+  for (let i = 0; i < array.length; i += size) {
+    result.push(array.slice(i, i + size));
+  }
+
+  return result;
+};
 
 // Utility functions
 export default function WalletSetupScreen() {
@@ -36,9 +61,22 @@ export default function WalletSetupScreen() {
   );
   const [privateKey, setPrivateKey] = useState("");
   const [privateKeyError, setPrivateKeyError] = useState("");
-  const [showBackupModal, setShowBackupModal] = useState(false);
-  const [showVerificationModal, setShowVerificationModal] = useState(false);
+  const [showSuccessScreen, setShowSuccessScreen] = useState(false);
+  const [successStage, setSuccessStage] = useState<
+    "summary" | "backup" | "verify"
+  >("summary");
   const [currentMnemonic, setCurrentMnemonic] = useState("");
+  const formattedMnemonic = useMemo<FormattedMnemonicWord[]>(
+    () => (currentMnemonic ? formatMnemonicForDisplay(currentMnemonic) : []),
+    [currentMnemonic]
+  );
+  const [verificationQuestions, setVerificationQuestions] = useState<
+    VerificationQuestion[]
+  >([]);
+  const [selectedAnswers, setSelectedAnswers] = useState<
+    Record<number, string>
+  >({});
+  const [answerErrors, setAnswerErrors] = useState<Record<number, string>>({});
 
   const createWallet = useCreateWallet();
   const importWallet = useImportWallet();
@@ -79,37 +117,8 @@ export default function WalletSetupScreen() {
 
       console.log("Wallet created successfully:", result.publicKey);
       setCurrentMnemonic(result.mnemonic);
-
-      Alert.alert(
-        "Wallet Created! 🎉",
-        `Your Stellar wallet has been created successfully.\n\nPublic Address: ${result.publicKey}`,
-        [
-          {
-            text: "Backup Wallet",
-            onPress: () => setShowBackupModal(true)
-          },
-          {
-            text: "Skip Backup",
-            style: "destructive",
-            onPress: () => {
-              Alert.alert(
-                "Skip Backup?",
-                "Without backing up your wallet, you won't be able to recover it if you lose access. Are you sure?",
-                [
-                  { text: "Cancel", style: "cancel" },
-                  {
-                    text: "Skip",
-                    style: "destructive",
-                    onPress: () => {
-                      router.replace("/(tabs)");
-                    }
-                  }
-                ]
-              );
-            }
-          }
-        ]
-      );
+      setSuccessStage("summary");
+      setShowSuccessScreen(true);
     } catch (error) {
       console.error("Error creating wallet with mnemonic:", error);
       Alert.alert("Error", "Failed to create wallet. Please try again.");
@@ -192,26 +201,433 @@ export default function WalletSetupScreen() {
     }
   };
 
-  const handleBackupConfirmed = () => {
-    setShowBackupModal(false);
-    setShowVerificationModal(true);
+  const handleSkipBackup = () => {
+    Alert.alert(
+      "Skip Backup?",
+      "Without backing up your wallet, you won't be able to recover it if you lose access. Are you sure?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Skip",
+          style: "destructive",
+          onPress: () => {
+            setShowSuccessScreen(false);
+            setSuccessStage("summary");
+            setCurrentMnemonic("");
+            setVerificationQuestions([]);
+            setSelectedAnswers({});
+            setAnswerErrors({});
+            router.replace("/(tabs)");
+          }
+        }
+      ]
+    );
   };
 
-  const handleVerificationComplete = () => {
-    setShowVerificationModal(false);
-    setCurrentMnemonic(""); // Clear mnemonic from memory
-    router.replace("/(tabs)");
+  const handleBackupWallet = () => {
+    setSuccessStage("backup");
   };
 
-  const handleCloseBackup = () => {
-    setShowBackupModal(false);
-    setCurrentMnemonic(""); // Clear mnemonic from memory
+  const handleCopyMnemonic = async () => {
+    if (!currentMnemonic) return;
+    try {
+      await Clipboard.setStringAsync(currentMnemonic);
+      Alert.alert("Copied", "Recovery phrase copied to clipboard");
+    } catch (error) {
+      console.error("Failed to copy mnemonic:", error);
+      Alert.alert("Error", "Could not copy recovery phrase. Please try again.");
+    }
   };
 
-  const handleCloseVerification = () => {
-    setShowVerificationModal(false);
-    setShowBackupModal(true); // Go back to backup modal
+  const startVerification = useCallback(() => {
+    if (!currentMnemonic) return;
+
+    const words = splitMnemonicToWords(currentMnemonic);
+    const formatted = formatMnemonicForDisplay(currentMnemonic);
+    const requiredCount = words.length >= 24 ? 3 : 2;
+    const selectedIndices: number[] = [];
+
+    while (selectedIndices.length < requiredCount) {
+      const random = Math.floor(Math.random() * words.length) + 1;
+      if (!selectedIndices.includes(random)) {
+        selectedIndices.push(random);
+      }
+    }
+
+    const questions: VerificationQuestion[] = selectedIndices
+      .sort((a, b) => a - b)
+      .map((index) => {
+        const correctWord = words[index - 1];
+        const otherOptions = formatted
+          .filter((item) => item.index !== index)
+          .map((item) => item.word);
+
+        const distractors = otherOptions
+          .sort(() => 0.5 - Math.random())
+          .slice(0, 3);
+
+        const options = [...distractors, correctWord].sort(
+          () => 0.5 - Math.random()
+        );
+
+        return {
+          index,
+          correctWord,
+          options
+        };
+      });
+
+    setVerificationQuestions(questions);
+    setSelectedAnswers({});
+    setAnswerErrors({});
+    setSuccessStage("verify");
+  }, [currentMnemonic]);
+
+  const handleSelectAnswer = useCallback(
+    (index: number, value: string) => {
+      setSelectedAnswers((prev) => ({
+        ...prev,
+        [index]: value
+      }));
+
+      if (answerErrors[index]) {
+        setAnswerErrors((prev) => ({
+          ...prev,
+          [index]: ""
+        }));
+      }
+    },
+    [answerErrors]
+  );
+
+  const handleVerifyBackup = () => {
+    if (!currentMnemonic) {
+      return;
+    }
+
+    const newErrors: Record<number, string> = {};
+    let hasError = false;
+
+    verificationQuestions.forEach(({ index, correctWord }) => {
+      const answer = selectedAnswers[index];
+      if (!answer) {
+        newErrors[index] = "Please select an option";
+        hasError = true;
+      } else if (answer.toLowerCase() !== correctWord.toLowerCase()) {
+        newErrors[index] = "Incorrect word";
+        hasError = true;
+      }
+    });
+
+    if (hasError) {
+      setAnswerErrors(newErrors);
+      Alert.alert(
+        "Verification Failed",
+        "The selected words do not match your recovery phrase. Please review and try again."
+      );
+      return;
+    }
+
+    Alert.alert(
+      "Verification Successful",
+      "Your wallet backup has been verified. Your wallet is ready to use.",
+      [
+        {
+          text: "Continue",
+          onPress: () => {
+            setShowSuccessScreen(false);
+            setSuccessStage("summary");
+            setCurrentMnemonic("");
+            setVerificationQuestions([]);
+            setSelectedAnswers({});
+            setAnswerErrors({});
+            router.replace("/(tabs)");
+          }
+        }
+      ]
+    );
   };
+
+  if (showSuccessScreen && currentMnemonic) {
+    if (successStage === "summary") {
+      return (
+        <YStack
+          flex={1}
+          backgroundColor='#FFFFFF'
+          padding='$6'
+          justifyContent='space-between'
+        >
+          <YStack
+            flex={1}
+            justifyContent='center'
+            alignItems='center'
+            space='$6'
+          >
+            <YStack alignItems='center' space='$4'>
+              <Text
+                fontSize='$10'
+                fontWeight='700'
+                color='#1C252E'
+                textAlign='center'
+              >
+                Wallet Created Successfully!
+              </Text>
+              <XStack space='$4' alignItems='center'>
+                <Image
+                  source={require("@/assets/icons/auth/wallet.png")}
+                  style={{ width: 120, height: 120 }}
+                  contentFit='contain'
+                />
+                <Image
+                  source={require("@/assets/icons/auth/check.png")}
+                  style={{ width: 80, height: 80 }}
+                  contentFit='contain'
+                />
+              </XStack>
+              <Text
+                fontSize='$4'
+                color='#637381'
+                textAlign='center'
+                maxWidth={300}
+              >
+                Your wallet has been created. Back it up now to ensure you can
+                recover it later.
+              </Text>
+            </YStack>
+          </YStack>
+
+          <YStack space='$3'>
+            <Button
+              size='$5'
+              backgroundColor='#4B5563'
+              pressStyle={{ backgroundColor: "#374151" }}
+              onPress={handleBackupWallet}
+            >
+              <Text color='#FFFFFF' fontSize='$5' fontWeight='600'>
+                Back up Wallet
+              </Text>
+            </Button>
+            <Button
+              size='$5'
+              variant='outlined'
+              borderColor='#E5E7EB'
+              backgroundColor='transparent'
+              pressStyle={{ backgroundColor: "#F9FAFB" }}
+              onPress={handleSkipBackup}
+            >
+              <Text color='#4B5563' fontSize='$5' fontWeight='600'>
+                Skip for Now
+              </Text>
+            </Button>
+          </YStack>
+        </YStack>
+      );
+    }
+
+    if (successStage === "backup") {
+      return (
+        <ScrollView
+          flex={1}
+          backgroundColor='#FFFFFF'
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{
+            paddingHorizontal: 24,
+            paddingVertical: 40
+          }}
+        >
+          <YStack space='$6'>
+            <YStack space='$3'>
+              <Text fontSize='$9' fontWeight='700' color='#1C252E'>
+                Backup Your Wallet
+              </Text>
+              <Text fontSize='$4' color='#637381'>
+                Write down these words in order and keep them in a safe place.
+                You'll need them to recover your wallet.
+              </Text>
+            </YStack>
+
+            <YStack space='$4'>
+              {chunkArray(formattedMnemonic, 4).map((row, rowIndex) => (
+                <XStack
+                  key={rowIndex}
+                  space='$2'
+                  justifyContent='space-between'
+                >
+                  {row.map((item) => (
+                    <XStack
+                      key={item.index}
+                      flex={1}
+                      alignItems='center'
+                      space='$2'
+                      padding='$3'
+                      backgroundColor='#F8FAFC'
+                      borderRadius={8}
+                    >
+                      <Text fontSize='$2' color='#94A3B8' fontWeight='500'>
+                        {item.index}
+                      </Text>
+                      <Text fontSize='$3' color='#1E293B' fontWeight='600'>
+                        {item.word}
+                      </Text>
+                    </XStack>
+                  ))}
+                </XStack>
+              ))}
+            </YStack>
+
+            <YStack space='$3'>
+              <Button
+                size='$4'
+                variant='outlined'
+                borderColor='#E5E7EB'
+                backgroundColor='#F9FAFB'
+                pressStyle={{ backgroundColor: "#F1F3F5" }}
+                onPress={handleCopyMnemonic}
+              >
+                <Text color='#4B5563' fontSize='$4' fontWeight='600'>
+                  Copy to Clipboard
+                </Text>
+              </Button>
+
+              <Button
+                size='$5'
+                backgroundColor='#4B5563'
+                pressStyle={{ backgroundColor: "#374151" }}
+                onPress={startVerification}
+              >
+                <Text color='#FFFFFF' fontSize='$5' fontWeight='600'>
+                  I've Written It Down
+                </Text>
+              </Button>
+
+              <Button
+                size='$4'
+                variant='outlined'
+                borderColor='transparent'
+                backgroundColor='transparent'
+                pressStyle={{ opacity: 0.7 }}
+                onPress={() => setSuccessStage("summary")}
+              >
+                <Text color='#94A3B8' fontSize='$4' fontWeight='500'>
+                  Go Back
+                </Text>
+              </Button>
+            </YStack>
+          </YStack>
+        </ScrollView>
+      );
+    }
+
+    if (successStage === "verify") {
+      return (
+        <ScrollView
+          flex={1}
+          backgroundColor='#FFFFFF'
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{
+            paddingHorizontal: 24,
+            paddingVertical: 40
+          }}
+        >
+          <YStack space='$6'>
+            <YStack space='$3'>
+              <Text fontSize='$9' fontWeight='700' color='#1C252E'>
+                Verify Your Backup
+              </Text>
+              <Text fontSize='$4' color='#637381'>
+                Select the correct words to verify your backup phrase.
+              </Text>
+            </YStack>
+
+            <YStack space='$5'>
+              {verificationQuestions.map((question, qIndex) => (
+                <YStack key={qIndex} space='$3'>
+                  <Text fontSize='$5' fontWeight='600' color='#1E293B'>
+                    What is word #{question.index}?
+                  </Text>
+                  <YStack space='$2'>
+                    {question.options.map((option, optIndex) => {
+                      const isSelected =
+                        selectedAnswers[question.index] === option;
+                      const hasError = answerErrors[question.index];
+
+                      return (
+                        <Button
+                          key={optIndex}
+                          size='$4'
+                          variant='outlined'
+                          borderColor={
+                            hasError && isSelected
+                              ? "#EF4444"
+                              : isSelected
+                              ? "#4B5563"
+                              : "#E5E7EB"
+                          }
+                          backgroundColor={isSelected ? "#F8FAFC" : "#FFFFFF"}
+                          pressStyle={{
+                            backgroundColor: "#F9FAFB",
+                            borderColor: "#4B5563"
+                          }}
+                          onPress={() =>
+                            handleSelectAnswer(question.index, option)
+                          }
+                        >
+                          <Text
+                            color={
+                              hasError && isSelected
+                                ? "#EF4444"
+                                : isSelected
+                                ? "#1E293B"
+                                : "#64748B"
+                            }
+                            fontSize='$4'
+                            fontWeight={isSelected ? "600" : "500"}
+                          >
+                            {option}
+                          </Text>
+                        </Button>
+                      );
+                    })}
+                  </YStack>
+                  {answerErrors[question.index] && (
+                    <Text fontSize='$3' color='#EF4444'>
+                      {answerErrors[question.index]}
+                    </Text>
+                  )}
+                </YStack>
+              ))}
+            </YStack>
+
+            <YStack space='$3'>
+              <Button
+                size='$5'
+                backgroundColor='#4B5563'
+                pressStyle={{ backgroundColor: "#374151" }}
+                onPress={handleVerifyBackup}
+              >
+                <Text color='#FFFFFF' fontSize='$5' fontWeight='600'>
+                  Verify Backup
+                </Text>
+              </Button>
+
+              <Button
+                size='$4'
+                variant='outlined'
+                borderColor='transparent'
+                backgroundColor='transparent'
+                pressStyle={{ opacity: 0.7 }}
+                onPress={() => setSuccessStage("backup")}
+              >
+                <Text color='#94A3B8' fontSize='$4' fontWeight='500'>
+                  Go Back
+                </Text>
+              </Button>
+            </YStack>
+          </YStack>
+        </ScrollView>
+      );
+    }
+  }
 
   if (isLoading) {
     return (
@@ -439,19 +855,6 @@ export default function WalletSetupScreen() {
           </YStack>
         )}
       </YStack>
-
-      <BackupPhraseModal
-        visible={showBackupModal}
-        mnemonic={currentMnemonic}
-        onClose={handleCloseBackup}
-        onBackupConfirmed={handleBackupConfirmed}
-      />
-      <VerificationModal
-        visible={showVerificationModal}
-        mnemonic={currentMnemonic}
-        onClose={handleCloseVerification}
-        onVerificationComplete={handleVerificationComplete}
-      />
     </ScrollView>
   );
 }
