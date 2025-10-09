@@ -12,3 +12,4 @@ export const assetClassStyles: Record<
   Commodity: { color: "#D2B100", backgroundColor: "#FFE13D33" }
 };
 
+
