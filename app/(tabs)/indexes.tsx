@@ -178,7 +178,7 @@ const FilteredIndexCard: React.FC<FilteredIndexCardProps> = ({
       <XStack alignItems='flex-start' space='$3' width='100%'>
         <AssetIcon
           symbol={indexAsset.symbol}
-          size={42}
+          size={36}
           backgroundColor={classStyle.color}
           fontSize='$4'
           fontWeight='700'

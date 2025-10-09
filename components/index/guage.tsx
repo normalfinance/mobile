@@ -127,12 +127,31 @@ const SemiCircleGauge: React.FC<SemiCircleGaugeProps> = ({
   const currentAngle = valueToAngle(value);
   const knobPosition = polarToCartesian(centerX, centerY, radius, currentAngle);
 
+  // Calculate positions for min/max labels at arc endpoints
+  const minLabelPosition = polarToCartesian(
+    centerX,
+    centerY,
+    radius - strokeWidth - 10,
+    270
+  );
+  const maxLabelPosition = polarToCartesian(
+    centerX,
+    centerY,
+    radius - strokeWidth - 10,
+    90
+  );
+
   return (
     <GestureHandlerRootView style={styles.container}>
-      <View style={[styles.gaugeContainer, { width: size, height: size }]}>
+      <View
+        style={[
+          styles.gaugeContainer,
+          { width: size + 2, height: (size + 25) / 2, overflow: "hidden" }
+        ]}
+      >
         <PanGestureHandler onGestureEvent={onGestureEvent}>
           <View>
-            <Svg width={size} height={size}>
+            <Svg width={size + 2} height={size + 2}>
               <G>
                 {/* Background arc */}
                 <Path
@@ -160,18 +179,37 @@ const SemiCircleGauge: React.FC<SemiCircleGaugeProps> = ({
                   fill={knobColor}
                   stroke='#FFFFFF'
                   strokeWidth={3}
+                  zIndex={100}
                 />
               </G>
             </Svg>
           </View>
         </PanGestureHandler>
 
-        {/* Value display */}
-        <View style={styles.valueContainer}>
-          <Text style={styles.valueText}>{Math.round(value)}</Text>
-          <Text style={styles.labelText}>
-            {minValue} - {maxValue}
+        {/* Allocation text spanning horizontally across bottom */}
+        <View
+          style={[
+            styles.allocationContainer,
+            {
+              left: minLabelPosition.x - 20,
+              top: minLabelPosition.y - 35,
+              width: maxLabelPosition.x - minLabelPosition.x + 40
+            }
+          ]}
+        >
+          <Text
+            style={{
+              fontSize: 24,
+              fontWeight: "bold",
+              color: "#333",
+              justifyContent: "center",
+              alignItems: "center",
+              textAlign: "center"
+            }}
+          >
+            {Math.round(value)}
           </Text>
+          <Text style={styles.allocationText}>Used percent of allocation</Text>
         </View>
       </View>
     </GestureHandlerRootView>
@@ -182,16 +220,17 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: "center",
-    alignItems: "center"
+    alignItems: "center",
+    paddingHorizontal: 20
   },
   gaugeContainer: {
-    justifyContent: "center",
+    justifyContent: "flex-start",
     alignItems: "center",
     position: "relative"
   },
   valueContainer: {
     position: "absolute",
-    bottom: 40,
+    bottom: 20,
     alignSelf: "center",
     alignItems: "center"
   },
@@ -204,6 +243,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#666",
     marginTop: 4
+  },
+  allocationContainer: {
+    flexDirection: "column",
+    position: "absolute",
+    alignItems: "center",
+    justifyContent: "center",
+    height: 40
+  },
+  allocationText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#666",
+    textAlign: "center"
   }
 });
 

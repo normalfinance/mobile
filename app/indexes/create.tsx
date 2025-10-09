@@ -318,13 +318,13 @@ const CreateIndexScreen: React.FC = () => {
           </YStack>
         </YStack>
 
-        <Card padding={24} space='$4'>
+        <Card padding={10} space='$4'>
           <SemiCircleGauge
-            size={200}
+            size={250}
             minValue={0}
             maxValue={100}
             initialValue={50}
-            strokeWidth={20}
+            strokeWidth={15}
             activeColor='#4CAF50'
             inactiveColor='#E0E0E0'
             knobColor='#2196F3'
