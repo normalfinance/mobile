@@ -1,19 +1,17 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useRouter } from "expo-router";
 import { useAuth } from "@clerk/clerk-expo";
 import { Alert } from "react-native";
+import { Image } from "expo-image";
 import {
   YStack,
   XStack,
-  H2,
-  H3,
-  H6,
   Text,
   Button,
-  Input,
   TextArea,
-  Separator,
-  Spinner
+  Spinner,
+  ScrollView,
+  Separator
 } from "tamagui";
 import {
   useCreateWallet,
@@ -29,16 +27,6 @@ import VerificationModal from "@/components/wallet/VerificationModal";
 import ImportMnemonicForm from "@/components/wallet/ImportMnemonicForm";
 
 // Utility functions
-const validatePrivateKey = (privateKey: string) => {
-  // Stellar private keys start with 'S' and are 56 characters long
-  const trimmed = privateKey.trim();
-  return trimmed.length === 56 && trimmed.startsWith("S");
-};
-
-const getWalletErrorMessage = (error: string) => {
-  return error || "An unknown error occurred";
-};
-
 export default function WalletSetupScreen() {
   const { userId } = useAuth();
   const router = useRouter();
@@ -229,13 +217,12 @@ export default function WalletSetupScreen() {
     return (
       <YStack
         flex={1}
-        // @ts-ignore
         justifyContent='center'
         alignItems='center'
-        backgroundColor='$background'
+        backgroundColor='#F6F8FF'
       >
-        <Spinner size='large' color='$blue10' />
-        <Text mt='$4' color='$color11'>
+        <Spinner size='large' color='#2563EB' />
+        <Text mt='$4' color='#4B5567'>
           {showImportForm ? "Importing wallet..." : "Creating wallet..."}
         </Text>
       </YStack>
@@ -243,172 +230,216 @@ export default function WalletSetupScreen() {
   }
 
   return (
-    // @ts-ignore
-    <YStack flex={1} p='$4' backgroundColor='$background'>
-      // @ts-ignore
-      <YStack mt='$6' mb='$6'>
-        {/* @ts-ignore */}
-        <H2 textAlign='center' mb='$2'>
-          Set Up Your Wallet
-        </H2>
-        {/* @ts-ignore */}
-        <Text textAlign='center' color='$color11'>
-          You need a Stellar wallet to use Normal Finance
-        </Text>
-      </YStack>
-      {!showImportForm ? (
-        // @ts-ignore
-        <YStack flex={1} justifyContent='center'>
-          <YStack mb='$6'>
-            <Button
-              size='$5'
-              theme='blue'
-              mb='$4'
-              onPress={handleCreateNewWallet}
-              disabled={isLoading}
-            >
-              <Text fontSize='$5' fontWeight='600'>
-                Create New Wallet
-              </Text>
-            </Button>
-
-            <Text
-              // @ts-ignore
-              textAlign='center'
-              fontSize='$3'
-              color='$color11'
-              marginBottom='$4'
-            >
-              This will create a new Stellar wallet linked to your account
-            </Text>
-          </YStack>
-          <XStack
-            // @ts-ignore
-            justifyContent='center'
-            alignItems='center'
-            mv='$4'
-          >
-            <Separator flex={1} mr='$3' />
-            <Text color='$color10'>OR</Text>
-            <Separator flex={1} ml='$3' />
-          </XStack>
-          <YStack mt='$6'>
-            <Button
-              size='$5'
-              variant='outlined'
-              onPress={() => setShowImportForm(true)}
-              disabled={isLoading}
-            >
-              <Text fontSize='$5' fontWeight='600'>
-                Import Existing Wallet
-              </Text>
-            </Button>
-
-            <Text
-              // @ts-ignore
-              textAlign='center'
-              fontSize='$3'
-              color='$color11'
-              marginTop='$4'
-            >
-              Use your existing private key or recovery phrase
-            </Text>
-          </YStack>
+    <ScrollView
+      flex={1}
+      backgroundColor='#FFFFFF'
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={{
+        flexGrow: 1,
+        paddingHorizontal: 24,
+        paddingVertical: 40,
+        alignItems: "center"
+      }}
+    >
+      <YStack
+        width='100%'
+        space='$6'
+        alignItems='center'
+        justifyContent='center'
+        flex={1}
+      >
+        <YStack alignItems='center' space='$4'>
+          <Text fontSize='$10' fontWeight='700' color='#1C252E'>
+            Wallet Setup
+          </Text>
+          <Image
+            source={require("@/assets/icons/auth/wallet.png")}
+            style={{ width: 240, height: 240 }}
+            contentFit='contain'
+          />
         </YStack>
-      ) : (
-        <YStack flex={1}>
-          <Button
-            size='$3'
-            variant='outlined'
-            // @ts-ignore
-            alignSelf='flex-start'
-            mb='$4'
-            onPress={() => {
-              setShowImportForm(false);
-              setPrivateKey("");
-              setPrivateKeyError("");
-              setImportType("private-key");
-            }}
+
+        {!showImportForm ? (
+          <YStack
+            backgroundColor='#F8FAFC'
+            borderRadius={14}
+            width='100%'
+            p='$4'
+            space='$5'
           >
-            <Text>← Back</Text>
-          </Button>
-
-          <H3 mb='$4'>Import Your Wallet</H3>
-
-          <XStack space='$2' mb='$4'>
-            <Button
-              size='$3'
-              variant={
-                importType === "private-key" ? "solid" : ("outlined" as any)
-              }
-              theme={importType === "private-key" ? "blue" : undefined}
-              onPress={() => setImportType("private-key")}
-              flex={1}
-            >
-              <Text>Private Key</Text>
-            </Button>
-            <Button
-              size='$3'
-              variant={
-                importType === "mnemonic" ? "solid" : ("outlined" as any)
-              }
-              theme={importType === "mnemonic" ? "blue" : undefined}
-              onPress={() => setImportType("mnemonic")}
-              flex={1}
-            >
-              <Text>Recovery Phrase</Text>
-            </Button>
-          </XStack>
-
-          {importType === "private-key" ? (
             <YStack space='$3'>
-              <Text fontSize='$4' color='$color11' mb='$3'>
-                Enter your private key
+              <Text fontSize={16} fontWeight='500' color='#637381'>
+                Dont have a wallet?
               </Text>
-
-              <TextArea
-                size='$4'
-                placeholder='Enter your Stellar private key (starts with S...)'
-                value={privateKey}
-                onChangeText={handlePrivateKeyChange}
-                numberOfLines={3}
-                borderColor={privateKeyError ? "$red8" : "$borderColor"}
-                mb='$2'
-                autoCapitalize='none'
-                autoCorrect={false}
-              />
-
-              {privateKeyError ? (
-                <Text color='$red10' fontSize='$3' mb='$4'>
-                  {privateKeyError}
-                </Text>
-              ) : null}
-
-              <Text fontSize='$2' color='$color10' mb='$6'>
-                Your private key should start with 'S' and be 56 characters long
-              </Text>
-
               <Button
-                size='$5'
-                theme='blue'
-                onPress={handleImportWallet}
-                disabled={isLoading || !privateKey.trim()}
+                height={46}
+                borderRadius={4}
+                backgroundColor='#4B5563'
+                pressStyle={{ backgroundColor: "#374151" }}
+                onPress={handleCreateNewWallet}
+                disabled={isLoading}
               >
-                <Text fontSize='$5' fontWeight='600'>
-                  Import Wallet
+                <Text color='#FFFFFF' fontSize={14} fontWeight='700'>
+                  Create a new wallet
                 </Text>
               </Button>
             </YStack>
-          ) : (
-            <ImportMnemonicForm
-              onImport={handleMnemonicImport}
-              onBack={() => setImportType("private-key")}
-              isLoading={importFromMnemonic.isPending}
-              error={importFromMnemonic.error?.message}
-            />
-          )}
-        </YStack>
-      )}
+
+            <YStack space='$3'>
+              <Text fontSize={16} fontWeight='500' color='#637381'>
+                Already have a wallet?
+              </Text>
+              <Button
+                height={42}
+                borderRadius={4}
+                backgroundColor='#0F172A'
+                pressStyle={{ backgroundColor: "#0B1220" }}
+                onPress={() => setShowImportForm(true)}
+                disabled={isLoading}
+              >
+                <Text color='#FFFFFF' fontSize={14} fontWeight='700'>
+                  Import an existing wallet
+                </Text>
+              </Button>
+            </YStack>
+          </YStack>
+        ) : (
+          <YStack width='100%' space='$5'>
+            <Button
+              size='$3'
+              variant='outlined'
+              alignSelf='flex-start'
+              borderRadius={14}
+              px='$4'
+              onPress={() => {
+                setShowImportForm(false);
+                setPrivateKey("");
+                setPrivateKeyError("");
+                setImportType("private-key");
+              }}
+            >
+              <Text fontSize={15} fontWeight='500'>
+                ← Back
+              </Text>
+            </Button>
+
+            <YStack
+              backgroundColor='#FFFFFF'
+              borderRadius={24}
+              p='$5'
+              space='$4'
+              shadowColor='rgba(15, 23, 42, 0.12)'
+              shadowOffset={{ width: 0, height: 16 }}
+              shadowOpacity={0.08}
+              shadowRadius={28}
+            >
+              <Text fontSize={22} fontWeight='600' color='#0F172A'>
+                Import your wallet
+              </Text>
+
+              <XStack
+                backgroundColor='#F1F5F9'
+                borderRadius={14}
+                p='$1'
+                space='$2'
+              >
+                <Button
+                  flex={1}
+                  height={46}
+                  borderRadius={12}
+                  backgroundColor={
+                    importType === "private-key" ? "#FFFFFF" : "transparent"
+                  }
+                  color={importType === "private-key" ? "#0F172A" : "#6B7280"}
+                  onPress={() => setImportType("private-key")}
+                >
+                  <Text
+                    fontSize={14}
+                    fontWeight='600'
+                    color={importType === "private-key" ? "#0F172A" : "#6B7280"}
+                  >
+                    Private key
+                  </Text>
+                </Button>
+                <Button
+                  flex={1}
+                  height={46}
+                  borderRadius={12}
+                  backgroundColor={
+                    importType === "mnemonic" ? "#FFFFFF" : "transparent"
+                  }
+                  color={importType === "mnemonic" ? "#0F172A" : "#6B7280"}
+                  onPress={() => setImportType("mnemonic")}
+                >
+                  <Text
+                    fontSize={14}
+                    fontWeight='600'
+                    color={importType === "mnemonic" ? "#0F172A" : "#6B7280"}
+                  >
+                    Recovery phrase
+                  </Text>
+                </Button>
+              </XStack>
+
+              {importType === "private-key" ? (
+                <YStack space='$3'>
+                  <Text fontSize={15} color='#4B5563'>
+                    Enter your private key below to import your Stellar wallet.
+                  </Text>
+
+                  <TextArea
+                    size='$4'
+                    placeholder='Enter your Stellar private key (starts with S...)'
+                    value={privateKey}
+                    onChangeText={handlePrivateKeyChange}
+                    numberOfLines={4}
+                    borderRadius={16}
+                    borderColor={privateKeyError ? "#F87171" : "#E2E8F0"}
+                    backgroundColor='#F8FAFC'
+                    color='#0F172A'
+                    autoCapitalize='none'
+                    autoCorrect={false}
+                    px='$4'
+                    py='$3'
+                  />
+
+                  {privateKeyError ? (
+                    <Text color='#DC2626' fontSize={13}>
+                      {privateKeyError}
+                    </Text>
+                  ) : null}
+
+                  <Text fontSize={12} color='#94A3B8'>
+                    Your private key should start with "S" and be 56 characters
+                    long.
+                  </Text>
+
+                  <Button
+                    height={52}
+                    borderRadius={16}
+                    backgroundColor='#0F172A'
+                    pressStyle={{ backgroundColor: "#0B1220" }}
+                    onPress={handleImportWallet}
+                    disabled={isLoading || !privateKey.trim()}
+                  >
+                    <Text color='#FFFFFF' fontSize={15} fontWeight='600'>
+                      Import wallet
+                    </Text>
+                  </Button>
+                </YStack>
+              ) : (
+                <ImportMnemonicForm
+                  onImport={handleMnemonicImport}
+                  onBack={() => setImportType("private-key")}
+                  isLoading={importFromMnemonic.isPending}
+                  error={importFromMnemonic.error?.message}
+                />
+              )}
+            </YStack>
+          </YStack>
+        )}
+      </YStack>
+
       <BackupPhraseModal
         visible={showBackupModal}
         mnemonic={currentMnemonic}
@@ -421,6 +452,6 @@ export default function WalletSetupScreen() {
         onClose={handleCloseVerification}
         onVerificationComplete={handleVerificationComplete}
       />
-    </YStack>
+    </ScrollView>
   );
 }
