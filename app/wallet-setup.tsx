@@ -453,23 +453,27 @@ export default function WalletSetupScreen() {
             paddingVertical: 15
           }}
         >
-
           <YStack space='$6'>
-            <XStack alignItems='center' space='$3' justifyContent='flex-start'  width='100%'>
-            <Button
-              size='$3'
-              variant='outlined'
-              borderColor='transparent'
-              backgroundColor='transparent'
-              pressStyle={{ opacity: 0.7 }}
-              onPress={() => setSuccessStage("summary")}
-              textAlign='left'
-              padding='0'
-              width={"auto"}
-              height={'auto'}
+            <XStack
+              alignItems='center'
+              space='$3'
+              justifyContent='flex-start'
+              width='100%'
             >
-              <ArrowLeft size={24} color='#637381' />
-            </Button>
+              <Button
+                size='$3'
+                variant='outlined'
+                borderColor='transparent'
+                backgroundColor='transparent'
+                pressStyle={{ opacity: 0.7 }}
+                onPress={() => setSuccessStage("summary")}
+                textAlign='left'
+                padding='0'
+                width={"auto"}
+                height={"auto"}
+              >
+                <ArrowLeft size={24} color='#637381' />
+              </Button>
             </XStack>
 
             <YStack space='$3' paddingHorizontal='0'>
@@ -561,49 +565,88 @@ export default function WalletSetupScreen() {
           padding='$6'
           justifyContent='space-between'
         >
-          <YStack flex={1} justifyContent='center' space='$8'>
-            {/* Progress Dots */}
-            <XStack justifyContent='center' space='$3'>
-              {verificationQuestions.map((_, index) => (
-                <YStack
-                  key={index}
-                  width={10}
-                  height={10}
-                  borderRadius={5}
-                  backgroundColor={
-                    index === currentQuestionIndex
-                      ? "#4B5563"
-                      : index < currentQuestionIndex
-                      ? "#94A3B8"
-                      : "#E5E7EB"
-                  }
-                />
-              ))}
-            </XStack>
-
+          <XStack
+            alignItems='center'
+            justifyContent='flex-start'
+            width='100%'
+            marginBottom='$4'
+            space='$3'
+          >
+            <Button
+              size='$3'
+              variant='outlined'
+              borderColor='transparent'
+              backgroundColor='transparent'
+              pressStyle={{ opacity: 0.7 }}
+              onPress={() => setSuccessStage("summary")}
+              textAlign='left'
+              padding='0'
+              width={"auto"}
+              height={"auto"}
+            >
+              <ArrowLeft size={24} color='#637381' />
+            </Button>
+          </XStack>
+          <YStack
+            flex={1}
+            justifyContent='flex-start'
+            space='$8'
+            alignItems='flex-start'
+          >
             {/* Question Content */}
             {currentQuestion && (
-              <YStack space='$5' alignItems='center'>
-                <YStack space='$3' alignItems='center'>
+              <YStack space='$5' alignItems='flex-start' width='100%'>
+                <YStack space='$3' alignItems='flex-start' width='100%'>
                   <Text
-                    fontSize='$9'
+                    fontSize={24}
                     fontWeight='700'
                     color='#1C252E'
                     textAlign='center'
                   >
                     Verify Your Backup
                   </Text>
+                  {/* Progress Dots */}
+                  <XStack justifyContent='center' space='$3'>
+                    {verificationQuestions.map((_, index) => (
+                      <YStack
+                        key={index}
+                        width={10}
+                        height={10}
+                        borderRadius={5}
+                        backgroundColor={
+                          index === currentQuestionIndex
+                            ? "#4B5563"
+                            : index < currentQuestionIndex
+                            ? "#94A3B8"
+                            : "#E5E7EB"
+                        }
+                      />
+                    ))}
+                  </XStack>
                   <Text
-                    fontSize='$5'
-                    fontWeight='600'
+                    fontSize='$2'
+                    fontWeight='700'
                     color='#1E293B'
                     textAlign='center'
                   >
-                    What is word #{currentQuestion.index}?
+                    Select the {currentQuestion.index}
+                    {currentQuestion.index === 1
+                      ? "st"
+                      : currentQuestion.index === 2
+                      ? "nd"
+                      : currentQuestion.index === 3
+                      ? "rd"
+                      : "th"}{" "}
+                    word
                   </Text>
                 </YStack>
 
-                <YStack width='100%' space='$2'>
+                <YStack
+                  width='100%'
+                  space='$2'
+                  alignItems='flex-start'
+                  justifyContent='flex-start'
+                >
                   {currentQuestion.options.map((option, optIndex) => {
                     const isSelected =
                       selectedAnswers[currentQuestion.index] === option;
@@ -612,15 +655,18 @@ export default function WalletSetupScreen() {
                     return (
                       <Button
                         key={optIndex}
-                        size='$5'
+                        height={46}
                         variant='outlined'
+                        textAlign='left'
+                        borderRadius={4}
                         borderColor={
                           hasError && isSelected
                             ? "#EF4444"
                             : isSelected
-                            ? "#4B5563"
-                            : "#E5E7EB"
+                            ? "#919EABB0"
+                            : "#919EAB1F"
                         }
+                        borderWidth={1}
                         backgroundColor={isSelected ? "#F8FAFC" : "#FFFFFF"}
                         pressStyle={{
                           backgroundColor: "#F9FAFB",
@@ -629,17 +675,19 @@ export default function WalletSetupScreen() {
                         onPress={() =>
                           handleSelectAnswer(currentQuestion.index, option)
                         }
+                        width='100%'
                       >
                         <Text
                           color={
                             hasError && isSelected
                               ? "#EF4444"
                               : isSelected
-                              ? "#1E293B"
-                              : "#64748B"
+                              ? "#1C252E"
+                              : "#637381"
                           }
-                          fontSize='$4'
-                          fontWeight={isSelected ? "600" : "500"}
+                          fontSize={12}
+                          fontWeight={"700"}
+                          textAlign='center'
                         >
                           {option}
                         </Text>
@@ -680,30 +728,14 @@ export default function WalletSetupScreen() {
                 backgroundColor='transparent'
                 pressStyle={{ backgroundColor: "#F9FAFB" }}
                 onPress={() => setCurrentQuestionIndex((prev) => prev - 1)}
+                borderRadius={4}
+                width='100%'
               >
-                <Text color='#4B5563' fontSize='$4' fontWeight='600'>
+                <Text color='#1C252E' fontSize={14} fontWeight='600'>
                   Previous Question
                 </Text>
               </Button>
             )}
-
-            <Button
-              size='$4'
-              variant='outlined'
-              borderColor='transparent'
-              backgroundColor='transparent'
-              pressStyle={{ opacity: 0.7 }}
-              onPress={() => {
-                setSuccessStage("backup");
-                setCurrentQuestionIndex(0);
-                setSelectedAnswers({});
-                setAnswerErrors({});
-              }}
-            >
-              <Text color='#94A3B8' fontSize='$4' fontWeight='500'>
-                Go Back
-              </Text>
-            </Button>
           </YStack>
         </YStack>
       );

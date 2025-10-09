@@ -204,7 +204,7 @@ export default function PasswordlessSignIn({
               code.length === 6 && !isVerifying ? "#1C252E" : "#F2F4F7"
             }
             size='$4'
-            borderRadius={16}
+            borderRadius={6}
             borderWidth={1}
             borderColor={
               code.length === 6 && !isVerifying ? "#1C252E" : "$borderColor"
@@ -229,7 +229,7 @@ export default function PasswordlessSignIn({
               disabled={cooldown > 0}
               opacity={cooldown > 0 ? 0.6 : 1}
               paddingHorizontal={16}
-              borderRadius={16}
+              borderRadius={6}
               borderWidth={1}
               borderColor={cooldown > 0 ? "#1C252E" : "$borderColor"}
             >
@@ -242,7 +242,7 @@ export default function PasswordlessSignIn({
               size='$3'
               variant='outlined'
               onPress={resetFlow}
-              borderRadius={16}
+              borderRadius={6}
               borderWidth={1}
               borderColor='$borderColor'
             >
