@@ -1,28 +1,22 @@
-import { useOAuth, useSignIn } from "@clerk/clerk-expo";
+import { useOAuth } from "@clerk/clerk-expo";
 import { Link, useRouter } from "expo-router";
-import { Alert } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import React, { useEffect } from "react";
+import { Alert } from "react-native";
+import { Image } from "expo-image";
 import PasswordlessSignIn from "@/components/passwordless-signin";
-import {
-  Button,
-  Text,
-  H6,
-  H3,
-  H4,
-  Input,
-  XStack,
-  YStack,
-  Separator
-} from "tamagui";
+import { Button, Paragraph, Text, XStack, YStack } from "tamagui";
 
-export default function Page() {
-  const { signIn, setActive, isLoaded } = useSignIn();
-  const router = useRouter();
+const useWarmUpBrowser = () => {
+  useEffect(() => {
+    void WebBrowser.warmUpAsync();
+    return () => {
+      void WebBrowser.coolDownAsync();
+    };
+  }, []);
+};
 
-  const [emailAddress, setEmailAddress] = React.useState("");
-  const [password, setPassword] = React.useState("");
-
+export default function SignInScreen() {
   const { startOAuthFlow: startGoogleOAuthFlow } = useOAuth({
     strategy: "oauth_google"
   });
@@ -30,48 +24,16 @@ export default function Page() {
     strategy: "oauth_apple"
   });
 
-  const useWarmUpBrowser = () => {
-    useEffect(() => {
-      console.log("useWarmUpBrowser");
-      void WebBrowser.warmUpAsync();
-      return () => {
-        console.log("useWarmUpBrowser coolDownAsync");
-        void WebBrowser.coolDownAsync();
-      };
-    }, []);
-  };
+  const router = useRouter();
 
   useWarmUpBrowser();
 
-  const onPasswordSignInPress = React.useCallback(async () => {
-    if (!isLoaded) return;
-
-    try {
-      const signInAttempt = await signIn.create({
-        identifier: emailAddress,
-        password
-      });
-
-      if (signInAttempt.status === "complete") {
-        await setActive({ session: signInAttempt.createdSessionId });
-        router.replace("/");
-      } else {
-        console.error("Sign-in not complete", signInAttempt);
-      }
-    } catch (err: any) {
-      console.error("Password sign-in error", err);
-      Alert.alert("Error", err.errors?.[0]?.message || "Failed to sign in");
-    }
-  }, [isLoaded, emailAddress, password, signIn, setActive, router]);
-
   const onGoogleSignInPress = React.useCallback(async () => {
-    console.log("onGoogleSignInPress");
     try {
       const { createdSessionId, setActive } = await startGoogleOAuthFlow({});
 
       if (createdSessionId) {
-        console.log("createdSessionId", createdSessionId);
-        setActive!({ session: createdSessionId });
+        setActive?.({ session: createdSessionId });
         router.replace("/");
       }
     } catch (err) {
@@ -81,13 +43,11 @@ export default function Page() {
   }, [startGoogleOAuthFlow, router]);
 
   const onAppleSignInPress = React.useCallback(async () => {
-    console.log("onAppleSignInPress");
     try {
       const { createdSessionId, setActive } = await startAppleOAuthFlow({});
 
       if (createdSessionId) {
-        console.log("createdSessionId", createdSessionId);
-        setActive!({ session: createdSessionId });
+        setActive?.({ session: createdSessionId });
         router.replace("/");
       }
     } catch (err) {
@@ -97,105 +57,102 @@ export default function Page() {
   }, [startAppleOAuthFlow, router]);
 
   return (
-    <YStack flex={1} px='$4'>
-      <H3 my='$3'>Auth boilerplates</H3>
-      {/* Password sign-in */}
-      <YStack>
-        <H6 mb='$3'>Sign in with Email & Password</H6>
-        <Input
-          size='$4'
-          mb='$3'
-          borderWidth={1}
-          borderColor='$borderColor'
-          autoCapitalize='none'
-          value={emailAddress}
-          placeholder='Enter email'
-          keyboardType='email-address'
-          onChangeText={setEmailAddress}
-        />
-        <Input
-          size='$4'
-          mb='$3'
-          borderWidth={1}
-          borderColor='$borderColor'
-          value={password}
-          placeholder='Enter password'
-          secureTextEntry={true}
-          onChangeText={setPassword}
-        />
-        <Button
-          theme={emailAddress && password ? "blue" : null}
-          size='$4'
-          mb='$3'
-          onPress={onPasswordSignInPress}
-          disabled={!emailAddress || !password}
+    <YStack
+      flex={1}
+      bg='#F7F8FA'
+      alignItems='center'
+      justifyContent='space-around'
+      p='$4'
+    >
+      <YStack alignItems='center' space='$4' justifyContent='space-between'>
+        <YStack
+          width={64}
+          height={64}
+          borderRadius={44}
+          borderWidth={3}
+          borderColor='rgba(148,163,184,0.1)'
+          bg='white'
+          alignItems='center'
+          justifyContent='center'
+          shadowColor='rgba(15, 23, 42, 0.08)'
+          shadowOffset={{ width: 0, height: 12 }}
+          shadowOpacity={1}
+          shadowRadius={24}
+          overflow='hidden'
         >
-          Sign In
-        </Button>
-      </YStack>
-      {/* OR Separator */}
-      {/* @ts-ignore */}
-      <XStack
-        justify='center'
-        alignItems='center'
-        justifyContent='center'
-        my='$3'
-      >
-        <Separator flex={1} mr='$3' />
-        <Text color='$color10'>OR</Text>
-        <Separator flex={1} ml='$3' />
-      </XStack>
-      {/* Passwordless sign-in */}
-      <YStack>
-        <PasswordlessSignIn />
-      </YStack>
-      {/* OR Separator */}
-      {/* @ts-ignore */}
-      <XStack
-        justify='center'
-        alignItems='center'
-        justifyContent='center'
-        my='$3'
-      >
-        <Separator flex={1} mr='$3' />
-        <Text color='$color10'>OR</Text>
-        <Separator flex={1} ml='$3' />
-      </XStack>
-      {/* OAuth sign-in */}
-      <YStack>
-        <H6 mb='$3'>Continue with Google</H6>
-        <Button theme='blue' size='$4' onPress={onGoogleSignInPress} mb='$3'>
-          Continue with Google
-        </Button>
-      </YStack>
-      {/* OR Separator */}
-      {/* @ts-ignore */}
-      <XStack
-        justify='center'
-        alignItems='center'
-        justifyContent='center'
-        my='$3'
-      >
-        <Separator flex={1} mr='$3' />
-        <Text color='$color10'>OR</Text>
-        <Separator flex={1} ml='$3' />
-      </XStack>
-      {/* Apple OAuth sign-in */}
-      <YStack>
-        <H6 mb='$3'>Continue with Apple</H6>
-        <Button theme='gray' size='$4' onPress={onAppleSignInPress} mb='$3'>
-          Continue with Apple
-        </Button>
-      </YStack>
-      {/* Sign up link */}
-      <XStack>
-        <Text color='$color10'>Dont have an account?</Text>
-        <Link href='/sign-up'>
-          <Text color='$blue10' fontWeight='bold'>
-            Sign up
+          <Image
+            source={require("@/assets/icons/normal.png")}
+            style={{ width: 56, height: 56 }}
+          />
+        </YStack>
+
+        <YStack space='$2' alignItems='center'>
+          <Text fontSize={24} fontWeight='500' color='#0D0D12'>
+            Sign in to your account
           </Text>
-        </Link>
+          <Paragraph
+            color='#666D80'
+            textAlign='center'
+            fontWeight='400'
+            fontSize={16}
+          >
+            Welcome back! Please enter your details
+          </Paragraph>
+        </YStack>
+      </YStack>
+
+      <PasswordlessSignIn onSuccess={() => router.replace("/")} />
+      <XStack
+        // @ts-ignore
+        justifyContent='center'
+        alignItems='center'
+        mv='$4'
+      >
+        <Separator flex={1} mr='$3' />
+        <Text color='$color10'>OR</Text>
+        <Separator flex={1} ml='$3' />
       </XStack>
+
+      <YStack space='$3' width='100%'>
+        <Button
+          size='$5'
+          backgroundColor='#FFFFFF'
+          borderColor='rgba(208, 213, 221, 0.8)'
+          borderWidth={1}
+          borderRadius={6}
+          fontWeight='600'
+          onPress={onGoogleSignInPress}
+        >
+          <XStack alignItems='center' justifyContent='center' space='$3'>
+            <Image
+              source={require("@/assets/icons/auth/google.png")}
+              style={{ width: 24, height: 24 }}
+            />
+            <Text color='#101828' fontWeight='600'>
+              Sign in with Google
+            </Text>
+          </XStack>
+        </Button>
+
+        <Button
+          size='$5'
+          backgroundColor='#FFFFFF'
+          borderColor='$borderColor'
+          borderWidth={1}
+          borderRadius={6}
+          onPress={onAppleSignInPress}
+        >
+          <XStack alignItems='center' justifyContent='center' space='$3'>
+            <Image
+              source={require("@/assets/icons/auth/apple.png")}
+              style={{ width: 24, height: 24 }}
+            />
+            <Text color='#1C252E' fontWeight='600'>
+              Sign in with Apple
+            </Text>
+          </XStack>
+        </Button>
+      </YStack>
     </YStack>
   );
 }
