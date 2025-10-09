@@ -1,6 +1,23 @@
 import * as SecureStore from "expo-secure-store";
 import { STORAGE_KEYS, STORAGE_ERRORS } from "../constants/storage.constants";
 
+const BIGINT_TAG = "__bigint__";
+
+const serializeForStorage = (value: unknown): string =>
+  JSON.stringify(value, (_, v) =>
+    typeof v === "bigint" ? { [BIGINT_TAG]: v.toString() } : v
+  );
+
+const deserializeFromStorage = <T>(raw: string): T =>
+  JSON.parse(raw, (_, v) =>
+    v && typeof v === "object" && BIGINT_TAG in v ? BigInt(v[BIGINT_TAG]) : v
+  );
+
+const shouldBypassSerialization = (key: string): boolean =>
+  key === STORAGE_KEYS.WALLET ||
+  key === STORAGE_KEYS.PRIVATE_KEY ||
+  key === STORAGE_KEYS.USER_ID;
+
 export const secureStorage = {
   async setItem(key: string, value: string): Promise<void> {
     try {
@@ -29,7 +46,10 @@ export const secureStorage = {
   },
 
   async setJSON<T>(key: string, value: T): Promise<void> {
-    await this.setItem(key, JSON.stringify(Number(value)));
+    const payload = shouldBypassSerialization(key)
+      ? JSON.stringify(value)
+      : serializeForStorage(value);
+    await this.setItem(key, payload);
   },
 
   async getJSON<T>(key: string): Promise<T | null> {
@@ -37,7 +57,9 @@ export const secureStorage = {
     if (!item) return null;
 
     try {
-      return JSON.parse(item);
+      return shouldBypassSerialization(key)
+        ? JSON.parse(item)
+        : deserializeFromStorage<T>(item);
     } catch (error) {
       console.error("Failed to parse JSON from storage:", error);
       return null;
@@ -103,7 +125,9 @@ export const cacheStorage = {
   // Get the list of all cache keys
   async getCacheKeysList(): Promise<string[]> {
     try {
-      const keys = await secureStorage.getJSON<string[]>(STORAGE_KEYS.ORACLE_CACHE_KEYS);
+      const keys = await secureStorage.getJSON<string[]>(
+        STORAGE_KEYS.ORACLE_CACHE_KEYS
+      );
       return keys || [];
     } catch (error) {
       console.error("Failed to get cache keys list:", error);
@@ -139,7 +163,7 @@ export const cacheStorage = {
   async removeCacheKey(key: string): Promise<void> {
     try {
       const keys = await this.getCacheKeysList();
-      const filteredKeys = keys.filter(k => k !== key);
+      const filteredKeys = keys.filter((k) => k !== key);
       await this.updateCacheKeysList(filteredKeys);
     } catch (error) {
       console.error(`${STORAGE_ERRORS.FAILED_TO_MANAGE_CACHE}:`, error);
@@ -151,7 +175,7 @@ export const cacheStorage = {
   async getKeysWithPrefix(prefix: string): Promise<string[]> {
     try {
       const keys = await this.getCacheKeysList();
-      return keys.filter(key => key.startsWith(prefix));
+      return keys.filter((key) => key.startsWith(prefix));
     } catch (error) {
       console.error("Failed to get keys with prefix:", error);
       return [];
@@ -194,12 +218,12 @@ export const cacheStorage = {
   async multiRemove(keys: string[]): Promise<void> {
     try {
       // Remove all items from secure storage
-      const removePromises = keys.map(key => secureStorage.deleteItem(key));
+      const removePromises = keys.map((key) => secureStorage.deleteItem(key));
       await Promise.all(removePromises);
 
       // Update the cache keys list by removing all the deleted keys
       const currentKeys = await this.getCacheKeysList();
-      const remainingKeys = currentKeys.filter(key => !keys.includes(key));
+      const remainingKeys = currentKeys.filter((key) => !keys.includes(key));
       await this.updateCacheKeysList(remainingKeys);
     } catch (error) {
       console.error("Failed to remove multiple cache items:", error);

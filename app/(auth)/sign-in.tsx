@@ -5,7 +5,7 @@ import React, { useEffect } from "react";
 import { Alert } from "react-native";
 import { Image } from "expo-image";
 import PasswordlessSignIn from "@/components/passwordless-signin";
-import { Button, Paragraph, Text, XStack, YStack } from "tamagui";
+import { Button, Paragraph, Text, XStack, YStack, Separator } from "tamagui";
 
 const useWarmUpBrowser = () => {
   useEffect(() => {
