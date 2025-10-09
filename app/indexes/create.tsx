@@ -13,12 +13,11 @@ import {
   TextArea
 } from "tamagui";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { ChevronDown, User } from "lucide-react-native";
+import { User } from "lucide-react-native";
 import Svg, { Path } from "react-native-svg";
 
-import { Select, type SelectProps } from "@tamagui/select";
-import { Adapt } from "@tamagui/adapt";
-import { Sheet } from "@tamagui/sheet";
+import { Picker } from '@react-native-picker/picker';
+import { View } from 'react-native';
 
 import { AssetIcon } from "@/components/ui/AssetIcon";
 import SemiCircleGauge from "@/components/index/guage";
@@ -127,20 +126,6 @@ const AllocationRow: React.FC<{
   );
 };
 
-const SelectTrigger: React.FC<SelectProps> = (props) => {
-  return (
-    <Select.Trigger
-      {...props}
-      iconAfter={<ChevronDown size={16} color='#1C252E' />}
-      height={52}
-      borderRadius={12}
-      borderColor='#DFE3E8'
-      backgroundColor='#F9FAFB'
-    >
-      <Select.Value placeholder='Choose weighting' />
-    </Select.Trigger>
-  );
-};
 
 const CreateIndexScreen: React.FC = () => {
   const router = useRouter();
@@ -282,39 +267,30 @@ const CreateIndexScreen: React.FC = () => {
             <Text fontSize='$2' fontWeight='600' color='#1C252E'>
               Weighting method
             </Text>
-            {/* <Select value={weighting} onValueChange={setWeighting}>
-                <SelectTrigger />
-
-                <Adapt when='sm' platform='touch'>
-                  <Sheet
-                    modal
-                    dismissOnSnapToBottom
-                    animation='quick'
-                    snapPoints={[60]}
-                  >
-                    <Sheet.Frame>
-                      <Sheet.Handle />
-                      <Select.ScrollView>
-                        {weightingOptions.map((option) => (
-                          <Select.Item key={option.value} value={option.value}>
-                            <Select.ItemText>{option.label}</Select.ItemText>
-                          </Select.Item>
-                        ))}
-                      </Select.ScrollView>
-                    </Sheet.Frame>
-                  </Sheet>
-                </Adapt>
-
-                <Select.Content zIndex={1000}>
-                  <Select.ScrollView>
-                    {weightingOptions.map((option) => (
-                      <Select.Item key={option.value} value={option.value}>
-                        <Select.ItemText>{option.label}</Select.ItemText>
-                      </Select.Item>
-                    ))}
-                  </Select.ScrollView>
-                </Select.Content>
-              </Select> */}
+            <View
+              style={{
+                height: 52,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: '#DFE3E8',
+                backgroundColor: '#F9FAFB',
+                justifyContent: 'center'
+              }}
+            >
+              <Picker
+                selectedValue={weighting}
+                onValueChange={setWeighting}
+                style={{ height: 50 }}
+              >
+                {weightingOptions.map((option) => (
+                  <Picker.Item
+                    key={option.value}
+                    label={option.label}
+                    value={option.value}
+                  />
+                ))}
+              </Picker>
+            </View>
           </YStack>
         </YStack>
 
