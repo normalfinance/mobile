@@ -134,9 +134,7 @@ export default function PasswordlessSignIn({
   };
 
   return (
-    <YStack space='$3'>
-      <H6>Passwordless Sign In</H6>
-
+    <YStack space='$3' width='100%'>
       {!emailSent ? (
         <YStack space='$3'>
           <Input
@@ -153,13 +151,21 @@ export default function PasswordlessSignIn({
           />
 
           <Button
-            theme={email.trim() && !isLoading ? "blue" : undefined}
+            backgroundColor={email.trim() && !isLoading ? "#1C252E" : "#F2F4F7"}
             size='$4'
             onPress={sendCode}
             disabled={!email.trim() || isLoading}
             opacity={!email.trim() || isLoading ? 0.6 : 1}
+            borderRadius={6}
+            borderWidth={1}
+            borderColor={
+              email.trim() && !isLoading ? "#1C252E" : "$borderColor"
+            }
           >
-            <Text color='white' fontWeight='bold'>
+            <Text
+              color={email.trim() && !isLoading ? "white" : "#1C252E"}
+              fontWeight='600'
+            >
               {isLoading ? "Sending..." : "Send Code"}
             </Text>
           </Button>
@@ -167,15 +173,15 @@ export default function PasswordlessSignIn({
       ) : (
         <YStack space='$3'>
           <YStack
-            bg='$blue2'
+            bg='#F2F4F7'
             p='$3'
             borderLeftWidth={4}
-            borderLeftColor='$blue8'
+            borderLeftColor='#1C252E'
           >
-            <Text fontSize='$4' color='$blue11' fontWeight='600'>
+            <Text fontSize='$4' color='#1C252E' fontWeight='600'>
               Code sent to {email}
             </Text>
-            <Text fontSize='$3' color='$blue10' mt='$1'>
+            <Text fontSize='$3' color='#666D80' mt='$1'>
               Enter the 6-digit code from your email below.
             </Text>
           </YStack>
@@ -194,13 +200,23 @@ export default function PasswordlessSignIn({
           />
 
           <Button
-            theme={code.length === 6 && !isVerifying ? "blue" : undefined}
+            backgroundColor={
+              code.length === 6 && !isVerifying ? "#1C252E" : "#F2F4F7"
+            }
             size='$4'
+            borderRadius={6}
+            borderWidth={1}
+            borderColor={
+              code.length === 6 && !isVerifying ? "#1C252E" : "$borderColor"
+            }
             onPress={verifyCode}
             disabled={code.length !== 6 || isVerifying}
             opacity={code.length !== 6 || isVerifying ? 0.6 : 1}
           >
-            <Text color='white' fontWeight='bold'>
+            <Text
+              color={code.length === 6 && !isVerifying ? "white" : "#1C252E"}
+              fontWeight='600'
+            >
               {isVerifying ? "Verifying..." : "Verify Code"}
             </Text>
           </Button>
@@ -209,18 +225,27 @@ export default function PasswordlessSignIn({
           <XStack space='$2' justifyContent='center'>
             <Button
               size='$3'
-              variant='outlined'
-              theme={cooldown > 0 ? undefined : "blue"}
               onPress={resendCode}
               disabled={cooldown > 0}
               opacity={cooldown > 0 ? 0.6 : 1}
+              paddingHorizontal={16}
+              borderRadius={6}
+              borderWidth={1}
+              borderColor={cooldown > 0 ? "#1C252E" : "$borderColor"}
             >
               <Text fontWeight='500'>
                 {cooldown > 0 ? `Resend in ${cooldown}s` : "Resend Code"}
               </Text>
             </Button>
 
-            <Button size='$3' variant='outlined' onPress={resetFlow}>
+            <Button
+              size='$3'
+              variant='outlined'
+              onPress={resetFlow}
+              borderRadius={6}
+              borderWidth={1}
+              borderColor='$borderColor'
+            >
               <Text fontWeight='500'>Change Email</Text>
             </Button>
           </XStack>
