@@ -4,11 +4,11 @@ import { useMultipleTokenPrices } from "@/hooks/use-token-price";
 import {
   calculatePortfolioData,
   generateChartData,
-  generateMockTransactions,
   type PortfolioData,
   type ChartDataPoint,
   type Transaction
 } from "@/services/portfolio.service";
+import { useWalletTransactions } from "@/hooks/use-wallet-transactions";
 
 export const usePortfolio = () => {
   const [selectedPeriod, setSelectedPeriod] = useState("7D");
@@ -52,13 +52,19 @@ export const usePortfolio = () => {
     return generateChartData(selectedPeriod, portfolioData.totalValue);
   }, [selectedPeriod, portfolioData.totalValue]);
 
-  // Mock transaction data
-  const transactions: Transaction[] = useMemo(() => {
-    return generateMockTransactions();
-  }, []);
+  const {
+    transactions: walletTransactions,
+    isLoading: isLoadingTransactions,
+    error: transactionsError,
+    refetch: refetchTransactions
+  } = useWalletTransactions();
 
-  const isLoading = isLoadingBalances || isLoadingPrices;
-  const hasError = !!balancesError || Object.keys(priceErrors).length > 0;
+  const isLoading =
+    isLoadingBalances || isLoadingPrices || isLoadingTransactions;
+  const hasError =
+    !!balancesError ||
+    Object.keys(priceErrors).length > 0 ||
+    Boolean(transactionsError);
 
   const handlePeriodChange = (period: string) => {
     setSelectedPeriod(period);
@@ -72,24 +78,26 @@ export const usePortfolio = () => {
     // Portfolio data
     portfolioData,
     chartData,
-    transactions,
-    
+    transactions: walletTransactions,
+
     // Loading states
     isLoading,
     hasError,
     balancesError,
     priceErrors,
-    
+    transactionsError,
+
     // UI state
     selectedPeriod,
     selectedCategory,
-    
+
     // Actions
     handlePeriodChange,
     handleCategoryChange,
-    
+
     // Raw data for debugging
     walletAssets,
-    prices
+    prices,
+    refetchTransactions
   };
 };

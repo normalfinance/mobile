@@ -135,55 +135,6 @@ export const generateChartData = (
   return dataPoints;
 };
 
-export const generateMockTransactions = (): Transaction[] => {
-  const mockTransactions: Transaction[] = [
-    {
-      id: "tx1",
-      type: "receive",
-      asset: "nETH",
-      amount: 0.5,
-      usdValue: 1600.5,
-      change: 2.3,
-      timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
-      status: "completed"
-    },
-    {
-      id: "tx2",
-      type: "sell",
-      asset: "nETH",
-      amount: 0.2,
-      usdValue: 780.14,
-      change: -0.52,
-      changeUsd: -4.06,
-      timestamp: new Date(Date.now() - 5 * 60 * 60 * 1000), // 5 hours ago
-      status: "completed"
-    },
-    {
-      id: "tx3",
-      type: "swap",
-      asset: "nETH",
-      amount: 0.3,
-      usdValue: 1175.4,
-      change: 0.64,
-      timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000), // 1 day ago
-      status: "completed"
-    },
-    {
-      id: "tx4",
-      type: "buy",
-      asset: "nBTC",
-      amount: 0.05,
-      usdValue: 280.33,
-      timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 2 days ago
-      status: "pending"
-    }
-  ];
-
-  return mockTransactions.sort(
-    (a, b) => b.timestamp.getTime() - a.timestamp.getTime()
-  );
-};
-
 const formatDateForPeriod = (timestamp: number, period: string): string => {
   const date = new Date(timestamp);
 
