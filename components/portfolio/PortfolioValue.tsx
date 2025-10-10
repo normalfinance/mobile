@@ -75,11 +75,11 @@ export const PortfolioValue: React.FC<PortfolioValueProps> = ({
         fontFamily='$numeric'
         marginVertical='$2'
       >
-        $20,498.57
-        {/* {totalValue.toLocaleString("en-US", {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2
-        })} */}
+        {/* $20,498.57 */}
+        {totalValue.toLocaleString("en-US", {
+          minimumFractionDigits: 6,
+          maximumFractionDigits: 6
+        })}
       </Text>
       <XStack alignItems='center' space='$2'>
         <Text fontSize='$2' color='#1C252E'>

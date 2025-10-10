@@ -18,7 +18,7 @@ import { Account } from "@stellar/stellar-sdk";
 // Service configuration
 const CONFIG: OracleServiceConfig = {
   oracleAddress: "CB4OHJ5KAEY2O5ZOFWOFYOCP6WL5FSZEPO4GVJLW4PBJZRWM4IID7QDF",
-  priceDecimals: 14,
+  priceDecimals: 7,
   maxRequestsPerMinute: 30,
   defaultCacheDuration: 30000, // 30 seconds
   rateLimitKey: "oracle_rate_limit"

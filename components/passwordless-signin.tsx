@@ -52,12 +52,6 @@ export default function PasswordlessSignIn({
         setCooldown(60); // 60 second cooldown
         startCooldownTimer();
         onEmailSent?.();
-
-        Alert.alert(
-          "Code Sent",
-          "Check your email for a 6-digit verification code.",
-          [{ text: "OK" }]
-        );
       }
     } catch (error: any) {
       console.error("Send code error:", error);
@@ -84,10 +78,6 @@ export default function PasswordlessSignIn({
       if (signInAttempt.status === "complete") {
         await setActive({ session: signInAttempt.createdSessionId });
         onSuccess?.();
-
-        Alert.alert("Success", "You have been signed in successfully!", [
-          { text: "OK" }
-        ]);
       } else {
         console.error("Sign-in not complete:", signInAttempt);
         Alert.alert(
