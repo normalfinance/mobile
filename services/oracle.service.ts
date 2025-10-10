@@ -27,6 +27,8 @@ const CONFIG: OracleServiceConfig = {
 // Global state for background updates
 let backgroundConfig: BackgroundUpdateConfig | null = null;
 
+const inFlightPriceRequests = new Map<string, Promise<PriceData>>();
+
 // Cache operations
 export const getCachedPrice = async (
   cacheKey: string
@@ -101,16 +103,44 @@ export const updateRateLimit = async (): Promise<void> => {
 export const fetchPriceFromOracle = async (
   asset: string
 ): Promise<PriceData> => {
-  const keypair = await getKeypair();
-  if (!keypair) {
-    throw new Error("No wallet found in secure storage");
+  const normalizedAsset = asset.trim().toUpperCase();
+  const requestKey = `${CONFIG.oracleAddress}:${normalizedAsset}`;
+
+  const existingRequest = inFlightPriceRequests.get(requestKey);
+  if (existingRequest) {
+    return existingRequest;
   }
-  const networkConfig = {
-    rpcUrl: STELLAR_CONFIG.SOROBAN_RPC_URLS.TESTNET,
-    networkPassphrase: STELLAR_CONFIG.TESTNET_PASSPHRASE,
-    testingSource: new Account(keypair.publicKey(), "0")
-  };
-  return await getOraclePrice(CONFIG.oracleAddress, asset, networkConfig);
+
+  const requestPromise = (async () => {
+    await checkRateLimit();
+
+    try {
+      const keypair = await getKeypair();
+      if (!keypair) {
+        throw new Error("No wallet found in secure storage");
+      }
+      const networkConfig = {
+        rpcUrl: STELLAR_CONFIG.SOROBAN_RPC_URLS.TESTNET,
+        networkPassphrase: STELLAR_CONFIG.TESTNET_PASSPHRASE,
+        testingSource: new Account(keypair.publicKey(), "0")
+      };
+
+      const priceData = await getOraclePrice(
+        CONFIG.oracleAddress,
+        asset,
+        networkConfig
+      );
+
+      await updateRateLimit();
+
+      return priceData;
+    } finally {
+      inFlightPriceRequests.delete(requestKey);
+    }
+  })();
+
+  inFlightPriceRequests.set(requestKey, requestPromise);
+  return requestPromise;
 };
 
 /**
@@ -134,9 +164,6 @@ export const getTokenPrice = async (
       };
     }
 
-    // Check rate limiting before making API call
-    await checkRateLimit();
-
     // Fetch fresh data
     const priceData = await fetchPriceFromOracle(asset);
     const formattedPrice = formatTokenAmount(
@@ -150,9 +177,6 @@ export const getTokenPrice = async (
       formattedPrice,
       cachedAt: Date.now()
     });
-
-    // Update rate limit counter
-    await updateRateLimit();
 
     return {
       price: formattedPrice,
@@ -208,8 +232,6 @@ export const getMultiplePrices = async (
   // Fetch fresh data for remaining assets with rate limiting
   for (const asset of assetsToFetch) {
     try {
-      await checkRateLimit();
-
       const priceData = await fetchPriceFromOracle(asset);
       const formattedPrice = formatTokenAmount(
         priceData.price,
@@ -230,8 +252,6 @@ export const getMultiplePrices = async (
         timestamp: priceData.timestamp,
         cached: false
       };
-
-      await updateRateLimit();
 
       // Small delay between requests to avoid overwhelming the oracle
       if (assetsToFetch.indexOf(asset) < assetsToFetch.length - 1) {
