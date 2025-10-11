@@ -77,8 +77,8 @@ export const PortfolioValue: React.FC<PortfolioValueProps> = ({
       >
         {/* $20,498.57 */}
         {totalValue.toLocaleString("en-US", {
-          minimumFractionDigits: 6,
-          maximumFractionDigits: 6
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2
         })}
       </Text>
       <XStack alignItems='center' space='$2'>

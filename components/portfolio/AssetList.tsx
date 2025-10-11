@@ -37,8 +37,8 @@ export const AssetCard: React.FC<{
 }> = ({ asset, increaseIconUri, decreaseIconUri, onPress }) => {
   const isPositive = (asset.priceChange24h || 0) >= 0;
   const formattedBalance = new Intl.NumberFormat("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
+    minimumFractionDigits: 4,
+    maximumFractionDigits: 4
   }).format(parseFloat(asset.balance));
   const formattedUsdValue = asset.usdValue.toLocaleString("en-US", {
     minimumFractionDigits: 2,
