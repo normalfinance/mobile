@@ -1,7 +1,7 @@
 import { Redirect, usePathname, useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import { useAuth } from "@clerk/clerk-expo";
-import { Tabs, YStack, H6, Text, View, Spinner } from "tamagui";
+import { Tabs, YStack, Text, View, Spinner } from "tamagui";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import HomeScreen from "./index";
@@ -15,6 +15,15 @@ import {
   useAuthCredentials
 } from "@/services";
 
+import {
+  HomeIcon,
+  PricesIcon,
+  InvestIcon,
+  IndexesIcon,
+  SettingsIcon,
+  type NavbarIconProps
+} from "@/components/icons/navbar";
+
 type TabKey = "home" | "prices" | "invest" | "indexes" | "settings";
 
 const tabRoutes: Record<
@@ -27,6 +36,43 @@ const tabRoutes: Record<
   indexes: "/(tabs)/indexes",
   settings: "/(tabs)/settings"
 };
+
+type TabItem = {
+  key: TabKey;
+  label: string;
+  Icon: React.FC<NavbarIconProps>;
+};
+
+const TAB_ITEMS: TabItem[] = [
+  {
+    key: "home",
+    label: "Home",
+    Icon: HomeIcon
+  },
+  {
+    key: "prices",
+    label: "Prices",
+    Icon: PricesIcon
+  },
+  {
+    key: "invest",
+    label: "Invest",
+    Icon: InvestIcon
+  },
+  {
+    key: "indexes",
+    label: "Indexes",
+    Icon: IndexesIcon
+  },
+  {
+    key: "settings",
+    label: "Settings",
+    Icon: SettingsIcon
+  }
+];
+
+const ACTIVE_TAB_COLOR = "#1C252E";
+const INACTIVE_TAB_COLOR = "#9DB2CE";
 
 export default function TabLayout() {
   const { isSignedIn, userId } = useAuth();
@@ -145,22 +191,36 @@ export default function TabLayout() {
               borderTopWidth={1}
               borderTopColor='$borderColor'
               width='100%'
+              paddingVertical='$2'
+              gap='$0'
             >
-              <Tabs.Tab value='home' flex={1}>
-                <Text>Home</Text>
-              </Tabs.Tab>
-              <Tabs.Tab value='prices' flex={1}>
-                <Text>Prices</Text>
-              </Tabs.Tab>
-              <Tabs.Tab value='invest' flex={1}>
-                <Text>Invest</Text>
-              </Tabs.Tab>
-              <Tabs.Tab value='indexes' flex={1}>
-                <Text>Indexes</Text>
-              </Tabs.Tab>
-              <Tabs.Tab value='settings' flex={1}>
-                <Text>Settings</Text>
-              </Tabs.Tab>
+              {TAB_ITEMS.map(({ key, label, Icon }) => {
+                const isActive = activeTab === key;
+                const color = isActive ? ACTIVE_TAB_COLOR : INACTIVE_TAB_COLOR;
+
+                return (
+                  <Tabs.Tab
+                    key={key}
+                    value={key}
+                    flex={1}
+                    alignItems='center'
+                    justifyContent='center'
+                    paddingVertical='$1'
+                    paddingHorizontal='$0'
+                  >
+                    <YStack alignItems='center' space='$1'>
+                      <Icon color={color} />
+                      <Text
+                        fontSize='$1'
+                        fontWeight={isActive ? "600" : "500"}
+                        color={color}
+                      >
+                        {label}
+                      </Text>
+                    </YStack>
+                  </Tabs.Tab>
+                );
+              })}
             </Tabs.List>
           </Tabs>
         </YStack>
