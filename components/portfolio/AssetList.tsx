@@ -7,7 +7,7 @@ import { useRouter } from "expo-router";
 import { DisplayAsset } from "@/lib/types/balance.types";
 import { AssetIcon } from "@/components/ui/AssetIcon";
 
-interface AssetWithPrice extends DisplayAsset {
+export interface AssetWithPrice extends DisplayAsset {
   usdValue: number;
   usdPrice: number;
   priceChange24h?: number;
@@ -18,6 +18,7 @@ interface AssetListProps {
   selectedCategory: string;
   onCategoryChange: (category: string) => void;
   isLoading?: boolean;
+  searchQuery?: string;
 }
 
 const categories = [
@@ -28,7 +29,7 @@ const categories = [
   { label: "Stocks", value: "stocks" }
 ];
 
-const AssetItem: React.FC<{
+export const AssetCard: React.FC<{
   asset: AssetWithPrice;
   increaseIconUri?: string;
   decreaseIconUri?: string;
@@ -36,8 +37,8 @@ const AssetItem: React.FC<{
 }> = ({ asset, increaseIconUri, decreaseIconUri, onPress }) => {
   const isPositive = (asset.priceChange24h || 0) >= 0;
   const formattedBalance = new Intl.NumberFormat("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
+    minimumFractionDigits: 4,
+    maximumFractionDigits: 4
   }).format(parseFloat(asset.balance));
   const formattedUsdValue = asset.usdValue.toLocaleString("en-US", {
     minimumFractionDigits: 2,
@@ -153,13 +154,11 @@ export const AssetList: React.FC<AssetListProps> = ({
   assets,
   selectedCategory,
   onCategoryChange,
-  isLoading = false
+  isLoading = false,
+  searchQuery
 }) => {
   const router = useRouter();
-  const [priceChangeAssets] = useAssets([
-    require("@svgs/increase.svg"),
-    require("@svgs/decrease.svg")
-  ]);
+  const [priceChangeAssets] = useAssets(PRICE_CHANGE_ICON_SOURCES);
 
   const increaseAsset = priceChangeAssets?.[0];
   const decreaseAsset = priceChangeAssets?.[1];
@@ -173,7 +172,7 @@ export const AssetList: React.FC<AssetListProps> = ({
       ? decreaseAsset.localUri ?? decreaseAsset.uri
       : undefined;
   // Filter assets based on selected category
-  const filteredAssets = React.useMemo(() => {
+  const categorizedAssets = React.useMemo(() => {
     if (selectedCategory === "all") return assets;
 
     // For now, categorize all crypto assets as "crypto"
@@ -198,6 +197,21 @@ export const AssetList: React.FC<AssetListProps> = ({
         return assets;
     }
   }, [assets, selectedCategory]);
+
+  const filteredAndSearchedAssets = React.useMemo(() => {
+    if (!searchQuery || !searchQuery.trim()) {
+      return categorizedAssets;
+    }
+
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+
+    return categorizedAssets.filter((asset) => {
+      const name = asset.display_name?.toLowerCase?.() ?? "";
+      const code = asset.asset_code?.toLowerCase?.() ?? "";
+
+      return name.includes(normalizedQuery) || code.includes(normalizedQuery);
+    });
+  }, [categorizedAssets, searchQuery]);
 
   if (isLoading) {
     return (
@@ -262,8 +276,8 @@ export const AssetList: React.FC<AssetListProps> = ({
 
       {/* Asset list */}
       <YStack space='$3'>
-        {filteredAssets.map((asset) => (
-          <AssetItem
+        {filteredAndSearchedAssets.map((asset) => (
+          <AssetCard
             key={`${asset.asset_code}-${asset.asset_issuer || "native"}`}
             asset={asset}
             increaseIconUri={increaseIconUri}
@@ -273,10 +287,12 @@ export const AssetList: React.FC<AssetListProps> = ({
             }
           />
         ))}
-        {filteredAssets.length === 0 && (
+        {filteredAndSearchedAssets.length === 0 && (
           <YStack alignItems='center' paddingVertical='$6'>
             <Text fontSize='$4' color='$gray11' textAlign='center'>
-              No assets found in this category
+              {searchQuery?.trim()
+                ? "No assets match your search."
+                : "No assets found in this category"}
             </Text>
           </YStack>
         )}
@@ -284,3 +300,8 @@ export const AssetList: React.FC<AssetListProps> = ({
     </YStack>
   );
 };
+
+export const PRICE_CHANGE_ICON_SOURCES = [
+  require("@svgs/increase.svg"),
+  require("@svgs/decrease.svg")
+] as const;

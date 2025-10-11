@@ -53,6 +53,8 @@ export async function getOraclePrice(
   const { last_oracle_price_twap, last_oracle_price_twap_ts } =
     simulation.result;
 
+  console.log("last_oracle_price_twap", formattedAsset, last_oracle_price_twap);
+
   return {
     price: last_oracle_price_twap,
     timestamp: Number(last_oracle_price_twap_ts)

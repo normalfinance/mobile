@@ -42,7 +42,7 @@ SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
-  
+
   useEffect(() => {
     loadFonts().then(() => {
       SplashScreen.hideAsync();
@@ -67,7 +67,7 @@ export default function RootLayout() {
                 <Stack>
                   <Stack.Screen
                     name='(tabs)'
-                    options={{ headerShown: false }}
+                    options={{ headerShown: false, animation: "none" }}
                   />
                   <Stack.Screen
                     name='(auth)'
