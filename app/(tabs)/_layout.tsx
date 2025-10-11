@@ -1,5 +1,5 @@
 import { Redirect, usePathname, useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { useAuth } from "@clerk/clerk-expo";
 import { Tabs, YStack, Text, View, Spinner } from "tamagui";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -78,7 +78,6 @@ export default function TabLayout() {
   const { isSignedIn, userId } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
-  const [activeTab, setActiveTab] = useState<TabKey>("settings");
   const { data: credentials, isLoading: isLoadingCredentials } =
     useAuthCredentials();
   const { data: hasLocalWallet, isLoading: isCheckingLocalWallet } =
@@ -102,19 +101,12 @@ export default function TabLayout() {
       ? false
       : undefined;
 
-  useEffect(() => {
-    console.log("pathname", pathname);
-
+  const activeTab = React.useMemo<TabKey>(() => {
     const segments = pathname.split("/").filter(Boolean);
     const possibleSegment = segments[0];
-    const tabSegment: TabKey =
-      possibleSegment && possibleSegment in tabRoutes
-        ? (possibleSegment as TabKey)
-        : "home";
-
-    if (tabSegment !== activeTab) {
-      setActiveTab(tabSegment);
-    }
+    return possibleSegment && possibleSegment in tabRoutes
+      ? (possibleSegment as TabKey)
+      : "home";
   }, [pathname]);
 
   if (!isSignedIn) {
@@ -151,8 +143,9 @@ export default function TabLayout() {
 
   const handleTabChange = (value: TabKey) => {
     console.log("handleTabChange", value);
-    setActiveTab(value);
-    router.push(tabRoutes[value]);
+    if (value !== activeTab) {
+      router.push(tabRoutes[value]);
+    }
   };
 
   const renderTabContent = () => {
