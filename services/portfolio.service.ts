@@ -3,15 +3,8 @@ import { TokenPriceResult } from "@/lib/types/oracle.types";
 import { formatNormalToken } from "@/lib/utils/format.utils";
 import type {
   HistoricalPriceMap,
-  HistoricalPricePoint,
-  PricePerformanceMap
+  HistoricalPricePoint
 } from "../services/coinmarketcap.service";
-
-const formatPerformanceKey = (assetCode: string): string => {
-  return assetCode.toUpperCase().startsWith("N") && assetCode.length > 1
-    ? assetCode.slice(1).toUpperCase()
-    : assetCode.toUpperCase();
-};
 
 export interface AssetWithPrice extends DisplayAsset {
   usdValue: number;
@@ -52,13 +45,8 @@ const sanitizeNumber = (value: number): number =>
   Number.isFinite(value) ? value : 0;
 
 const computeAssetChangePercent = (
-  history: HistoricalPricePoint[] | undefined,
-  performance?: number
+  history: HistoricalPricePoint[] | undefined
 ): number => {
-  if (typeof performance === "number" && Number.isFinite(performance)) {
-    return performance;
-  }
-
   if (!history || history.length < 2) {
     return 0;
   }
@@ -77,13 +65,8 @@ const computeAssetChangePercent = (
 const calculateUsdPrice = (
   assetCode: string,
   prices: Record<string, TokenPriceResult>,
-  history: HistoricalPricePoint[] | undefined,
-  performancePrice?: number
+  history: HistoricalPricePoint[] | undefined
 ): number => {
-  if (typeof performancePrice === "number" && performancePrice >= 0) {
-    return performancePrice;
-  }
-
   const priceData = prices[assetCode];
 
   if (priceData?.price) {
@@ -180,8 +163,7 @@ export const calculatePortfolioData = (
   assets: DisplayAsset[],
   prices: Record<string, TokenPriceResult>,
   chartData: ChartDataPoint[],
-  historicalPrices: HistoricalPriceMap,
-  performanceStats: PricePerformanceMap
+  historicalPrices: HistoricalPriceMap
 ): PortfolioData => {
   const assetsWithPrices: AssetWithPrice[] = [];
   let totalValue = 0;
@@ -190,29 +172,17 @@ export const calculatePortfolioData = (
   assets.forEach((asset) => {
     const balance = sanitizeNumber(parseFloat(asset.balance) || 0);
     const history = historicalPrices[asset.asset_code];
-    const performanceEntry =
-      performanceStats[formatPerformanceKey(asset.asset_code)];
-    const usdPrice = calculateUsdPrice(
-      asset.asset_code,
-      prices,
-      history,
-      performanceEntry?.price
-    );
+    const usdPrice = calculateUsdPrice(asset.asset_code, prices, history);
     const usdValue = balance * usdPrice;
-    const priceChange24h = computeAssetChangePercent(
-      history,
-      performanceEntry?.percentChange24h
-    );
+    const priceChange24h = computeAssetChangePercent(history);
 
     const sanitizedUsdValue = sanitizeNumber(usdValue);
 
     totalValue += sanitizedUsdValue;
 
-    if (performanceEntry?.percentChange24h != null) {
-      totalChangeUsd += sanitizeNumber(
-        sanitizedUsdValue * (priceChange24h / 100)
-      );
-    }
+    totalChangeUsd += sanitizeNumber(
+      sanitizedUsdValue * (priceChange24h / 100)
+    );
 
     assetsWithPrices.push({
       ...asset,

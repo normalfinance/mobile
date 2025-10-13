@@ -10,10 +10,7 @@ import {
   type PortfolioPeriod
 } from "@/services/portfolio.service";
 import { useWalletTransactions } from "@/hooks/use-wallet-transactions";
-import {
-  useHistoricalPrices,
-  usePricePerformanceStats
-} from "../services/coinmarketcap.service";
+import { useHistoricalPrices } from "../services/coinmarketcap.service";
 
 export const usePortfolio = () => {
   const [selectedPeriod, setSelectedPeriod] = useState<PortfolioPeriod>("7D");
@@ -48,15 +45,6 @@ export const usePortfolio = () => {
     enabled: walletAssets.length > 0
   });
 
-  const {
-    data: performanceStats,
-    isLoading: isLoadingPerformance,
-    error: performanceError
-  } = usePricePerformanceStats({
-    symbols: assetSymbols,
-    enabled: walletAssets.length > 0
-  });
-
   const chartData: ChartDataPoint[] = useMemo(() => {
     if (!walletAssets.length) {
       return [];
@@ -84,10 +72,9 @@ export const usePortfolio = () => {
       walletAssets,
       prices,
       chartData,
-      historicalPrices,
-      performanceStats
+      historicalPrices
     );
-  }, [walletAssets, prices, chartData, historicalPrices, performanceStats]);
+  }, [walletAssets, prices, chartData, historicalPrices]);
 
   const {
     transactions: walletTransactions,
@@ -100,13 +87,11 @@ export const usePortfolio = () => {
     isLoadingBalances ||
     isLoadingPrices ||
     isLoadingHistorical ||
-    isLoadingPerformance ||
     isLoadingTransactions;
 
   console.log("balancesError", balancesError);
   console.log("priceErrors", priceErrors);
   console.log("historicalErrors", historicalErrors);
-  console.log("performanceError", performanceError);
   console.log("transactionsError", transactionsError);
 
   //next set of logs according to what hasError is checking
@@ -120,14 +105,12 @@ export const usePortfolio = () => {
     Object.keys(historicalErrors).length > 0
   );
   console.log("Boolean(transactionsError)", Boolean(transactionsError));
-  console.log("Boolean(performanceError)", Boolean(performanceError));
 
   const hasError =
     !!balancesError ||
     Object.keys(priceErrors).length > 0 ||
     Object.keys(historicalErrors).length > 0 ||
-    Boolean(transactionsError) ||
-    Boolean(performanceError);
+    Boolean(transactionsError);
 
   const handlePeriodChange = (period: string) => {
     setSelectedPeriod(period as PortfolioPeriod);
@@ -149,7 +132,6 @@ export const usePortfolio = () => {
     balancesError,
     priceErrors,
     historicalErrors,
-    performanceError,
     transactionsError,
 
     // UI state

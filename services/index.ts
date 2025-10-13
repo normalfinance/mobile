@@ -93,7 +93,6 @@ export {
 export {
   coinMarketCapService,
   useHistoricalPrices,
-  usePricePerformanceStats,
   coinMarketCapQueryKeys
 } from "./coinmarketcap.service";
 

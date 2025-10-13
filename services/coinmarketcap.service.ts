@@ -93,51 +93,6 @@ interface CoinMarketCapHistoricalResponse {
   };
 }
 
-export interface PricePerformanceEntry {
-  price?: number;
-  percentChange1h?: number;
-  percentChange24h?: number;
-  percentChange7d?: number;
-  percentChange30d?: number;
-  percentChange90d?: number;
-  percentChange1y?: number;
-  lastUpdated?: string;
-}
-
-export type PricePerformanceMap = Record<string, PricePerformanceEntry>;
-
-interface CoinMarketCapPerformanceQuote {
-  price: number;
-  percent_change_1h?: number;
-  percent_change_24h?: number;
-  percent_change_7d?: number;
-  percent_change_30d?: number;
-  percent_change_90d?: number;
-  percent_change_1y?: number;
-  last_updated?: string;
-}
-
-interface CoinMarketCapPerformanceItem {
-  id: number;
-  name: string;
-  symbol: string;
-  slug: string;
-  last_updated?: string;
-  quote: {
-    [convert: string]: CoinMarketCapPerformanceQuote;
-  };
-}
-
-interface CoinMarketCapPerformanceResponse {
-  status: {
-    error_code: number;
-    error_message: string | null;
-  };
-  data?: {
-    [symbol: string]: CoinMarketCapPerformanceItem;
-  };
-}
-
 export const coinMarketCapQueryKeys = {
   all: ["coinmarketcap"] as const,
   historical: (period: PortfolioPeriod, symbols: readonly string[]) =>
@@ -145,12 +100,6 @@ export const coinMarketCapQueryKeys = {
       ...coinMarketCapQueryKeys.all,
       "historical",
       period,
-      [...symbols].sort().join("|")
-    ] as const,
-  performance: (symbols: readonly string[]) =>
-    [
-      ...coinMarketCapQueryKeys.all,
-      "performance",
       [...symbols].sort().join("|")
     ] as const
 };
@@ -321,101 +270,6 @@ const fetchHistoricalPricesForSymbols = async (
   return { data: results, errors };
 };
 
-const buildPerformanceUrl = (symbols: readonly string[]): string => {
-  const params = new URLSearchParams({
-    symbol: symbols.join(","),
-    convert: DEFAULT_CONVERT
-  });
-
-  return `${COINMARKETCAP_BASE_URL}/v2/cryptocurrency/price-performance-stats/latest?${params.toString()}`;
-};
-
-const parsePerformanceResponse = (
-  json: CoinMarketCapPerformanceResponse,
-  convert: string
-): PricePerformanceMap => {
-  if (json.status?.error_code && json.status.error_code !== 0) {
-    const message =
-      json.status.error_message ||
-      `CoinMarketCap performance request failed with code ${json.status.error_code}`;
-    throw new Error(message);
-  }
-
-  if (!json.data) {
-    return {};
-  }
-
-  return Object.entries(json.data).reduce<PricePerformanceMap>(
-    (acc, [symbol, item]) => {
-      const quote = item.quote?.[convert];
-
-      if (!quote) {
-        return acc;
-      }
-
-      acc[symbol] = {
-        price: quote.price,
-        percentChange1h: quote.percent_change_1h,
-        percentChange24h: quote.percent_change_24h,
-        percentChange7d: quote.percent_change_7d,
-        percentChange30d: quote.percent_change_30d,
-        percentChange90d: quote.percent_change_90d,
-        percentChange1y: quote.percent_change_1y,
-        lastUpdated: quote.last_updated ?? item.last_updated
-      };
-
-      return acc;
-    },
-    {}
-  );
-};
-
-const fetchPricePerformanceStats = async (
-  symbols: readonly string[]
-): Promise<PricePerformanceMap> => {
-  if (symbols.length === 0) {
-    return {};
-  }
-
-  const apiKey = ensureApiKey();
-  const normalizedSymbols = Array.from(
-    new Set(symbols.map(normalizeSymbol).filter(Boolean))
-  );
-
-  console.log(
-    "normalizedSymbols in fetchPricePerformanceStats",
-    normalizedSymbols
-  );
-
-  if (normalizedSymbols.length === 0) {
-    return {};
-  }
-
-  const url = buildPerformanceUrl(normalizedSymbols);
-  console.log("url in fetchPricePerformanceStats", url);
-
-  try {
-    const response = await fetch(url, {
-      headers: {
-        Accept: "application/json",
-        "X-CMC_PRO_API_KEY": apiKey
-      },
-      signal: createTimeoutSignal(DEFAULT_TIMEOUT)
-    });
-
-    if (!response.ok) {
-      throw handleHttpError(new Error(response.statusText));
-    }
-
-    const json = (await response.json()) as any;
-    console.log("json in fetchPricePerformanceStats", json);
-    return parsePerformanceResponse(json, DEFAULT_CONVERT);
-  } catch (error) {
-    console.log("error in fetchPricePerformanceStats", error);
-    throw handleHttpError(error);
-  }
-};
-
 interface UseHistoricalPricesOptions {
   symbols: readonly string[];
   period: PortfolioPeriod;
@@ -445,34 +299,7 @@ export const useHistoricalPrices = ({
   };
 };
 
-interface UsePricePerformanceStatsOptions {
-  symbols: readonly string[];
-  enabled?: boolean;
-}
-
-export const usePricePerformanceStats = ({
-  symbols,
-  enabled = true
-}: UsePricePerformanceStatsOptions) => {
-  const query = useQuery({
-    queryKey: coinMarketCapQueryKeys.performance(symbols),
-    queryFn: () => fetchPricePerformanceStats(symbols),
-    enabled: enabled && symbols.length > 0,
-    staleTime: STALE_TIMES.SHORT,
-    gcTime: STALE_TIMES.LONG
-  });
-
-  return {
-    data: query.data ?? ({} as PricePerformanceMap),
-    isLoading: query.isLoading,
-    isFetching: query.isFetching,
-    error: query.error,
-    refetch: query.refetch
-  };
-};
-
 export const coinMarketCapService = {
   fetchHistoricalQuotes,
-  fetchHistoricalPricesForSymbols,
-  fetchPricePerformanceStats
+  fetchHistoricalPricesForSymbols
 };
