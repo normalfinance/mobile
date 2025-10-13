@@ -177,7 +177,7 @@ const parseHistoricalResponse = (
     throw new Error(message);
   }
 
-//   console.log("json in parseHistoricalResponse", json);
+  //   console.log("json in parseHistoricalResponse", json);
 
   const symbolData = json.data?.[symbol];
   if (!symbolData?.length) {
@@ -275,8 +275,8 @@ const fetchHistoricalQuotes = async ({
       throw handleHttpError(new Error(response.statusText));
     }
 
-    const json = (await response.json()) as any;
-    // console.log("json in fetchHistoricalQuotes", json);
+    const json = (await response.json()) as CoinMarketCapHistoricalResponse;
+    console.log("json3 in fetchHistoricalQuotes", json.data?.[symbol][0].quotes![0].quote?.[convert]);
     return parseHistoricalResponse(json, symbol, convert);
   } catch (error) {
     throw handleHttpError(error);
