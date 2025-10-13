@@ -39,7 +39,7 @@ const PERIOD_CONFIG: Record<StandardPortfolioPeriod, PeriodConfig> = {
     count: 180
   },
   "365D": {
-    interval: "1w",
+    interval: "7d",
     subtractMs: 365 * 24 * 60 * 60 * 1000,
     count: 52
   },
