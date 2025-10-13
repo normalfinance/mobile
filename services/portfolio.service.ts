@@ -1,6 +1,5 @@
 import { DisplayAsset } from "@/lib/types/balance.types";
 import { TokenPriceResult } from "@/lib/types/oracle.types";
-import { formatNormalToken } from "@/lib/utils/format.utils";
 import type {
   HistoricalPriceMap,
   HistoricalPricePoint
@@ -44,6 +43,15 @@ export interface Transaction {
 const sanitizeNumber = (value: number): number =>
   Number.isFinite(value) ? value : 0;
 
+const getPointPrice = (point: HistoricalPricePoint): number => {
+  const close =
+    typeof point.close === "number" && Number.isFinite(point.close)
+      ? point.close
+      : undefined;
+
+  return sanitizeNumber(close ?? point.price ?? 0);
+};
+
 const computeAssetChangePercent = (
   history: HistoricalPricePoint[] | undefined
 ): number => {
@@ -52,8 +60,8 @@ const computeAssetChangePercent = (
   }
 
   const sorted = [...history].sort((a, b) => a.timestamp - b.timestamp);
-  const latest = sorted[sorted.length - 1].close;
-  const previous = sorted[sorted.length - 2].close;
+  const latest = getPointPrice(sorted[sorted.length - 1]);
+  const previous = getPointPrice(sorted[sorted.length - 2]);
 
   if (!previous || previous === 0) {
     return 0;
@@ -80,7 +88,7 @@ const calculateUsdPrice = (
     const latest = history.reduce((prev, current) =>
       current.timestamp > prev.timestamp ? current : prev
     );
-    return sanitizeNumber(latest.close);
+    return getPointPrice(latest);
   }
 
   return 0;
@@ -140,7 +148,7 @@ export const generatePortfolioChartData = (
         state.index < history.length &&
         history[state.index].timestamp <= timestamp
       ) {
-        state.lastPrice = sanitizeNumber(history[state.index].close);
+        state.lastPrice = getPointPrice(history[state.index]);
         state.index += 1;
       }
 

@@ -52,24 +52,39 @@ const PERIOD_CONFIG: Record<StandardPortfolioPeriod, PeriodConfig> = {
 
 export interface HistoricalPricePoint {
   timestamp: number;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  volume: number;
+  price: number;
+  close?: number;
+  marketCap?: number;
+  volume24h?: number;
+  percentChange1h?: number;
+  percentChange24h?: number;
+  percentChange7d?: number;
+  percentChange30d?: number;
+  circulatingSupply?: number;
+  totalSupply?: number;
 }
 
 export type HistoricalPriceMap = Record<string, HistoricalPricePoint[]>;
 
 interface CoinMarketCapHistoricalQuote {
-  time_open: string;
+  time_stamp: string;
   time_close: string;
   quote: {
     [convert: string]: {
+      circulating_supply: number;
+      total_supply: number;
+      market_cap: number;
+      volume_24h: number;
+      percent_change_1h: number;
+      percent_change_24h: number;
+      percent_change_7d: number;
+      percent_change_30d: number;
+      timestamp: number;
+      price: number;
+      close: number;
       open: number;
       high: number;
       low: number;
-      close: number;
       volume: number;
     };
   };
@@ -162,6 +177,8 @@ const parseHistoricalResponse = (
     throw new Error(message);
   }
 
+  console.log("json in parseHistoricalResponse", json);
+
   const symbolData = json.data?.[symbol];
   if (!symbolData?.length) {
     return [];
@@ -177,23 +194,57 @@ const parseHistoricalResponse = (
     .map((quote) => {
       const usdQuote = quote.quote?.[convert];
 
+      console.log("usdQuote in parseHistoricalResponse", usdQuote);
+
       if (!usdQuote) {
         return null;
       }
 
-      const timestamp = new Date(quote.time_close || quote.time_open).getTime();
+      const timestampSource =
+        usdQuote.timestamp ?? quote.time_close ?? quote.time_stamp;
+      const timestamp = timestampSource
+        ? new Date(timestampSource).getTime()
+        : Number.NaN;
+
+      console.log("timestamp in parseHistoricalResponse", timestamp);
 
       if (!Number.isFinite(timestamp)) {
         return null;
       }
 
+      const toFiniteNumber = (value: unknown): number | undefined => {
+        if (typeof value === "number") {
+          return Number.isFinite(value) ? value : undefined;
+        }
+
+        if (typeof value === "string") {
+          const parsed = Number.parseFloat(value);
+          return Number.isFinite(parsed) ? parsed : undefined;
+        }
+
+        return undefined;
+      };
+
+      const price = toFiniteNumber(
+        usdQuote.price ?? usdQuote.close ?? usdQuote.open
+      );
+
+      if (price === undefined) {
+        return null;
+      }
+
       return {
         timestamp,
-        open: usdQuote.open,
-        high: usdQuote.high,
-        low: usdQuote.low,
-        close: usdQuote.close,
-        volume: usdQuote.volume
+        price,
+        close: price,
+        marketCap: toFiniteNumber(usdQuote.market_cap),
+        volume24h: toFiniteNumber(usdQuote.volume_24h),
+        percentChange1h: toFiniteNumber(usdQuote.percent_change_1h),
+        percentChange24h: toFiniteNumber(usdQuote.percent_change_24h),
+        percentChange7d: toFiniteNumber(usdQuote.percent_change_7d),
+        percentChange30d: toFiniteNumber(usdQuote.percent_change_30d),
+        circulatingSupply: toFiniteNumber(usdQuote.circulating_supply),
+        totalSupply: toFiniteNumber(usdQuote.total_supply)
       } satisfies HistoricalPricePoint;
     })
     .filter(Boolean) as HistoricalPricePoint[];
@@ -225,10 +276,7 @@ const fetchHistoricalQuotes = async ({
     }
 
     const json = (await response.json()) as any;
-    console.log(
-      "json in fetchHistoricalQuotes",
-      json.data?.[symbol][0].quotes[0].quote?.[convert]
-    );
+    console.log("json in fetchHistoricalQuotes", json);
     return parseHistoricalResponse(json, symbol, convert);
   } catch (error) {
     throw handleHttpError(error);
