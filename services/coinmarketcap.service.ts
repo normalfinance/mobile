@@ -177,7 +177,7 @@ const parseHistoricalResponse = (
     throw new Error(message);
   }
 
-  console.log("json in parseHistoricalResponse", json);
+//   console.log("json in parseHistoricalResponse", json);
 
   const symbolData = json.data?.[symbol];
   if (!symbolData?.length) {
@@ -194,7 +194,7 @@ const parseHistoricalResponse = (
     .map((quote) => {
       const usdQuote = quote.quote?.[convert];
 
-      console.log("usdQuote in parseHistoricalResponse", usdQuote);
+      // console.log("usdQuote in parseHistoricalResponse", usdQuote);
 
       if (!usdQuote) {
         return null;
@@ -206,7 +206,7 @@ const parseHistoricalResponse = (
         ? new Date(timestampSource).getTime()
         : Number.NaN;
 
-      console.log("timestamp in parseHistoricalResponse", timestamp);
+      // console.log("timestamp in parseHistoricalResponse", timestamp);
 
       if (!Number.isFinite(timestamp)) {
         return null;
@@ -276,7 +276,7 @@ const fetchHistoricalQuotes = async ({
     }
 
     const json = (await response.json()) as any;
-    console.log("json in fetchHistoricalQuotes", json);
+    // console.log("json in fetchHistoricalQuotes", json);
     return parseHistoricalResponse(json, symbol, convert);
   } catch (error) {
     throw handleHttpError(error);
@@ -301,7 +301,7 @@ const fetchHistoricalPricesForSymbols = async (
           symbol: coinSymbol,
           period
         });
-        console.log("points", points);
+        // console.log("points", points);
 
         results[symbol] = points;
       } catch (error) {

@@ -72,9 +72,10 @@ export const usePortfolio = () => {
       walletAssets,
       prices,
       chartData,
-      historicalPrices
+      historicalPrices,
+      selectedPeriod
     );
-  }, [walletAssets, prices, chartData, historicalPrices]);
+  }, [walletAssets, prices, chartData, historicalPrices, selectedPeriod]);
 
   const {
     transactions: walletTransactions,
@@ -88,23 +89,6 @@ export const usePortfolio = () => {
     isLoadingPrices ||
     isLoadingHistorical ||
     isLoadingTransactions;
-
-  console.log("balancesError", balancesError);
-  console.log("priceErrors", priceErrors);
-  console.log("historicalErrors", historicalErrors);
-  console.log("transactionsError", transactionsError);
-
-  //next set of logs according to what hasError is checking
-  console.log("!!balancesError", !!balancesError);
-  console.log(
-    "Object.keys(priceErrors).length > 0",
-    Object.keys(priceErrors).length > 0
-  );
-  console.log(
-    "Object.keys(historicalErrors).length > 0",
-    Object.keys(historicalErrors).length > 0
-  );
-  console.log("Boolean(transactionsError)", Boolean(transactionsError));
 
   const hasError =
     !!balancesError ||

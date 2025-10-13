@@ -53,21 +53,50 @@ const getPointPrice = (point: HistoricalPricePoint): number => {
 };
 
 const computeAssetChangePercent = (
-  history: HistoricalPricePoint[] | undefined
+  history: HistoricalPricePoint[] | undefined,
+  period: PortfolioPeriod
 ): number => {
-  if (!history || history.length < 2) {
+  if (!history || history.length === 0) {
     return 0;
   }
 
   const sorted = [...history].sort((a, b) => a.timestamp - b.timestamp);
-  const latest = getPointPrice(sorted[sorted.length - 1]);
-  const previous = getPointPrice(sorted[sorted.length - 2]);
+  const latestPoint = sorted[sorted.length - 1];
 
-  if (!previous || previous === 0) {
+  if (period === "1D" || period === "7D" || period === "30D") {
+    const percentChangeField = (() => {
+      switch (period) {
+        case "1D":
+          return latestPoint.percentChange24h;
+        case "7D":
+          return latestPoint.percentChange7d;
+        case "30D":
+          return latestPoint.percentChange30d;
+        default:
+          return undefined;
+      }
+    })();
+
+    if (
+      typeof percentChangeField === "number" &&
+      Number.isFinite(percentChangeField)
+    ) {
+      return sanitizeNumber(percentChangeField);
+    }
+  }
+
+  if (sorted.length < 2) {
     return 0;
   }
 
-  return ((latest - previous) / previous) * 100;
+  const firstPrice = getPointPrice(sorted[0]);
+  const latestPrice = getPointPrice(latestPoint);
+
+  if (!firstPrice || firstPrice === 0) {
+    return 0;
+  }
+
+  return sanitizeNumber(((latestPrice - firstPrice) / firstPrice) * 100);
 };
 
 const calculateUsdPrice = (
@@ -171,7 +200,8 @@ export const calculatePortfolioData = (
   assets: DisplayAsset[],
   prices: Record<string, TokenPriceResult>,
   chartData: ChartDataPoint[],
-  historicalPrices: HistoricalPriceMap
+  historicalPrices: HistoricalPriceMap,
+  period: PortfolioPeriod
 ): PortfolioData => {
   const assetsWithPrices: AssetWithPrice[] = [];
   let totalValue = 0;
@@ -182,21 +212,19 @@ export const calculatePortfolioData = (
     const history = historicalPrices[asset.asset_code];
     const usdPrice = calculateUsdPrice(asset.asset_code, prices, history);
     const usdValue = balance * usdPrice;
-    const priceChange24h = computeAssetChangePercent(history);
+    const percentChange = computeAssetChangePercent(history, period);
 
     const sanitizedUsdValue = sanitizeNumber(usdValue);
 
     totalValue += sanitizedUsdValue;
 
-    totalChangeUsd += sanitizeNumber(
-      sanitizedUsdValue * (priceChange24h / 100)
-    );
+    totalChangeUsd += sanitizeNumber(sanitizedUsdValue * (percentChange / 100));
 
     assetsWithPrices.push({
       ...asset,
       usdValue: sanitizedUsdValue,
       usdPrice: sanitizeNumber(usdPrice),
-      priceChange24h: sanitizeNumber(priceChange24h)
+      priceChange24h: sanitizeNumber(percentChange)
     });
   });
 
