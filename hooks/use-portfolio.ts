@@ -1,17 +1,22 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useWalletBalances } from "@/services/balance.service";
 import { useMultipleTokenPrices } from "@/hooks/use-token-price";
 import {
   calculatePortfolioData,
-  generateChartData,
+  generatePortfolioChartData,
   type PortfolioData,
   type ChartDataPoint,
-  type Transaction
+  type Transaction,
+  type PortfolioPeriod
 } from "@/services/portfolio.service";
 import { useWalletTransactions } from "@/hooks/use-wallet-transactions";
+import {
+  useHistoricalPrices,
+  usePricePerformanceStats
+} from "../services/coinmarketcap.service";
 
 export const usePortfolio = () => {
-  const [selectedPeriod, setSelectedPeriod] = useState("7D");
+  const [selectedPeriod, setSelectedPeriod] = useState<PortfolioPeriod>("7D");
   const [selectedCategory, setSelectedCategory] = useState("all");
 
   // Fetch wallet balances
@@ -33,9 +38,40 @@ export const usePortfolio = () => {
     errors: priceErrors
   } = useMultipleTokenPrices(assetSymbols);
 
+  const {
+    data: historicalPrices,
+    isLoading: isLoadingHistorical,
+    errors: historicalErrors
+  } = useHistoricalPrices({
+    symbols: assetSymbols,
+    period: selectedPeriod,
+    enabled: walletAssets.length > 0
+  });
+
+  const {
+    data: performanceStats,
+    isLoading: isLoadingPerformance,
+    error: performanceError
+  } = usePricePerformanceStats({
+    symbols: assetSymbols,
+    enabled: walletAssets.length > 0
+  });
+
+  const chartData: ChartDataPoint[] = useMemo(() => {
+    if (!walletAssets.length) {
+      return [];
+    }
+
+    return generatePortfolioChartData(
+      walletAssets,
+      selectedPeriod,
+      historicalPrices
+    );
+  }, [historicalPrices, selectedPeriod, walletAssets]);
+
   // Calculate portfolio data
   const portfolioData: PortfolioData = useMemo(() => {
-    if (!walletAssets.length || isLoadingPrices) {
+    if (!walletAssets.length) {
       return {
         totalValue: 0,
         todayChange: 0,
@@ -44,13 +80,14 @@ export const usePortfolio = () => {
       };
     }
 
-    return calculatePortfolioData(walletAssets, prices);
-  }, [walletAssets, prices, isLoadingPrices]);
-
-  // Generate chart data based on current value and selected period
-  const chartData: ChartDataPoint[] = useMemo(() => {
-    return generateChartData(selectedPeriod, portfolioData.totalValue);
-  }, [selectedPeriod, portfolioData.totalValue]);
+    return calculatePortfolioData(
+      walletAssets,
+      prices,
+      chartData,
+      historicalPrices,
+      performanceStats
+    );
+  }, [walletAssets, prices, chartData, historicalPrices, performanceStats]);
 
   const {
     transactions: walletTransactions,
@@ -60,14 +97,27 @@ export const usePortfolio = () => {
   } = useWalletTransactions();
 
   const isLoading =
-    isLoadingBalances || isLoadingPrices || isLoadingTransactions;
+    isLoadingBalances ||
+    isLoadingPrices ||
+    isLoadingHistorical ||
+    isLoadingPerformance ||
+    isLoadingTransactions;
+
+  console.log("balancesError", balancesError);
+  console.log("priceErrors", priceErrors);
+  console.log("historicalErrors", historicalErrors);
+  console.log("performanceError", performanceError);
+  console.log("transactionsError", transactionsError);
+
   const hasError =
     !!balancesError ||
     Object.keys(priceErrors).length > 0 ||
-    Boolean(transactionsError);
+    Object.keys(historicalErrors).length > 0 ||
+    Boolean(transactionsError) ||
+    Boolean(performanceError);
 
   const handlePeriodChange = (period: string) => {
-    setSelectedPeriod(period);
+    setSelectedPeriod(period as PortfolioPeriod);
   };
 
   const handleCategoryChange = (category: string) => {
@@ -85,6 +135,8 @@ export const usePortfolio = () => {
     hasError,
     balancesError,
     priceErrors,
+    historicalErrors,
+    performanceError,
     transactionsError,
 
     // UI state

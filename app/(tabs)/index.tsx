@@ -96,32 +96,6 @@ export default function HomeScreen() {
     }
   }, [walletAddress]);
 
-  if (hasError) {
-    return (
-      <SafeAreaView style={{ flex: 1 }}>
-        <YStack
-          flex={1}
-          padding='$1'
-          backgroundColor='$background'
-          justifyContent='center'
-          alignItems='center'
-        >
-          <Text
-            fontSize='$4'
-            color='$red10'
-            textAlign='center'
-            marginBottom='$4'
-          >
-            Error loading portfolio data
-          </Text>
-          <Text fontSize='$3' color='$textSecondary' textAlign='center'>
-            Please check your wallet connection and try again
-          </Text>
-        </YStack>
-      </SafeAreaView>
-    );
-  }
-
   const hasSearchQuery = normalizedSearchQuery.length > 0;
 
   const searchResults = React.useMemo(() => {
@@ -142,96 +116,37 @@ export default function HomeScreen() {
 
   return (
     <YStack flex={1} backgroundColor='$background'>
-      <ScrollView showsVerticalScrollIndicator={false}>
-        <YStack padding='$3'>
-          {/* Header with search and statistics */}
-          <XStack
-            justifyContent='space-between'
+      {hasError ? (
+        <SafeAreaView style={{ flex: 1 }}>
+          <YStack
+            flex={1}
+            padding='$1'
+            backgroundColor='$background'
+            justifyContent='center'
             alignItems='center'
-            marginBottom='$2'
           >
-            <XStack
-              flex={1}
-              alignItems='center'
-              backgroundColor='#919EAB1F'
-              borderWidth={1}
-              borderColor='#919EAB1F'
-              borderRadius='$12'
-              paddingLeft='$3'
+            <Text
+              fontSize='$4'
+              color='$red10'
+              textAlign='center'
+              marginBottom='$4'
             >
-              <Search size={16} color='#737381' />
-              <Input
-                placeholder='Search assets'
-                backgroundColor='transparent'
-                borderWidth={0}
-                flex={1}
-                fontSize='$3'
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-              />
-            </XStack>
-          </XStack>
-
-          <View style={{ flex: 1 }}>
-            <View style={{ flex: 1 }}>
-              <PortfolioValue
-                totalValue={portfolioData.totalValue}
-                todayChange={portfolioData.todayChange}
-                todayChangePercent={portfolioData.todayChangePercent}
-                isLoading={isLoading}
-              />
-            </View>
-
-            <PortfolioChart
-              data={chartData}
-              selectedPeriod={selectedPeriod}
-              onPeriodChange={handlePeriodChange}
-              isLoading={isLoading}
-            />
-
-            <ActionButtons
-              onSwap={handleNavigateToInvest}
-              onSend={handleNavigateToInvest}
-              onBuy={handleNavigateToInvest}
-              onSell={handleNavigateToInvest}
-              onReceive={handleReceive}
-            />
-
-            <AssetList
-              assets={portfolioData.assets}
-              selectedCategory={selectedCategory}
-              onCategoryChange={handleCategoryChange}
-              isLoading={isLoading}
-              searchQuery={searchQuery}
-            />
-          </View>
-
-          {/* Transaction History */}
-          <TransactionHistory
-            transactions={transactions}
-            isLoading={isLoading}
-          />
-        </YStack>
-      </ScrollView>
-
-      {hasSearchQuery && (
-        <BlurView
-          intensity={50}
-          tint='dark'
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0
-          }}
-        >
-          <SafeAreaView style={{ flex: 1 }}>
-            <YStack flex={1} padding='$3' gap='$4'>
+              Error loading portfolio data
+            </Text>
+            <Text fontSize='$3' color='$textSecondary' textAlign='center'>
+              Please check your wallet connection and try again
+            </Text>
+          </YStack>
+        </SafeAreaView>
+      ) : (
+        <>
+          <ScrollView showsVerticalScrollIndicator={false}>
+            <YStack padding='$3'>
+              {/* Header with search and statistics */}
               <XStack
-                alignItems='center'
                 justifyContent='space-between'
-                gap='$2'
+                alignItems='center'
+                marginBottom='$2'
               >
                 <XStack
                   flex={1}
@@ -251,141 +166,233 @@ export default function HomeScreen() {
                     fontSize='$3'
                     value={searchQuery}
                     onChangeText={setSearchQuery}
-                    autoFocus
                   />
                 </XStack>
-                <Button
-                  backgroundColor='transparent'
-                  borderWidth={0}
-                  onPress={() => setSearchQuery("")}
-                >
-                  <Text color='#FFFFFF' fontWeight='600'>
-                    Cancel
-                  </Text>
-                </Button>
               </XStack>
 
-              <ScrollView
-                contentContainerStyle={{ paddingBottom: 24 }}
-                showsVerticalScrollIndicator={false}
-              >
-                <YStack gap='$3'>
-                  {searchResults.map((asset) => (
-                    <AssetCard
-                      key={`${asset.asset_code}-${
-                        asset.asset_issuer || "native"
-                      }-search`}
-                      asset={asset}
-                      increaseIconUri={increaseIconUri}
-                      decreaseIconUri={decreaseIconUri}
-                      onPress={() => {
-                        router.push(`/asset/${asset.asset_code.toLowerCase()}`);
-                        setSearchQuery("");
-                      }}
-                    />
-                  ))}
+              <View style={{ flex: 1 }}>
+                <View style={{ flex: 1 }}>
+                  <PortfolioValue
+                    totalValue={portfolioData.totalValue}
+                    todayChange={portfolioData.todayChange}
+                    todayChangePercent={portfolioData.todayChangePercent}
+                    isLoading={isLoading}
+                  />
+                </View>
 
-                  {searchResults.length === 0 && (
-                    <YStack
-                      backgroundColor='#F9FAFB'
-                      padding='$4'
-                      borderRadius='$6'
+                <PortfolioChart
+                  data={chartData}
+                  selectedPeriod={selectedPeriod}
+                  onPeriodChange={handlePeriodChange}
+                  isLoading={isLoading}
+                />
+
+                <ActionButtons
+                  onSwap={handleNavigateToInvest}
+                  onSend={handleNavigateToInvest}
+                  onBuy={handleNavigateToInvest}
+                  onSell={handleNavigateToInvest}
+                  onReceive={handleReceive}
+                />
+
+                <AssetList
+                  assets={portfolioData.assets}
+                  selectedCategory={selectedCategory}
+                  onCategoryChange={handleCategoryChange}
+                  isLoading={isLoading}
+                  searchQuery={searchQuery}
+                />
+              </View>
+
+              {/* Transaction History */}
+              <TransactionHistory
+                transactions={transactions}
+                isLoading={isLoading}
+              />
+            </YStack>
+          </ScrollView>
+
+          {hasSearchQuery && (
+            <BlurView
+              intensity={50}
+              tint='dark'
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0
+              }}
+            >
+              <SafeAreaView style={{ flex: 1 }}>
+                <YStack flex={1} padding='$3' gap='$4'>
+                  <XStack
+                    alignItems='center'
+                    justifyContent='space-between'
+                    gap='$2'
+                  >
+                    <XStack
+                      flex={1}
                       alignItems='center'
+                      backgroundColor='#919EAB1F'
+                      borderWidth={1}
+                      borderColor='#919EAB1F'
+                      borderRadius='$12'
+                      paddingLeft='$3'
                     >
-                      <Text fontSize='$4' color='#1C252E' textAlign='center'>
-                        No assets match your search.
+                      <Search size={16} color='#737381' />
+                      <Input
+                        placeholder='Search assets'
+                        backgroundColor='transparent'
+                        borderWidth={0}
+                        flex={1}
+                        fontSize='$3'
+                        value={searchQuery}
+                        onChangeText={setSearchQuery}
+                        autoFocus
+                      />
+                    </XStack>
+                    <Button
+                      backgroundColor='transparent'
+                      borderWidth={0}
+                      onPress={() => setSearchQuery("")}
+                    >
+                      <Text color='#FFFFFF' fontWeight='600'>
+                        Cancel
                       </Text>
+                    </Button>
+                  </XStack>
+
+                  <ScrollView
+                    contentContainerStyle={{ paddingBottom: 24 }}
+                    showsVerticalScrollIndicator={false}
+                  >
+                    <YStack gap='$3'>
+                      {searchResults.map((asset) => (
+                        <AssetCard
+                          key={`${asset.asset_code}-${
+                            asset.asset_issuer || "native"
+                          }-search`}
+                          asset={asset}
+                          increaseIconUri={increaseIconUri}
+                          decreaseIconUri={decreaseIconUri}
+                          onPress={() => {
+                            router.push(
+                              `/asset/${asset.asset_code.toLowerCase()}`
+                            );
+                            setSearchQuery("");
+                          }}
+                        />
+                      ))}
+
+                      {searchResults.length === 0 && (
+                        <YStack
+                          backgroundColor='#F9FAFB'
+                          padding='$4'
+                          borderRadius='$6'
+                          alignItems='center'
+                        >
+                          <Text
+                            fontSize='$4'
+                            color='#1C252E'
+                            textAlign='center'
+                          >
+                            No assets match your search.
+                          </Text>
+                        </YStack>
+                      )}
                     </YStack>
+                  </ScrollView>
+                </YStack>
+              </SafeAreaView>
+            </BlurView>
+          )}
+
+          <Modal
+            visible={isReceiveModalOpen}
+            transparent
+            animationType='slide'
+            onRequestClose={handleCloseReceiveModal}
+          >
+            <YStack
+              flex={1}
+              justifyContent='center'
+              alignItems='center'
+              backgroundColor='rgba(0, 0, 0, 0.35)'
+              padding='$4'
+            >
+              <YStack
+                width='100%'
+                maxWidth={360}
+                padding='$4'
+                backgroundColor='$background'
+                borderRadius='$6'
+                space='$4'
+              >
+                <Text fontSize='$5' fontWeight='700' textAlign='center'>
+                  Receive Funds
+                </Text>
+
+                <YStack alignItems='center' space='$3'>
+                  <Text fontSize='$3' color='$gray10' textAlign='center'>
+                    Share this address to receive funds.
+                  </Text>
+
+                  {walletInfo?.publicKey ? (
+                    <YStack alignItems='center' space='$3'>
+                      <QRCode value={walletShareUrl} size={180} />
+                      <Text
+                        fontSize='$2'
+                        color='$gray11'
+                        textAlign='center'
+                        selectable
+                      >
+                        {walletAddress}
+                      </Text>
+                      <Text
+                        fontSize='$1'
+                        color='$gray10'
+                        textAlign='center'
+                        selectable
+                      >
+                        {walletShareUrl}
+                      </Text>
+                      <Button
+                        size='$3'
+                        borderRadius='$2'
+                        backgroundColor='#1C252E'
+                        onPress={handleCopyAddress}
+                        disabled={isCopyingAddress}
+                      >
+                        <Text color='white' fontWeight='600'>
+                          Copy Address
+                        </Text>
+                      </Button>
+                    </YStack>
+                  ) : (
+                    <Text fontSize='$3' color='$gray11' textAlign='center'>
+                      Wallet address not available.
+                    </Text>
                   )}
                 </YStack>
-              </ScrollView>
+
+                <Button
+                  onPress={handleCloseReceiveModal}
+                  borderRadius='$2'
+                  backgroundColor='#FFFFFF'
+                  borderWidth={0.5}
+                  borderColor='#1C252E'
+                  padding='$3'
+                >
+                  <Text color='#1C252E' fontWeight='600'>
+                    Close
+                  </Text>
+                </Button>
+              </YStack>
             </YStack>
-          </SafeAreaView>
-        </BlurView>
+          </Modal>
+        </>
       )}
-=      <Modal
-        visible={isReceiveModalOpen}
-        transparent
-        animationType='slide'
-        onRequestClose={handleCloseReceiveModal}
-      >
-        <YStack
-          flex={1}
-          justifyContent='center'
-          alignItems='center'
-          backgroundColor='rgba(0, 0, 0, 0.35)'
-          padding='$4'
-        >
-          <YStack
-            width='100%'
-            maxWidth={360}
-            padding='$4'
-            backgroundColor='$background'
-            borderRadius='$6'
-            space='$4'
-          >
-            <Text fontSize='$5' fontWeight='700' textAlign='center'>
-              Receive Funds
-            </Text>
-
-            <YStack alignItems='center' space='$3'>
-              <Text fontSize='$3' color='$gray10' textAlign='center'>
-                Share this address to receive funds.
-              </Text>
-
-              {walletInfo?.publicKey ? (
-                <YStack alignItems='center' space='$3'>
-                  <QRCode value={walletShareUrl} size={180} />
-                  <Text
-                    fontSize='$2'
-                    color='$gray11'
-                    textAlign='center'
-                    selectable
-                  >
-                    {walletAddress}
-                  </Text>
-                  <Text
-                    fontSize='$1'
-                    color='$gray10'
-                    textAlign='center'
-                    selectable
-                  >
-                    {walletShareUrl}
-                  </Text>
-                  <Button
-                    size='$3'
-                    borderRadius='$2'
-                    backgroundColor='#1C252E'
-                    onPress={handleCopyAddress}
-                    disabled={isCopyingAddress}
-                  >
-                    <Text color='white' fontWeight='600'>
-                      Copy Address
-                    </Text>
-                  </Button>
-                </YStack>
-              ) : (
-                <Text fontSize='$3' color='$gray11' textAlign='center'>
-                  Wallet address not available.
-                </Text>
-              )}
-            </YStack>
-
-            <Button
-              onPress={handleCloseReceiveModal}
-              borderRadius='$2'
-              backgroundColor='#FFFFFF'
-              borderWidth={0.5}
-              borderColor='#1C252E'
-              padding='$3'
-            >
-              <Text color='#1C252E' fontWeight='600'>
-                Close
-              </Text>
-            </Button>
-          </YStack>
-        </YStack>
-      </Modal>
     </YStack>
   );
 }

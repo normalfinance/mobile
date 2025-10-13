@@ -9,14 +9,16 @@ interface ChartDataPoint {
   date: string;
 }
 
+type ChartPeriod = "1D" | "7D" | "30D" | "180D" | "365D" | "All";
+
 interface PortfolioChartProps {
   data: ChartDataPoint[];
-  selectedPeriod: string;
-  onPeriodChange: (period: string) => void;
+  selectedPeriod: ChartPeriod;
+  onPeriodChange: (period: ChartPeriod) => void;
   isLoading?: boolean;
 }
 
-const periods = [
+const periods: { label: string; value: ChartPeriod }[] = [
   { label: "1D", value: "1D" },
   { label: "7D", value: "7D" },
   { label: "30D", value: "30D" },

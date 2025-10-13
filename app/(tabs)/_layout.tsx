@@ -109,38 +109,6 @@ export default function TabLayout() {
       : "home";
   }, [pathname]);
 
-  if (!isSignedIn) {
-    return <Redirect href='/sign-in' />;
-  }
-
-  if (isCheckingWallet) {
-    return (
-      // @ts-ignore
-      <YStack
-        flex={1}
-        // @ts-ignore
-        justifyContent='center'
-        alignItems='center'
-        backgroundColor='$background'
-      >
-        <Spinner size='large' color='$blue10' />
-        {/* @ts-ignore */}
-        <Text marginTop='$4' color='$color11'>
-          Checking wallet...
-        </Text>
-      </YStack>
-    );
-  }
-
-  if (resolvedHasWallet === false) {
-    console.log("No wallet found, redirecting to wallet setup");
-    return <Redirect href='/wallet-setup' />;
-  }
-
-  if (userId) {
-    console.log("userId", userId, "hasWallet", resolvedHasWallet);
-  }
-
   const handleTabChange = (value: TabKey) => {
     console.log("handleTabChange", value);
     if (value !== activeTab) {
@@ -165,59 +133,90 @@ export default function TabLayout() {
     }
   };
 
+  if (userId) {
+    console.log("userId", userId, "hasWallet", resolvedHasWallet);
+  }
+
+  // Single return with all conditional rendering
   return (
-    // @ts-ignore
-    <View flex={1} backgroundColor='$background'>
-      <SafeAreaView style={{ flex: 1 }}>
-        <YStack flex={1}>
-          <YStack flex={1}>{renderTabContent()}</YStack>
-
-          <Tabs
-            value={activeTab}
-            onValueChange={handleTabChange}
-            orientation='horizontal'
-            flexDirection='row'
-            width='100%'
-          >
-            <Tabs.List
-              backgroundColor='$background'
-              borderTopWidth={1}
-              borderTopColor='$borderColor'
-              width='100%'
-              paddingVertical='$2'
-              gap='$0'
-            >
-              {TAB_ITEMS.map(({ key, label, Icon }) => {
-                const isActive = activeTab === key;
-                const color = isActive ? ACTIVE_TAB_COLOR : INACTIVE_TAB_COLOR;
-
-                return (
-                  <Tabs.Tab
-                    key={key}
-                    value={key}
-                    flex={1}
-                    alignItems='center'
-                    justifyContent='center'
-                    paddingVertical='$1'
-                    paddingHorizontal='$0'
-                  >
-                    <YStack alignItems='center' space='$1'>
-                      <Icon color={color} />
-                      <Text
-                        fontSize='$1'
-                        fontWeight={isActive ? "600" : "500"}
-                        color={color}
-                      >
-                        {label}
-                      </Text>
-                    </YStack>
-                  </Tabs.Tab>
-                );
-              })}
-            </Tabs.List>
-          </Tabs>
+    <>
+      {!isSignedIn ? (
+        <Redirect href='/sign-in' />
+      ) : isCheckingWallet ? (
+        // @ts-ignore
+        <YStack
+          flex={1}
+          // @ts-ignore
+          justifyContent='center'
+          alignItems='center'
+          backgroundColor='$background'
+        >
+          <Spinner size='large' color='$blue10' />
+          {/* @ts-ignore */}
+          <Text marginTop='$4' color='$color11'>
+            Checking wallet...
+          </Text>
         </YStack>
-      </SafeAreaView>
-    </View>
+      ) : resolvedHasWallet === false ? (
+        <>
+          {console.log("No wallet found, redirecting to wallet setup")}
+          <Redirect href='/wallet-setup' />
+        </>
+      ) : (
+        // @ts-ignore
+        <View flex={1} backgroundColor='$background'>
+          <SafeAreaView style={{ flex: 1 }}>
+            <YStack flex={1}>
+              <YStack flex={1}>{renderTabContent()}</YStack>
+
+              <Tabs
+                value={activeTab}
+                onValueChange={handleTabChange}
+                orientation='horizontal'
+                flexDirection='row'
+                width='100%'
+              >
+                <Tabs.List
+                  backgroundColor='$background'
+                  borderTopWidth={1}
+                  borderTopColor='$borderColor'
+                  width='100%'
+                  paddingVertical='$2'
+                  gap='$0'
+                >
+                  {TAB_ITEMS.map(({ key, label, Icon }) => {
+                    const isActive = activeTab === key;
+                    const color = isActive ? ACTIVE_TAB_COLOR : INACTIVE_TAB_COLOR;
+
+                    return (
+                      <Tabs.Tab
+                        key={key}
+                        value={key}
+                        flex={1}
+                        alignItems='center'
+                        justifyContent='center'
+                        paddingVertical='$1'
+                        paddingHorizontal='$0'
+                      >
+                        <YStack alignItems='center' space='$1'>
+                          <Icon color={color} />
+                          <Text
+                            fontSize='$1'
+                            fontWeight={isActive ? "600" : "500"}
+                            color={color}
+                          >
+                            {label}
+                          </Text>
+                        </YStack>
+                      </Tabs.Tab>
+                    );
+                  })}
+                </Tabs.List>
+              </Tabs>
+            </YStack>
+          </SafeAreaView>
+        </View>
+      )}
+    </>
   );
 }

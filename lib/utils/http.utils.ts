@@ -1,7 +1,7 @@
 import { HTTP_ERRORS, RETRY_CONFIG } from '../constants/api.constants';
 
 export const createTimeoutSignal = (timeout: number): AbortSignal => {
-  return AbortSignal.timeout(timeout);
+  return new AbortController().signal;
 };
 
 export const handleHttpError = (error: unknown): Error => {
