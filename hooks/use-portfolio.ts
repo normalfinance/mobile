@@ -109,6 +109,19 @@ export const usePortfolio = () => {
   console.log("performanceError", performanceError);
   console.log("transactionsError", transactionsError);
 
+  //next set of logs according to what hasError is checking
+  console.log("!!balancesError", !!balancesError);
+  console.log(
+    "Object.keys(priceErrors).length > 0",
+    Object.keys(priceErrors).length > 0
+  );
+  console.log(
+    "Object.keys(historicalErrors).length > 0",
+    Object.keys(historicalErrors).length > 0
+  );
+  console.log("Boolean(transactionsError)", Boolean(transactionsError));
+  console.log("Boolean(performanceError)", Boolean(performanceError));
+
   const hasError =
     !!balancesError ||
     Object.keys(priceErrors).length > 0 ||

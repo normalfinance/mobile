@@ -75,15 +75,21 @@ interface CoinMarketCapHistoricalQuote {
   };
 }
 
+interface CoinMarketCapHistoricalDataItem {
+  id?: number;
+  name?: string;
+  symbol?: string;
+  slug?: string;
+  quotes?: CoinMarketCapHistoricalQuote[];
+}
+
 interface CoinMarketCapHistoricalResponse {
   status: {
     error_code: number;
     error_message: string | null;
   };
   data?: {
-    [symbol: string]: {
-      quotes: CoinMarketCapHistoricalQuote[];
-    };
+    [symbol: string]: CoinMarketCapHistoricalDataItem[];
   };
 }
 
@@ -208,11 +214,17 @@ const parseHistoricalResponse = (
   }
 
   const symbolData = json.data?.[symbol];
-  if (!symbolData) {
+  if (!symbolData?.length) {
     return [];
   }
 
-  return symbolData.quotes
+  const quotes = symbolData.flatMap((entry) => entry.quotes ?? []);
+
+  if (quotes.length === 0) {
+    return [];
+  }
+
+  return quotes
     .map((quote) => {
       const usdQuote = quote.quote?.[convert];
 
@@ -370,11 +382,17 @@ const fetchPricePerformanceStats = async (
     new Set(symbols.map(normalizeSymbol).filter(Boolean))
   );
 
+  console.log(
+    "normalizedSymbols in fetchPricePerformanceStats",
+    normalizedSymbols
+  );
+
   if (normalizedSymbols.length === 0) {
     return {};
   }
 
   const url = buildPerformanceUrl(normalizedSymbols);
+  console.log("url in fetchPricePerformanceStats", url);
 
   try {
     const response = await fetch(url, {
@@ -389,9 +407,11 @@ const fetchPricePerformanceStats = async (
       throw handleHttpError(new Error(response.statusText));
     }
 
-    const json = (await response.json()) as CoinMarketCapPerformanceResponse;
+    const json = (await response.json()) as any;
+    console.log("json in fetchPricePerformanceStats", json);
     return parsePerformanceResponse(json, DEFAULT_CONVERT);
   } catch (error) {
+    console.log("error in fetchPricePerformanceStats", error);
     throw handleHttpError(error);
   }
 };
