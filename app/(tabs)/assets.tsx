@@ -12,6 +12,7 @@ import {
 import { useWalletBalanceStatus } from "@/services/balance.service";
 import { useWallet } from "@/services/wallet.service";
 import { DisplayAsset } from "@/lib/types/balance.types";
+import { AssetListSkeleton } from "@/components/ui/skeleton/portfolio-skeletons";
 
 const AssetItem = ({ asset }: { asset: DisplayAsset }) => {
   const formatBalance = (balance: string) => {
@@ -84,14 +85,7 @@ export default function AssetsScreen() {
 
     if (isLoading) {
       return (
-        // @ts-ignore
-        <YStack flex={1} justifyContent='center' alignItems='center'>
-          <Spinner size='large' color='$color12' />
-          {/* @ts-ignore */}
-          <Text color='$color10' marginTop='$2'>
-            Loading your assets...
-          </Text>
-        </YStack>
+        <AssetListSkeleton show={true} itemCount={6} />
       );
     }
 

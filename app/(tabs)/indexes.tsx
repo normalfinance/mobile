@@ -13,6 +13,7 @@ import {
   getCollectionIndexes,
   getFeaturedIndexes
 } from "@/services/indexes.service";
+import { IndexListSkeleton } from "@/components/ui/skeleton/index-skeletons";
 import { ChevronRightIcon } from "lucide-react-native";
 
 import { assetClassStyles } from "@/constants/assetClassStyles";
@@ -225,10 +226,16 @@ const IndexesScreen: React.FC = () => {
   const router = useRouter();
   const [selectedCategory, setSelectedCategory] =
     useState<IndexCategory>("Holding");
+  const [isLoading, setIsLoading] = useState(true);
   const [changeIcons] = useAssets([
     require("@svgs/increase.svg"),
     require("@svgs/decrease.svg")
   ]);
+
+  React.useEffect(() => {
+    const timer = setTimeout(() => setIsLoading(false), 1000);
+    return () => clearTimeout(timer);
+  }, []);
 
   const increaseIcon = changeIcons?.[0];
   const decreaseIcon = changeIcons?.[1];
@@ -248,13 +255,21 @@ const IndexesScreen: React.FC = () => {
     );
   }, [selectedCategory]);
 
+  if (isLoading) {
+    return (
+      <YStack flex={1} backgroundColor='#FFFFFF'>
+        <IndexListSkeleton show={true} />
+      </YStack>
+    );
+  }
+
   return (
     <YStack flex={1} backgroundColor='#FFFFFF'>
       <ScrollView
         contentContainerStyle={{
           paddingHorizontal: 24,
           paddingTop: 24,
-          paddingBottom: 40
+          minHeight: '100%'
         }}
         showsVerticalScrollIndicator={false}
       >
