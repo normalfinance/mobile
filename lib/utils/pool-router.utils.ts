@@ -173,6 +173,12 @@ export async function buildSwapTransaction(
 ): Promise<AssembledTransaction<bigint>> {
   console.log(`🔨 Building Pool Router swap transaction...`);
 
+  console.log("poolRouterAddress", poolRouterAddress);
+  console.log("networkConfig", networkConfig);
+  console.log("sourceAccount", sourceAccount);
+
+  console.log("swapArgs", swapArgs);
+
   const poolRouterClient = new PoolRouterClient({
     contractId: poolRouterAddress,
     networkPassphrase: networkConfig.networkPassphrase,

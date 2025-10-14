@@ -8,6 +8,7 @@ import {
   Keypair,
   rpc
 } from "@stellar/stellar-sdk";
+import { basicNodeSigner } from "@stellar/stellar-sdk/contract";
 import { getKeypair, getWallet } from "@/services/wallet.service";
 import {
   NetworkConfig,
@@ -241,7 +242,31 @@ export const useTransactionOperations = () => {
 
       console.log("🔨 Assembled transaction:", assembledTransaction);
 
-      const unsignedXDR = assembledTransaction.toXDR();
+      // make sure soroban data + auth entries are materialised
+      await assembledTransaction.simulate();
+
+      // sign each authorisation entry with the same keypair
+      const keypair = await getKeypair();
+      if (!keypair) {
+        throw new Error(STELLAR_ERRORS.NO_WALLET);
+      }
+      const nonInvokerSigners = assembledTransaction.needsNonInvokerSigningBy();
+      if (nonInvokerSigners.includes(keypair.publicKey())) {
+        const { signAuthEntry } = basicNodeSigner(
+          keypair,
+          config.networkPassphrase
+        );
+        await assembledTransaction.signAuthEntries({
+          address: keypair.publicKey(),
+          signAuthEntry
+        });
+      }
+
+      // now serialise the fully assembled transaction
+      const builtTx = assembledTransaction.built;
+      if (!builtTx) throw new Error("Soroban transaction was not built");
+
+      const unsignedXDR = builtTx.toXDR();
       if (!unsignedXDR) {
         throw new Error("Failed to generate swap transaction XDR");
       }
