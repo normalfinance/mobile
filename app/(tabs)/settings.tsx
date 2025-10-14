@@ -1,161 +1,130 @@
-import React, { useState, useEffect } from "react";
-import { useAuth } from "@clerk/clerk-expo";
-import { Alert } from "react-native";
+import React from "react";
+import { useRouter } from "expo-router";
+import { Pressable } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
-  YStack,
-  XStack,
-  H2,
-  H4,
-  Text,
-  Button,
-  Card,
-  Separator,
-  Spinner
-} from "tamagui";
-import { Clipboard } from "react-native";
-import { SignOutButton } from "@/components/sign-out";
-import { useWallet, WalletInfo } from "@/services";
-import { SettingsPageSkeleton } from "@/components/ui/skeleton/settings-skeletons";
+  ArrowLeft,
+  ChevronRight,
+  Globe,
+  Lock,
+  Wallet,
+  Bell,
+  Smile,
+  CircleDollarSign
+} from "lucide-react-native";
+import { Text, View, XStack, YStack } from "tamagui";
 
-// Utility functions
-const formatDate = (date: Date | string) => {
-  const d = typeof date === 'string' ? new Date(date) : date;
-  return d.toLocaleDateString();
+type IconComponent = React.ComponentType<{ size?: number; color?: string }>;
+
+type SettingsItem = {
+  key:
+    | "language"
+    | "currency"
+    | "reset"
+    | "notifications"
+    | "faceId"
+    | "wallet";
+  label: string;
+  Icon: IconComponent;
+  disabled: boolean;
 };
 
-const truncateAddress = (address: string, start = 6, end = 6) => {
-  if (!address) return '';
-  if (address.length <= start + end) return address;
-  return `${address.slice(0, start)}...${address.slice(-end)}`;
-};
+const ACCOUNT_ITEMS: SettingsItem[] = [
+  { key: "language", label: "Language", Icon: Globe, disabled: true },
+  {
+    key: "currency",
+    label: "Currency",
+    Icon: CircleDollarSign,
+    disabled: true
+  },
+  { key: "reset", label: "Reset Password", Icon: Lock, disabled: true },
+  {
+    key: "notifications",
+    label: "Notification Settings",
+    Icon: Bell,
+    disabled: true
+  },
+  { key: "faceId", label: "Face ID", Icon: Smile, disabled: true },
+  { key: "wallet", label: "Wallet Settings", Icon: Wallet, disabled: false }
+];
+
+function SettingsRow({
+  item,
+  onPress
+}: {
+  item: SettingsItem;
+  onPress: (item: SettingsItem) => void;
+}) {
+  const { Icon } = item;
+
+  return (
+    <Pressable onPress={() => onPress(item)} disabled={item.disabled}>
+      <View style={{ opacity: item.disabled ? 0.4 : 1 }}>
+        <XStack
+          alignItems='center'
+          justifyContent='space-between'
+          paddingVertical='$3'
+          paddingHorizontal='$4'
+          backgroundColor='#FFFFFF'
+        >
+          <XStack alignItems='center' space='$3'>
+            <View padding='$2' borderRadius={8} backgroundColor='transparent'>
+              <Icon size={16} color='#1B1D28' />
+            </View>
+            <Text fontSize='$3' fontWeight='500' color='#1C252E'>
+              {item.label}
+            </Text>
+          </XStack>
+          <ChevronRight size={20} color='#9AA5B5' />
+        </XStack>
+      </View>
+    </Pressable>
+  );
+}
 
 export default function SettingsScreen() {
-  const { userId } = useAuth();
-  const [isCopying, setIsCopying] = useState(false);
-  const { data: walletInfo, isLoading } = useWallet();
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
 
-  const handleCopyAddress = async () => {
-    if (!walletInfo?.publicKey) return;
+  const handleItemPress = (item: SettingsItem) => {
+    if (item.disabled) return;
 
-    setIsCopying(true);
-    try {
-      Clipboard.setString(walletInfo.publicKey);
-      console.log("Address copied to clipboard:", walletInfo.publicKey);
-      Alert.alert("Copied!", "Wallet address copied to clipboard");
-    } catch (error) {
-      console.error("Error copying to clipboard:", error);
-      Alert.alert("Error", "Failed to copy address to clipboard");
-    } finally {
-      setIsCopying(false);
+    if (item.key === "wallet") {
+      router.push("/(tabs)/wallet-settings");
     }
   };
 
   return (
-    // @ts-ignore
-    <YStack flex={1} backgroundColor='$background'>
-      // @ts-ignore
-      <YStack p='$4'>
-        // @ts-ignore
-        <H2 mb='$4'>Settings</H2>
+    <YStack flex={1} backgroundColor='#F4F7FB' paddingTop={12}>
+      <YStack paddingHorizontal='$4' space='$5'>
+        <XStack alignItems='center' justifyContent='space-between'>
+          <Text fontSize='$6' fontWeight='600' color='#1B1D28'>
+            Settings
+          </Text>
+          <View width={24} />
+        </XStack>
 
-        {isLoading ? (
-          <SettingsPageSkeleton show={true} />
-        ) : walletInfo ? (
-          // @ts-ignore
-          <YStack marginBottom='$6'>
-            <Card elevate size='$4' bordered marginBottom='$4'>
-              <Card.Header>
-                // @ts-ignore
-                <H4>Your Stellar Wallet</H4>
-              </Card.Header>
-              <Card.Footer padded>
-                <YStack space='$3'>
-                  <YStack space='$2'>
-                    <Text fontSize='$3' fontWeight='600' color='$color11'>
-                      Public Address
-                    </Text>
-                    {/* @ts-ignore */}
-                    <XStack alignItems='center' space='$2'>
-                      <Text
-                        fontSize='$4'
-                        // @ts-ignore
-                        fontFamily='$mono'
-                        color='$color12'
-                        flex={1}
-                        numberOfLines={1}
-                      >
-                        {truncateAddress(walletInfo.publicKey, 12, 12)}
-                      </Text>
-                      <Button
-                        size='$3'
-                        variant='outlined'
-                        // @ts-ignore
-                        onPress={handleCopyAddress}
-                        disabled={isCopying}
-                      >
-                        <Text fontSize='$2'>
-                          {isCopying ? "Copying..." : "Copy"}
-                        </Text>
-                      </Button>
-                    </XStack>
-                  </YStack>
-
-                  <Separator />
-
-                  <YStack space='$2'>
-                    <Text fontSize='$3' fontWeight='600' color='$color11'>
-                      Wallet Details
-                    </Text>
-                    {/* @ts-ignore */}
-                    <XStack justifyContent='space-between'>
-                      <Text fontSize='$3' color='$color10'>
-                        Created:
-                      </Text>
-                      <Text fontSize='$3' color='$color12'>
-                        {formatDate(new Date())}
-                      </Text>
-                    </XStack>
-                    {/* @ts-ignore */}
-                    <XStack justifyContent='space-between'>
-                      <Text fontSize='$3' color='$color10'>
-                        Type:
-                      </Text>
-                      <Text fontSize='$3' color='$color12'>
-                        Stellar Wallet
-                      </Text>
-                    </XStack>
-                  </YStack>
-
-                  <Separator />
-
-                  <Button
-                    size='$3'
-                    variant='outlined'
-                    theme='blue'
-                    onPress={handleCopyAddress}
-                    disabled={isCopying}
-                  >
-                    <Text>Copy Full Address</Text>
-                  </Button>
-                </YStack>
-              </Card.Footer>
-            </Card>
-          </YStack>
-        ) : (
-          <Card elevate size='$4' bordered marginBottom='$4'>
-            <Card.Header>
-              <H4>Wallet Not Found</H4>
-            </Card.Header>
-            <Card.Footer padded>
-              <Text color='$color11'>
-                No wallet information available. Please contact support if this
-                is unexpected.
-              </Text>
-            </Card.Footer>
-          </Card>
-        )}
-
-        <SignOutButton />
+        <YStack space='$3'>
+          <Text fontSize='$3' color='#6B7280'>
+            Account
+          </Text>
+          <View
+            backgroundColor='#FFFFFF'
+            borderRadius={12}
+            borderWidth={1}
+            borderColor='#E2E8F0'
+            overflow='hidden'
+          >
+            {ACCOUNT_ITEMS.map((item, index) => (
+              <React.Fragment key={item.key}>
+                <SettingsRow item={item} onPress={handleItemPress} />
+                {index < ACCOUNT_ITEMS.length - 1 ? (
+                  <View height={1} backgroundColor='#EEF2F7' marginLeft={64} />
+                ) : null}
+              </React.Fragment>
+            ))}
+          </View>
+        </YStack>
       </YStack>
     </YStack>
   );

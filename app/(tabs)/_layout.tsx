@@ -9,6 +9,7 @@ import InvestScreen from "./invest";
 import PricesScreen from "./prices";
 import IndexesScreen from "./indexes";
 import SettingsScreen from "./settings";
+import WalletSettingsScreen from "./wallet-settings";
 import {
   useHasWallet,
   useHasWalletWithBackendCheck,
@@ -24,17 +25,18 @@ import {
   type NavbarIconProps
 } from "@/components/icons/navbar";
 
-type TabKey = "home" | "prices" | "invest" | "indexes" | "settings";
+type TabKey = "home" | "prices" | "invest" | "indexes" | "settings" | "wallet-settings";
 
 const tabRoutes: Record<
   TabKey,
-  `/(${"tabs"})${"" | "/prices" | "/invest" | "/indexes" | "/settings"}`
+  `/(${"tabs"})${"" | "/prices" | "/invest" | "/indexes" | "/settings" | "/wallet-settings"}`
 > = {
   home: "/(tabs)",
   prices: "/(tabs)/prices",
   invest: "/(tabs)/invest",
   indexes: "/(tabs)/indexes",
-  settings: "/(tabs)/settings"
+  settings: "/(tabs)/settings",
+  "wallet-settings": "/(tabs)/wallet-settings"
 };
 
 type TabItem = {
@@ -103,8 +105,11 @@ export default function TabLayout() {
       : undefined;
 
   const activeTab = React.useMemo<TabKey>(() => {
+    console.log("pathname", pathname);
     const segments = pathname.split("/").filter(Boolean);
     const possibleSegment = segments[0];
+    console.log("possibleSegment", possibleSegment);
+    console.log("tabRoutes", tabRoutes);
     return possibleSegment && possibleSegment in tabRoutes
       ? (possibleSegment as TabKey)
       : "home";
@@ -129,6 +134,8 @@ export default function TabLayout() {
         return <IndexesScreen />;
       case "settings":
         return <SettingsScreen />;
+      case "wallet-settings":
+        return <WalletSettingsScreen />;
       default:
         return <HomeScreen />;
     }
