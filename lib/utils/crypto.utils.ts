@@ -4,7 +4,13 @@ import { Keypair } from "@stellar/stellar-sdk";
 import { pbkdf2 as pbkdf2Noble } from "@noble/hashes/pbkdf2";
 // @ts-ignore
 import { sha256 } from "@noble/hashes/sha2";
-import { createKeypairFromMnemonic, generateMnemonic } from "./mnemonic.utils";
+import {
+  DEFAULT_MNEMONIC_STRENGTH,
+  type MnemonicStrength,
+  createKeypairFromMnemonic,
+  generateMnemonic,
+  fundTestnetAccount
+} from "./mnemonic.utils";
 
 export const generateSecureRandomBytes = async (
   size: number = 32
@@ -140,6 +146,7 @@ export const createWalletFromMnemonic = (
 } => {
   try {
     const keypair = createKeypairFromMnemonic(mnemonic, passphrase);
+    fundTestnetAccount(keypair.publicKey());
 
     return {
       keypair,
@@ -152,15 +159,18 @@ export const createWalletFromMnemonic = (
   }
 };
 
-export const generateWalletWithMnemonic = (): {
+export const generateWalletWithMnemonic = (options?: {
+  strength?: MnemonicStrength;
+  passphrase?: string;
+}): {
   keypair: Keypair;
   publicKey: string;
   address: string;
   mnemonic: string;
 } => {
   try {
-    const mnemonic = generateMnemonic();
-    return createWalletFromMnemonic(mnemonic);
+    const mnemonic = generateMnemonic(DEFAULT_MNEMONIC_STRENGTH);
+    return createWalletFromMnemonic(mnemonic, options?.passphrase);
   } catch (error) {
     throw new Error(`Failed to generate wallet with mnemonic: ${error}`);
   }
