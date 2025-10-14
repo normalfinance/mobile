@@ -13,6 +13,7 @@ import {
 import { ArrowDown, ChevronsUpDown } from "lucide-react-native";
 import { SwapSection } from "@/components/swap/SwapSection";
 import { SwapButton } from "@/components/swap/SwapButton";
+import { SwapSectionSkeleton, SwapButtonSkeleton } from "@/components/ui/skeleton/swap-skeletons";
 import { useWalletBalances } from "@/services/balance.service";
 import {
   useSwapQuote,
@@ -44,6 +45,8 @@ const SwapCard = () => {
     useWalletBalances();
   const { data: availableTokens = [], isLoading: isLoadingTokens } =
     useAvailableTokens();
+  
+  const isInitialLoading = isLoadingBalances || isLoadingTokens;
   const executeSwapMutation = useExecuteSwap();
   const { showToast } = useToast();
 
@@ -269,6 +272,29 @@ const SwapCard = () => {
     if (quoteError) return "Error getting quote";
     return "Swap";
   };
+
+  if (isInitialLoading) {
+    return (
+      <YStack space='$4'>
+        <SwapSectionSkeleton show={true} />
+        <XStack justifyContent='center' marginVertical='$-2'>
+          <Circle
+            size={52}
+            backgroundColor='#DFE3E8'
+            opacity={0.5}
+            zIndex={2}
+            borderWidth={3}
+            borderRadius={16}
+            borderColor='#ffffff'
+          >
+            <ArrowDown size={20} color='#252525' />
+          </Circle>
+        </XStack>
+        <SwapSectionSkeleton show={true} />
+        <SwapButtonSkeleton show={true} />
+      </YStack>
+    );
+  }
 
   return (
     <YStack space='$4'>

@@ -15,6 +15,7 @@ import {
 import { Clipboard } from "react-native";
 import { SignOutButton } from "@/components/sign-out";
 import { useWallet, WalletInfo } from "@/services";
+import { SettingsPageSkeleton } from "@/components/ui/skeleton/settings-skeletons";
 
 // Utility functions
 const formatDate = (date: Date | string) => {
@@ -58,13 +59,7 @@ export default function SettingsScreen() {
         <H2 mb='$4'>Settings</H2>
 
         {isLoading ? (
-          // @ts-ignore
-          <YStack alignItems='center' justifyContent='center' height='$10'>
-            <Spinner size='large' color='$blue10' />
-            <Text mt='$2' color='$color11'>
-              Loading wallet info...
-            </Text>
-          </YStack>
+          <SettingsPageSkeleton show={true} />
         ) : walletInfo ? (
           // @ts-ignore
           <YStack marginBottom='$6'>

@@ -16,6 +16,13 @@ import {
   PRICE_CHANGE_ICON_SOURCES
 } from "@/components/portfolio/AssetList";
 import { TransactionHistory } from "@/components/portfolio/TransactionHistory";
+import { 
+  PortfolioValueSkeleton,
+  ChartSkeleton,
+  ActionButtonsSkeleton,
+  AssetListSkeleton,
+  TransactionSkeleton
+} from "@/components/ui/skeleton/portfolio-skeletons";
 import { usePortfolio } from "@/hooks/use-portfolio";
 import { useWallet } from "@/services";
 import { useAssets } from "expo-asset";
@@ -172,43 +179,63 @@ export default function HomeScreen() {
 
               <View style={{ flex: 1 }}>
                 <View style={{ flex: 1 }}>
-                  <PortfolioValue
-                    totalValue={portfolioData.totalValue}
-                    todayChange={portfolioData.todayChange}
-                    todayChangePercent={portfolioData.todayChangePercent}
-                    isLoading={isLoading}
-                  />
+                  {isLoading ? (
+                    <PortfolioValueSkeleton show={isLoading} />
+                  ) : (
+                    <PortfolioValue
+                      totalValue={portfolioData.totalValue}
+                      todayChange={portfolioData.todayChange}
+                      todayChangePercent={portfolioData.todayChangePercent}
+                      isLoading={isLoading}
+                    />
+                  )}
                 </View>
 
-                <PortfolioChart
-                  data={chartData}
-                  selectedPeriod={selectedPeriod}
-                  onPeriodChange={handlePeriodChange}
-                  isLoading={isLoading}
-                />
+                {isLoading ? (
+                  <ChartSkeleton show={isLoading} />
+                ) : (
+                  <PortfolioChart
+                    data={chartData}
+                    selectedPeriod={selectedPeriod}
+                    onPeriodChange={handlePeriodChange}
+                    isLoading={isLoading}
+                  />
+                )}
 
-                <ActionButtons
-                  onSwap={handleNavigateToInvest}
-                  onSend={handleNavigateToInvest}
-                  onBuy={handleNavigateToInvest}
-                  onSell={handleNavigateToInvest}
-                  onReceive={handleReceive}
-                />
+                {isLoading ? (
+                  <ActionButtonsSkeleton show={isLoading} />
+                ) : (
+                  <ActionButtons
+                    onSwap={handleNavigateToInvest}
+                    onSend={handleNavigateToInvest}
+                    onBuy={handleNavigateToInvest}
+                    onSell={handleNavigateToInvest}
+                    onReceive={handleReceive}
+                  />
+                )}
 
-                <AssetList
-                  assets={portfolioData.assets}
-                  selectedCategory={selectedCategory}
-                  onCategoryChange={handleCategoryChange}
-                  isLoading={isLoading}
-                  searchQuery={searchQuery}
-                />
+                {isLoading ? (
+                  <AssetListSkeleton show={isLoading} itemCount={5} />
+                ) : (
+                  <AssetList
+                    assets={portfolioData.assets}
+                    selectedCategory={selectedCategory}
+                    onCategoryChange={handleCategoryChange}
+                    isLoading={isLoading}
+                    searchQuery={searchQuery}
+                  />
+                )}
               </View>
 
               {/* Transaction History */}
-              <TransactionHistory
-                transactions={transactions}
-                isLoading={isLoading}
-              />
+              {isLoading ? (
+                <TransactionSkeleton show={isLoading} itemCount={3} />
+              ) : (
+                <TransactionHistory
+                  transactions={transactions}
+                  isLoading={isLoading}
+                />
+              )}
             </YStack>
           </ScrollView>
 

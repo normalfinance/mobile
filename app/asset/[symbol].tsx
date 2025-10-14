@@ -10,6 +10,7 @@ import { AssetIcon } from "@/components/ui/AssetIcon";
 import { PortfolioChart } from "@/components/portfolio/PortfolioChart";
 import { TransactionHistory } from "@/components/portfolio/TransactionHistory";
 import { usePortfolio } from "@/hooks/use-portfolio";
+import { AssetDetailSkeleton } from "@/components/ui/skeleton/price-skeletons";
 
 type DetailRow = {
   label: string;
@@ -119,11 +120,17 @@ export default function AssetDetailScreen() {
   const asset = assetDetailsMock[normalizedSymbol] ?? defaultAssetDetail;
   const [selectedPeriod, setSelectedPeriod] = useState<ChartPeriod>("1D");
   const [infoExpanded, setInfoExpanded] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
   const [changeIcons] = useAssets([
     require("@svgs/increase.svg"),
     require("@svgs/decrease.svg")
   ]);
   const { transactions, isLoading: isTransactionsLoading } = usePortfolio();
+
+  React.useEffect(() => {
+    const timer = setTimeout(() => setIsLoading(false), 1200);
+    return () => clearTimeout(timer);
+  }, []);
 
   const increaseIcon = changeIcons?.[0];
   const increaseIconUri = increaseIcon?.localUri ?? increaseIcon?.uri;
@@ -158,6 +165,14 @@ export default function AssetDetailScreen() {
       params: { sellAsset: assetSymbol }
     });
   };
+
+  if (isLoading) {
+    return (
+      <YStack flex={1} backgroundColor='#FFFFFF'>
+        <AssetDetailSkeleton show={true} />
+      </YStack>
+    );
+  }
 
   return (
     <YStack flex={1} backgroundColor='#FFFFFF'>

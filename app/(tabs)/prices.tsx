@@ -13,6 +13,7 @@ import {
   getCollectionAssets,
   getFeaturedAssets
 } from "@/services/prices.service";
+import { PriceListSkeleton } from "@/components/ui/skeleton/price-skeletons";
 import { ChevronRightIcon } from "lucide-react-native";
 
 import { assetClassStyles } from "@/constants/assetClassStyles";
@@ -185,10 +186,16 @@ export default function PricesScreen() {
   const router = useRouter();
   const [selectedCategory, setSelectedCategory] =
     useState<AssetCategory>("Trending");
+  const [isLoading, setIsLoading] = useState(true);
   const [changeIcons] = useAssets([
     require("@svgs/increase.svg"),
     require("@svgs/decrease.svg")
   ]);
+
+  React.useEffect(() => {
+    const timer = setTimeout(() => setIsLoading(false), 1000);
+    return () => clearTimeout(timer);
+  }, []);
 
   const increaseIcon = changeIcons?.[0];
   const decreaseIcon = changeIcons?.[1];
@@ -207,6 +214,14 @@ export default function PricesScreen() {
       asset.categories.includes(selectedCategory)
     );
   }, [selectedCategory]);
+
+  if (isLoading) {
+    return (
+      <YStack flex={1} backgroundColor='#FFFFFF'>
+        <PriceListSkeleton show={true} itemCount={8} />
+      </YStack>
+    );
+  }
 
   return (
     <YStack flex={1} backgroundColor='#FFFFFF'>
