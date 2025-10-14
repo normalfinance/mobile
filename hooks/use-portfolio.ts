@@ -90,6 +90,11 @@ export const usePortfolio = () => {
     isLoadingHistorical ||
     isLoadingTransactions;
 
+  console.log("!!balancesError", balancesError);
+  console.log("Object.keys(priceErrors).length > 0 ", Object.keys(priceErrors).length > 0);
+  console.log(" Object.keys(historicalErrors).length > 0", Object.keys(historicalErrors).length > 0);
+  console.log("Boolean(transactionsError)", Boolean(transactionsError));
+
   const hasError =
     !!balancesError ||
     Object.keys(priceErrors).length > 0 ||

@@ -13,6 +13,7 @@ import {
   CircleDollarSign
 } from "lucide-react-native";
 import { Text, View, XStack, YStack } from "tamagui";
+import { SignOutButton } from "@/components/sign-out";
 
 type IconComponent = React.ComponentType<{ size?: number; color?: string }>;
 
@@ -124,6 +125,10 @@ export default function SettingsScreen() {
               </React.Fragment>
             ))}
           </View>
+        </YStack>
+
+        <YStack space='$3'>
+          <SignOutButton />
         </YStack>
       </YStack>
     </YStack>
