@@ -269,7 +269,7 @@ const IndexesScreen: React.FC = () => {
         contentContainerStyle={{
           paddingHorizontal: 24,
           paddingTop: 24,
-          paddingBottom: 40
+          minHeight: '100%'
         }}
         showsVerticalScrollIndicator={false}
       >

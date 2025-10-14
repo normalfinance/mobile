@@ -124,31 +124,32 @@ export default function HomeScreen() {
   return (
     <YStack flex={1} backgroundColor='$background'>
       {hasError ? (
-        <SafeAreaView style={{ flex: 1 }}>
-          <YStack
-            flex={1}
-            padding='$1'
-            backgroundColor='$background'
-            justifyContent='center'
-            alignItems='center'
+        <YStack
+          flex={1}
+          padding='$4'
+          backgroundColor='$background'
+          justifyContent='center'
+          alignItems='center'
+        >
+          <Text
+            fontSize='$4'
+            color='$red10'
+            textAlign='center'
+            marginBottom='$4'
           >
-            <Text
-              fontSize='$4'
-              color='$red10'
-              textAlign='center'
-              marginBottom='$4'
-            >
-              Error loading portfolio data
-            </Text>
-            <Text fontSize='$3' color='$textSecondary' textAlign='center'>
-              Please check your wallet connection and try again
-            </Text>
-          </YStack>
-        </SafeAreaView>
+            Error loading portfolio data
+          </Text>
+          <Text fontSize='$3' color='$textSecondary' textAlign='center'>
+            Please check your wallet connection and try again
+          </Text>
+        </YStack>
       ) : (
         <>
-          <ScrollView showsVerticalScrollIndicator={false}>
-            <YStack padding='$3'>
+          <ScrollView 
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ minHeight: '100%' }}
+          >
+            <YStack padding='$3' flex={1}>
               {/* Header with search and statistics */}
               <XStack
                 justifyContent='space-between'
@@ -251,8 +252,7 @@ export default function HomeScreen() {
                 bottom: 0
               }}
             >
-              <SafeAreaView style={{ flex: 1 }}>
-                <YStack flex={1} padding='$3' gap='$4'>
+              <YStack flex={1} padding='$3' gap='$4' paddingTop='$6'>
                   <XStack
                     alignItems='center'
                     justifyContent='space-between'
@@ -331,7 +331,6 @@ export default function HomeScreen() {
                     </YStack>
                   </ScrollView>
                 </YStack>
-              </SafeAreaView>
             </BlurView>
           )}
 

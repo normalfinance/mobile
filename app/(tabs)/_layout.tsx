@@ -2,7 +2,7 @@ import { Redirect, usePathname, useRouter } from "expo-router";
 import React from "react";
 import { useAuth } from "@clerk/clerk-expo";
 import { Tabs, YStack, Text, View, Spinner } from "tamagui";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import HomeScreen from "./index";
 import InvestScreen from "./invest";
@@ -78,6 +78,7 @@ export default function TabLayout() {
   const { isSignedIn, userId } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+  const insets = useSafeAreaInsets();
   const { data: credentials, isLoading: isLoadingCredentials } =
     useAuthCredentials();
   const { data: hasLocalWallet, isLoading: isCheckingLocalWallet } =
@@ -165,56 +166,66 @@ export default function TabLayout() {
       ) : (
         // @ts-ignore
         <View flex={1} backgroundColor='$background'>
-          <SafeAreaView style={{ flex: 1 }}>
-            <YStack flex={1}>
-              <YStack flex={1}>{renderTabContent()}</YStack>
-
-              <Tabs
-                value={activeTab}
-                onValueChange={handleTabChange}
-                orientation='horizontal'
-                flexDirection='row'
-                width='100%'
+          <YStack flex={1}>
+            <SafeAreaView style={{ flex: 1, paddingBottom: 0 }}>
+              <YStack 
+                flex={1} 
+                paddingBottom={20 + insets.bottom}
               >
-                <Tabs.List
-                  backgroundColor='$background'
-                  borderTopWidth={1}
-                  borderTopColor='$borderColor'
-                  width='100%'
-                  paddingVertical='$2'
-                  gap='$0'
-                >
-                  {TAB_ITEMS.map(({ key, label, Icon }) => {
-                    const isActive = activeTab === key;
-                    const color = isActive ? ACTIVE_TAB_COLOR : INACTIVE_TAB_COLOR;
+                {renderTabContent()}
+              </YStack>
+            </SafeAreaView>
 
-                    return (
-                      <Tabs.Tab
-                        key={key}
-                        value={key}
-                        flex={1}
-                        alignItems='center'
-                        justifyContent='center'
-                        paddingVertical='$1'
-                        paddingHorizontal='$0'
-                      >
-                        <YStack alignItems='center' space='$1'>
-                          <Icon color={color} />
-                          <Text
-                            fontSize='$1'
-                            fontWeight={isActive ? "600" : "500"}
-                            color={color}
-                          >
-                            {label}
-                          </Text>
-                        </YStack>
-                      </Tabs.Tab>
-                    );
-                  })}
-                </Tabs.List>
-              </Tabs>
-            </YStack>
-          </SafeAreaView>
+            <Tabs
+              value={activeTab}
+              onValueChange={handleTabChange}
+              orientation='horizontal'
+              flexDirection='row'
+              width='100%'
+              position='absolute'
+              bottom={0}
+              left={0}
+              right={0}
+            >
+              <Tabs.List
+                backgroundColor='$background'
+                borderTopWidth={1}
+                borderTopColor='$borderColor'
+                width='100%'
+                paddingVertical='$2'
+                paddingBottom={insets.bottom + 8}
+                gap='$0'
+              >
+                {TAB_ITEMS.map(({ key, label, Icon }) => {
+                  const isActive = activeTab === key;
+                  const color = isActive ? ACTIVE_TAB_COLOR : INACTIVE_TAB_COLOR;
+
+                  return (
+                    <Tabs.Tab
+                      key={key}
+                      value={key}
+                      flex={1}
+                      alignItems='center'
+                      justifyContent='center'
+                      paddingVertical='$1'
+                      paddingHorizontal='$0'
+                    >
+                      <YStack alignItems='center' space='$1'>
+                        <Icon color={color} />
+                        <Text
+                          fontSize='$1'
+                          fontWeight={isActive ? "600" : "500"}
+                          color={color}
+                        >
+                          {label}
+                        </Text>
+                      </YStack>
+                    </Tabs.Tab>
+                  );
+                })}
+              </Tabs.List>
+            </Tabs>
+          </YStack>
         </View>
       )}
     </>
