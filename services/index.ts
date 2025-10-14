@@ -90,6 +90,12 @@ export {
   getAssetCategories
 } from "./prices.service";
 
+export {
+  coinMarketCapService,
+  useHistoricalPrices,
+  coinMarketCapQueryKeys
+} from "./coinmarketcap.service";
+
 // Export swap operation types for advanced usage
 export type {
   EstimateSwapArgs,

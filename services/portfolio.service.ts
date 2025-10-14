@@ -1,5 +1,9 @@
 import { DisplayAsset } from "@/lib/types/balance.types";
 import { TokenPriceResult } from "@/lib/types/oracle.types";
+import type {
+  HistoricalPriceMap,
+  HistoricalPricePoint
+} from "../services/coinmarketcap.service";
 
 export interface AssetWithPrice extends DisplayAsset {
   usdValue: number;
@@ -20,6 +24,8 @@ export interface ChartDataPoint {
   date: string;
 }
 
+export type PortfolioPeriod = "1D" | "7D" | "30D" | "180D" | "365D" | "All";
+
 export type TransactionType = "swap" | "send" | "receive" | "buy" | "sell";
 
 export interface Transaction {
@@ -34,100 +40,155 @@ export interface Transaction {
   status: "completed" | "pending" | "failed";
 }
 
-export const calculatePortfolioData = (
-  assets: DisplayAsset[],
-  prices: Record<string, TokenPriceResult>
-): PortfolioData => {
-  let totalValue = 0;
-  const assetsWithPrices: AssetWithPrice[] = [];
+const sanitizeNumber = (value: number): number =>
+  Number.isFinite(value) ? value : 0;
 
-  assets.forEach((asset) => {
-    const priceData = prices[asset.asset_code];
-    if (priceData && priceData.price) {
-      const usdPrice = parseFloat(priceData.price);
-      const balance = parseFloat(asset.balance);
-      const usdValue = balance * usdPrice;
+const getPointPrice = (point: HistoricalPricePoint): number => {
+  const close =
+    typeof point.close === "number" && Number.isFinite(point.close)
+      ? point.close
+      : undefined;
 
-      totalValue += usdValue;
-
-      assetsWithPrices.push({
-        ...asset,
-        usdValue,
-        usdPrice,
-        priceChange24h: generateMockPriceChange() // Mock data for now
-      });
-    } else {
-      // Include assets without price data as $0 value
-      assetsWithPrices.push({
-        ...asset,
-        usdValue: 0,
-        usdPrice: 0,
-        priceChange24h: 0
-      });
-    }
-  });
-
-  // Mock today's change - in a real app this would be calculated from historical data
-  const todayChange = totalValue * 0.0114; // 1.14% as shown in design
-  const todayChangePercent = 1.14;
-
-  return {
-    totalValue,
-    todayChange,
-    todayChangePercent,
-    assets: assetsWithPrices
-  };
+  return sanitizeNumber(close ?? point.price ?? 0);
 };
 
-export const generateChartData = (
-  period: string,
-  currentValue: number
-): ChartDataPoint[] => {
-  const now = Date.now();
-  const dataPoints: ChartDataPoint[] = [];
-
-  let points: number;
-  let intervalMs: number;
-
-  switch (period) {
-    case "1D":
-      points = 24;
-      intervalMs = 60 * 60 * 1000; // 1 hour
-      break;
-    case "7D":
-      points = 7;
-      intervalMs = 24 * 60 * 60 * 1000; // 1 day
-      break;
-    case "30D":
-      points = 30;
-      intervalMs = 24 * 60 * 60 * 1000; // 1 day
-      break;
-    case "180D":
-      points = 30;
-      intervalMs = 6 * 24 * 60 * 60 * 1000; // 6 days
-      break;
-    case "365D":
-      points = 52;
-      intervalMs = 7 * 24 * 60 * 60 * 1000; // 1 week
-      break;
-    case "All":
-      points = 12;
-      intervalMs = 30 * 24 * 60 * 60 * 1000; // 1 month
-      break;
-    default:
-      points = 24;
-      intervalMs = 60 * 60 * 1000;
+const computeAssetChangePercent = (
+  history: HistoricalPricePoint[] | undefined,
+  period: PortfolioPeriod
+): number => {
+  if (!history || history.length === 0) {
+    return 0;
   }
 
-  // Generate mock data with some variation
-  for (let i = points - 1; i >= 0; i--) {
-    const timestamp = now - i * intervalMs;
-    const variation = (Math.random() - 0.5) * 0.1; // ±5% variation
-    const value = currentValue * (1 + variation);
+  const sorted = [...history].sort((a, b) => a.timestamp - b.timestamp);
+  const latestPoint = sorted[sorted.length - 1];
+
+  if (period === "1D" || period === "7D" || period === "30D") {
+    const percentChangeField = (() => {
+      switch (period) {
+        case "1D":
+          return latestPoint.percentChange24h;
+        case "7D":
+          return latestPoint.percentChange7d;
+        case "30D":
+          return latestPoint.percentChange30d;
+        default:
+          return undefined;
+      }
+    })();
+
+    if (
+      typeof percentChangeField === "number" &&
+      Number.isFinite(percentChangeField)
+    ) {
+      return sanitizeNumber(percentChangeField);
+    }
+  }
+
+  if (sorted.length < 2) {
+    return 0;
+  }
+
+  const firstPrice = getPointPrice(sorted[0]);
+  const latestPrice = getPointPrice(latestPoint);
+
+  if (!firstPrice || firstPrice === 0) {
+    return 0;
+  }
+
+  return sanitizeNumber(((latestPrice - firstPrice) / firstPrice) * 100);
+};
+
+const calculateUsdPrice = (
+  assetCode: string,
+  prices: Record<string, TokenPriceResult>,
+  history: HistoricalPricePoint[] | undefined
+): number => {
+  const priceData = prices[assetCode];
+
+  if (priceData?.price) {
+    const parsed = parseFloat(priceData.price);
+    if (Number.isFinite(parsed) && parsed >= 0) {
+      return parsed;
+    }
+  }
+
+  if (history && history.length > 0) {
+    const latest = history.reduce((prev, current) =>
+      current.timestamp > prev.timestamp ? current : prev
+    );
+    return getPointPrice(latest);
+  }
+
+  return 0;
+};
+
+interface AssetHistoryState {
+  balance: number;
+  history: HistoricalPricePoint[];
+  index: number;
+  lastPrice: number | undefined;
+}
+
+export const generatePortfolioChartData = (
+  assets: DisplayAsset[],
+  period: PortfolioPeriod,
+  historicalPrices: HistoricalPriceMap
+): ChartDataPoint[] => {
+  const timestamps = new Set<number>();
+
+  assets.forEach((asset) => {
+    const history = historicalPrices[asset.asset_code];
+    history?.forEach((point) => {
+      if (Number.isFinite(point.timestamp)) {
+        timestamps.add(point.timestamp);
+      }
+    });
+  });
+
+  const sortedTimestamps = Array.from(timestamps).sort((a, b) => a - b);
+
+  if (sortedTimestamps.length === 0) {
+    return [];
+  }
+
+  const assetStates: AssetHistoryState[] = assets.map((asset) => {
+    const history = [...(historicalPrices[asset.asset_code] ?? [])].sort(
+      (a, b) => a.timestamp - b.timestamp
+    );
+
+    return {
+      balance: sanitizeNumber(parseFloat(asset.balance) || 0),
+      history,
+      index: 0,
+      lastPrice: undefined
+    };
+  });
+
+  const dataPoints: ChartDataPoint[] = [];
+
+  for (const timestamp of sortedTimestamps) {
+    let totalValue = 0;
+
+    assetStates.forEach((state) => {
+      const { history } = state;
+
+      while (
+        state.index < history.length &&
+        history[state.index].timestamp <= timestamp
+      ) {
+        state.lastPrice = getPointPrice(history[state.index]);
+        state.index += 1;
+      }
+
+      if (state.lastPrice !== undefined) {
+        totalValue += state.balance * state.lastPrice;
+      }
+    });
 
     dataPoints.push({
       timestamp,
-      value: Math.max(0, value),
+      value: sanitizeNumber(totalValue),
       date: formatDateForPeriod(timestamp, period)
     });
   }
@@ -135,7 +196,57 @@ export const generateChartData = (
   return dataPoints;
 };
 
-const formatDateForPeriod = (timestamp: number, period: string): string => {
+export const calculatePortfolioData = (
+  assets: DisplayAsset[],
+  prices: Record<string, TokenPriceResult>,
+  chartData: ChartDataPoint[],
+  historicalPrices: HistoricalPriceMap,
+  period: PortfolioPeriod
+): PortfolioData => {
+  const assetsWithPrices: AssetWithPrice[] = [];
+  let totalValue = 0;
+  let totalChangeUsd = 0;
+
+  assets.forEach((asset) => {
+    const balance = sanitizeNumber(parseFloat(asset.balance) || 0);
+    const history = historicalPrices[asset.asset_code];
+    const usdPrice = calculateUsdPrice(asset.asset_code, prices, history);
+    const usdValue = balance * usdPrice;
+    const percentChange = computeAssetChangePercent(history, period);
+
+    const sanitizedUsdValue = sanitizeNumber(usdValue);
+
+    totalValue += sanitizedUsdValue;
+
+    totalChangeUsd += sanitizeNumber(sanitizedUsdValue * (percentChange / 100));
+
+    assetsWithPrices.push({
+      ...asset,
+      usdValue: sanitizedUsdValue,
+      usdPrice: sanitizeNumber(usdPrice),
+      priceChange24h: sanitizeNumber(percentChange)
+    });
+  });
+
+  const latestValue = sanitizeNumber(totalValue);
+  const todayChange = sanitizeNumber(totalChangeUsd);
+  const previousValue = sanitizeNumber(latestValue - todayChange);
+
+  const todayChangePercent =
+    previousValue > 0 ? sanitizeNumber((todayChange / previousValue) * 100) : 0;
+
+  return {
+    totalValue: latestValue,
+    todayChange,
+    todayChangePercent,
+    assets: assetsWithPrices
+  };
+};
+
+const formatDateForPeriod = (
+  timestamp: number,
+  period: PortfolioPeriod
+): string => {
   const date = new Date(timestamp);
 
   switch (period) {
@@ -160,9 +271,4 @@ const formatDateForPeriod = (timestamp: number, period: string): string => {
     default:
       return date.toLocaleDateString();
   }
-};
-
-const generateMockPriceChange = (): number => {
-  // Generate random price change between -10% and +10%
-  return (Math.random() - 0.5) * 20;
 };
