@@ -10,9 +10,15 @@ export interface MnemonicVerificationWord {
   word: string;
 }
 
-export const generateMnemonic = (): string => {
+export type MnemonicStrength = 128 | 160 | 192 | 224 | 256;
+
+export const DEFAULT_MNEMONIC_STRENGTH: MnemonicStrength = 128;
+
+export const generateMnemonic = (
+  strength: MnemonicStrength = DEFAULT_MNEMONIC_STRENGTH
+): string => {
   // Generate entropy using expo-crypto to ensure compatibility
-  const entropy = Crypto.getRandomValues(new Uint8Array(32)); // 32 bytes = 256 bits
+  const entropy = Crypto.getRandomValues(new Uint8Array(strength / 8));
   const entropyHex = Array.from(entropy, (byte) =>
     byte.toString(16).padStart(2, "0")
   ).join("");
@@ -84,6 +90,23 @@ const deriveStellarAccountRawSeed = (
   }
 
   return key;
+};
+
+export const fundTestnetAccount = async (publicKey: string) => {
+  try {
+    console.log("Funding account via Friendbot", publicKey);
+    const response = await fetch(
+      `https://friendbot.stellar.org?addr=${encodeURIComponent(publicKey)}`
+    );
+    if (!response.ok) {
+      throw new Error("Failed to fund account via Friendbot");
+    }
+    console.log("Funded account via Friendbot");
+    return true;
+  } catch (error) {
+    console.error("Failed to fund account via Friendbot", error);
+    throw new Error("Failed to fund account via Friendbot");
+  }
 };
 
 export const createKeypairFromMnemonic = (

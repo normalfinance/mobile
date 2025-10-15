@@ -22,7 +22,7 @@ export const PortfolioValue: React.FC<PortfolioValueProps> = ({
 
   if (isLoading) {
     return (
-      <YStack alignItems='flex-start' space='$2' marginBottom='$4'>
+      <YStack alignItems='flex-start' space='$2' marginBottom='$4' justifyContent='center'>
         <XStack alignItems='center' space='$2' justifyContent='space-between'>
           <Text fontSize='$2' color='#637381' fontWeight='500'>
             Estimated total value
@@ -47,7 +47,7 @@ export const PortfolioValue: React.FC<PortfolioValueProps> = ({
   }
 
   return (
-    <YStack alignItems='flex-start' space='$2' marginBottom='$4'>
+    <YStack alignItems='flex-start' space='$2' marginBottom='$4' justifyContent='center' paddingTop={20}>
       <XStack
         alignItems='center'
         space='$2'
@@ -73,7 +73,7 @@ export const PortfolioValue: React.FC<PortfolioValueProps> = ({
         fontWeight='700'
         color='#11181C'
         fontFamily='$numeric'
-        marginVertical='$2'
+        marginVertical='$0'
       >
         {/* $20,498.57 */}
         {totalValue.toLocaleString("en-US", {

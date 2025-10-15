@@ -488,7 +488,7 @@ export default function WalletSetupScreen() {
             </YStack>
 
             <YStack space='$4'>
-              {chunkArray(formattedMnemonic, 4).map((row, rowIndex) => (
+              {chunkArray(formattedMnemonic, 3).map((row, rowIndex) => (
                 <XStack
                   key={rowIndex}
                   space='$2'

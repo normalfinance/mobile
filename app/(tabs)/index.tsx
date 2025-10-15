@@ -5,6 +5,7 @@ import { useRouter } from "expo-router";
 import QRCode from "react-native-qrcode-svg";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Search } from "lucide-react-native";
+import { Check } from "lucide-react-native";
 import * as Clipboard from "expo-clipboard";
 
 import { PortfolioValue } from "@/components/portfolio/PortfolioValue";
@@ -16,7 +17,7 @@ import {
   PRICE_CHANGE_ICON_SOURCES
 } from "@/components/portfolio/AssetList";
 import { TransactionHistory } from "@/components/portfolio/TransactionHistory";
-import { 
+import {
   PortfolioValueSkeleton,
   ChartSkeleton,
   ActionButtonsSkeleton,
@@ -35,6 +36,7 @@ export default function HomeScreen() {
     chartData,
     transactions,
     isLoading,
+    isChartRefreshing,
     hasError,
     selectedPeriod,
     selectedCategory,
@@ -46,6 +48,10 @@ export default function HomeScreen() {
   const [searchQuery, setSearchQuery] = React.useState("");
   const [isReceiveModalOpen, setIsReceiveModalOpen] = React.useState(false);
   const [isCopyingAddress, setIsCopyingAddress] = React.useState(false);
+  const [addressCopied, setAddressCopied] = React.useState(false);
+  const addressCopyTimeoutRef = React.useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
   const [priceChangeAssets] = useAssets(PRICE_CHANGE_ICON_SOURCES);
 
   const normalizedSearchQuery = React.useMemo(
@@ -98,10 +104,27 @@ export default function HomeScreen() {
     try {
       setIsCopyingAddress(true);
       await Clipboard.setStringAsync(walletAddress);
+      setAddressCopied(true);
+      if (addressCopyTimeoutRef.current) {
+        clearTimeout(addressCopyTimeoutRef.current);
+      }
+      addressCopyTimeoutRef.current = setTimeout(() => {
+        setAddressCopied(false);
+        addressCopyTimeoutRef.current = null;
+      }, 2000);
     } finally {
       setIsCopyingAddress(false);
     }
   }, [walletAddress]);
+
+  React.useEffect(() => {
+    return () => {
+      if (addressCopyTimeoutRef.current) {
+        clearTimeout(addressCopyTimeoutRef.current);
+        addressCopyTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   const hasSearchQuery = normalizedSearchQuery.length > 0;
 
@@ -145,9 +168,9 @@ export default function HomeScreen() {
         </YStack>
       ) : (
         <>
-          <ScrollView 
+          <ScrollView
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ minHeight: '100%' }}
+            contentContainerStyle={{ minHeight: "100%" }}
           >
             <YStack padding='$3' flex={1}>
               {/* Header with search and statistics */}
@@ -199,7 +222,7 @@ export default function HomeScreen() {
                     data={chartData}
                     selectedPeriod={selectedPeriod}
                     onPeriodChange={handlePeriodChange}
-                    isLoading={isLoading}
+                    isRefreshing={isChartRefreshing}
                   />
                 )}
 
@@ -253,84 +276,80 @@ export default function HomeScreen() {
               }}
             >
               <YStack flex={1} padding='$3' gap='$4' paddingTop='$6'>
+                <XStack
+                  alignItems='center'
+                  justifyContent='space-between'
+                  gap='$2'
+                >
                   <XStack
+                    flex={1}
                     alignItems='center'
-                    justifyContent='space-between'
-                    gap='$2'
+                    backgroundColor='#919EAB1F'
+                    borderWidth={1}
+                    borderColor='#919EAB1F'
+                    borderRadius='$12'
+                    paddingLeft='$3'
                   >
-                    <XStack
-                      flex={1}
-                      alignItems='center'
-                      backgroundColor='#919EAB1F'
-                      borderWidth={1}
-                      borderColor='#919EAB1F'
-                      borderRadius='$12'
-                      paddingLeft='$3'
-                    >
-                      <Search size={16} color='#737381' />
-                      <Input
-                        placeholder='Search assets'
-                        backgroundColor='transparent'
-                        borderWidth={0}
-                        flex={1}
-                        fontSize='$3'
-                        value={searchQuery}
-                        onChangeText={setSearchQuery}
-                        autoFocus
-                      />
-                    </XStack>
-                    <Button
+                    <Search size={16} color='#737381' />
+                    <Input
+                      placeholder='Search assets'
                       backgroundColor='transparent'
                       borderWidth={0}
-                      onPress={() => setSearchQuery("")}
-                    >
-                      <Text color='#FFFFFF' fontWeight='600'>
-                        Cancel
-                      </Text>
-                    </Button>
+                      flex={1}
+                      fontSize='$3'
+                      value={searchQuery}
+                      onChangeText={setSearchQuery}
+                      autoFocus
+                    />
                   </XStack>
-
-                  <ScrollView
-                    contentContainerStyle={{ paddingBottom: 24 }}
-                    showsVerticalScrollIndicator={false}
+                  <Button
+                    backgroundColor='transparent'
+                    borderWidth={0}
+                    onPress={() => setSearchQuery("")}
                   >
-                    <YStack gap='$3'>
-                      {searchResults.map((asset) => (
-                        <AssetCard
-                          key={`${asset.asset_code}-${
-                            asset.asset_issuer || "native"
-                          }-search`}
-                          asset={asset}
-                          increaseIconUri={increaseIconUri}
-                          decreaseIconUri={decreaseIconUri}
-                          onPress={() => {
-                            router.push(
-                              `/asset/${asset.asset_code.toLowerCase()}`
-                            );
-                            setSearchQuery("");
-                          }}
-                        />
-                      ))}
+                    <Text color='#FFFFFF' fontWeight='600'>
+                      Cancel
+                    </Text>
+                  </Button>
+                </XStack>
 
-                      {searchResults.length === 0 && (
-                        <YStack
-                          backgroundColor='#F9FAFB'
-                          padding='$4'
-                          borderRadius='$6'
-                          alignItems='center'
-                        >
-                          <Text
-                            fontSize='$4'
-                            color='#1C252E'
-                            textAlign='center'
-                          >
-                            No assets match your search.
-                          </Text>
-                        </YStack>
-                      )}
-                    </YStack>
-                  </ScrollView>
-                </YStack>
+                <ScrollView
+                  contentContainerStyle={{ paddingBottom: 24 }}
+                  showsVerticalScrollIndicator={false}
+                >
+                  <YStack gap='$3'>
+                    {searchResults.map((asset) => (
+                      <AssetCard
+                        key={`${asset.asset_code}-${
+                          asset.asset_issuer || "native"
+                        }-search`}
+                        asset={asset}
+                        increaseIconUri={increaseIconUri}
+                        decreaseIconUri={decreaseIconUri}
+                        onPress={() => {
+                          router.push(
+                            `/asset/${asset.asset_code.toLowerCase()}`
+                          );
+                          setSearchQuery("");
+                        }}
+                      />
+                    ))}
+
+                    {searchResults.length === 0 && (
+                      <YStack
+                        backgroundColor='#F9FAFB'
+                        padding='$4'
+                        borderRadius='$6'
+                        alignItems='center'
+                      >
+                        <Text fontSize='$4' color='#1C252E' textAlign='center'>
+                          No assets match your search.
+                        </Text>
+                      </YStack>
+                    )}
+                  </YStack>
+                </ScrollView>
+              </YStack>
             </BlurView>
           )}
 
@@ -386,12 +405,18 @@ export default function HomeScreen() {
                       <Button
                         size='$3'
                         borderRadius='$2'
-                        backgroundColor='#1C252E'
+                        backgroundColor={addressCopied ? "#22C55E" : "#1C252E"}
                         onPress={handleCopyAddress}
                         disabled={isCopyingAddress}
+                        icon={
+                          addressCopied ? (
+                            <Check size={16} color='#FFFFFF' />
+                          ) : undefined
+                        }
+                        minWidth={150}
                       >
                         <Text color='white' fontWeight='600'>
-                          Copy Address
+                          {addressCopied ? "Copied" : "Copy Address"}
                         </Text>
                       </Button>
                     </YStack>
