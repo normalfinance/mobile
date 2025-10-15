@@ -3,7 +3,7 @@ import { Alert, Modal, SafeAreaView } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Clipboard from "expo-clipboard";
-import { ArrowLeft, Copy, Eye, EyeOff } from "lucide-react-native";
+import { ArrowLeft, Check, Copy, Eye, EyeOff } from "lucide-react-native";
 import { Button, Card, Separator, Text, View, XStack, YStack } from "tamagui";
 
 import { useMnemonic, useWallet } from "@/services";
@@ -14,12 +14,25 @@ export default function WalletSettingsScreen() {
   const insets = useSafeAreaInsets();
   const { data: walletInfo, isLoading } = useWallet();
   const { data: mnemonic } = useMnemonic(true);
-  const [isCopying, setIsCopying] = useState(false);
+  const [isCopyingAddress, setIsCopyingAddress] = useState(false);
+  const [addressCopied, setAddressCopied] = useState(false);
+  const addressCopyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
+  const [mnemonicCopied, setMnemonicCopied] = useState(false);
+  const mnemonicCopyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
   const [isRevealModalVisible, setIsRevealModalVisible] = useState(false);
   const [isHoldingReveal, setIsHoldingReveal] = useState(false);
   const holdTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const holdIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [holdProgress, setHoldProgress] = useState(0);
+  const HOLD_DURATION_MS = 3000;
+  const holdSecondsRemaining = Math.max(
+    0,
+    Math.ceil((HOLD_DURATION_MS / 1000) * (1 - holdProgress))
+  );
 
   const publicAddress = walletInfo?.publicKey ?? "";
   const truncatedAddress = useMemo(() => {
@@ -30,16 +43,23 @@ export default function WalletSettingsScreen() {
   }, [publicAddress]);
 
   const handleCopy = async () => {
-    if (!publicAddress || isCopying) return;
+    if (!publicAddress || isCopyingAddress) return;
     try {
-      setIsCopying(true);
+      setIsCopyingAddress(true);
       await Clipboard.setStringAsync(publicAddress);
-      Alert.alert("Copied", "Wallet address copied to clipboard");
+      setAddressCopied(true);
+      if (addressCopyTimeoutRef.current) {
+        clearTimeout(addressCopyTimeoutRef.current);
+      }
+      addressCopyTimeoutRef.current = setTimeout(() => {
+        setAddressCopied(false);
+        addressCopyTimeoutRef.current = null;
+      }, 2000);
     } catch (error) {
       console.error("Failed to copy wallet address", error);
       Alert.alert("Error", "Unable to copy wallet address. Please try again.");
     } finally {
-      setIsCopying(false);
+      setIsCopyingAddress(false);
     }
   };
 
@@ -47,7 +67,14 @@ export default function WalletSettingsScreen() {
     if (!mnemonic) return;
     try {
       await Clipboard.setStringAsync(mnemonic);
-      Alert.alert("Copied", "Recovery phrase copied to clipboard");
+      setMnemonicCopied(true);
+      if (mnemonicCopyTimeoutRef.current) {
+        clearTimeout(mnemonicCopyTimeoutRef.current);
+      }
+      mnemonicCopyTimeoutRef.current = setTimeout(() => {
+        setMnemonicCopied(false);
+        mnemonicCopyTimeoutRef.current = null;
+      }, 2000);
     } catch (error) {
       console.error("Failed to copy mnemonic", error);
       Alert.alert("Error", "Unable to copy recovery phrase. Please try again.");
@@ -77,19 +104,18 @@ export default function WalletSettingsScreen() {
 
     setIsHoldingReveal(true);
     setHoldProgress(0);
-    const holdDuration = 3000;
     const tickInterval = 100;
     let elapsed = 0;
 
     holdIntervalRef.current = setInterval(() => {
       elapsed += tickInterval;
-      setHoldProgress(Math.min(elapsed / holdDuration, 1));
+      setHoldProgress(Math.min(elapsed / HOLD_DURATION_MS, 1));
     }, tickInterval);
 
     holdTimeoutRef.current = setTimeout(() => {
       setIsRevealModalVisible(true);
       resetHoldState();
-    }, holdDuration);
+    }, HOLD_DURATION_MS);
   };
 
   const cancelHoldTimer = () => {
@@ -100,6 +126,14 @@ export default function WalletSettingsScreen() {
   useEffect(() => {
     return () => {
       resetHoldState();
+      if (addressCopyTimeoutRef.current) {
+        clearTimeout(addressCopyTimeoutRef.current);
+        addressCopyTimeoutRef.current = null;
+      }
+      if (mnemonicCopyTimeoutRef.current) {
+        clearTimeout(mnemonicCopyTimeoutRef.current);
+        mnemonicCopyTimeoutRef.current = null;
+      }
     };
   }, []);
 
@@ -164,14 +198,20 @@ export default function WalletSettingsScreen() {
               <XStack>
                 <Button
                   flex={1}
-                  icon={<Copy size={18} color='#0F172A' />}
+                  icon={
+                    addressCopied ? (
+                      <Check size={18} color='#FFFFFF' />
+                    ) : (
+                      <Copy size={18} color='#0F172A' />
+                    )
+                  }
                   onPress={handleCopy}
-                  disabled={!publicAddress || isCopying}
-                  theme='light'
-                  backgroundColor='#EEF2FF'
-                  color='#0F172A'
+                  disabled={!publicAddress || isCopyingAddress}
+                  backgroundColor={addressCopied ? "#22C55E" : "#EEF2FF"}
                 >
-                  <Text>{isCopying ? "Copying..." : "Copy Address"}</Text>
+                  <Text color={addressCopied ? "#FFFFFF" : "#0F172A"}>
+                    {addressCopied ? "Copied" : "Copy Address"}
+                  </Text>
                 </Button>
               </XStack>
             </YStack>
@@ -206,9 +246,7 @@ export default function WalletSettingsScreen() {
                   <Eye size={18} color='#FFFFFF' />
                   <Text color='#FFFFFF' fontWeight='600'>
                     {isHoldingReveal
-                      ? `Hold for ${Math.max(0, 3 * (1 - holdProgress)).toFixed(
-                          1
-                        )}s`
+                      ? `Hold for ${holdSecondsRemaining}s`
                       : "Hold to Reveal"}
                   </Text>
                 </XStack>
@@ -301,12 +339,20 @@ export default function WalletSettingsScreen() {
             <Separator />
 
             <Button
-              icon={<Copy size={18} color='#FFFFFF' />}
-              backgroundColor='#2563EB'
+              icon={
+                mnemonicCopied ? (
+                  <Check size={18} color='#FFFFFF' />
+                ) : (
+                  <Copy size={18} color='#FFFFFF' />
+                )
+              }
+              backgroundColor={mnemonicCopied ? "#22C55E" : "#2563EB"}
               onPress={handleCopyMnemonic}
               disabled={!mnemonic}
             >
-              <Text color='#FFFFFF'>Copy Recovery Phrase</Text>
+              <Text color='#FFFFFF'>
+                {mnemonicCopied ? "Copied" : "Copy Recovery Phrase"}
+              </Text>
             </Button>
 
             <Button
