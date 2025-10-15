@@ -1,6 +1,7 @@
 export const STORAGE_KEYS = {
   WALLET: "stellar_wallet",
   PRIVATE_KEY: "stellar_private_key",
+  MNEMONIC: "stellar_mnemonic",
   USER_ID: "user_id",
   ORACLE_CACHE_KEYS: "oracle_cache_keys"
 } as const;

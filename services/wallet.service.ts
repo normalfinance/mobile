@@ -38,6 +38,7 @@ export const createWallet = async (): Promise<WalletInfo> => {
 
     // Store the wallet securely
     await walletStorage.setWallet(walletInfo, keypair.secret());
+    await walletStorage.deleteMnemonic();
 
     return walletInfo;
   } catch (error) {
@@ -59,6 +60,7 @@ export const importFromPrivateKey = async (
 
     // Store the imported wallet
     await walletStorage.setWallet(walletInfo, privateKey);
+    await walletStorage.deleteMnemonic();
 
     return walletInfo;
   } catch (error) {
@@ -79,6 +81,7 @@ export const createWalletWithMnemonic = async (): Promise<
 
     // Store the wallet securely
     await walletStorage.setWallet(walletInfo, walletData.keypair.secret());
+    await walletStorage.setMnemonic(walletData.mnemonic);
 
     return {
       ...walletInfo,
@@ -109,6 +112,7 @@ export const importFromMnemonic = async (
 
     // Store the imported wallet
     await walletStorage.setWallet(walletInfo, walletData.keypair.secret());
+    await walletStorage.setMnemonic(normalizedMnemonic);
 
     return walletInfo;
   } catch (error) {
@@ -250,6 +254,7 @@ export const createDeterministicWallet = async (
       salt,
       userId
     );
+    await walletStorage.deleteMnemonic();
 
     return walletInfo;
   } catch (error) {
@@ -285,12 +290,17 @@ export const getPrivateKey = async (): Promise<string | null> => {
   return await walletStorage.getPrivateKey();
 };
 
+export const getMnemonic = async (): Promise<string | null> => {
+  return await walletStorage.getMnemonic();
+};
+
 // Query Keys
 export const walletQueryKeys = {
   all: ["wallet"] as const,
   info: () => [...walletQueryKeys.all, "info"] as const,
   keypair: () => [...walletQueryKeys.all, "keypair"] as const,
   hasWallet: () => [...walletQueryKeys.all, "hasWallet"] as const,
+  mnemonic: () => [...walletQueryKeys.all, "mnemonic"] as const,
   privateKey: () => [...walletQueryKeys.all, "privateKey"] as const,
   checkExists: (userId: string) =>
     [...walletQueryKeys.all, "checkExists", userId] as const,
@@ -389,6 +399,15 @@ export const useWalletKeypair = (enabled: boolean = true) => {
     queryFn: getKeypair,
     enabled,
     staleTime: STALE_TIMES.MEDIUM
+  });
+};
+
+export const useMnemonic = (enabled: boolean = false) => {
+  return useQuery({
+    queryKey: walletQueryKeys.mnemonic(),
+    queryFn: getMnemonic,
+    enabled,
+    staleTime: STALE_TIMES.SHORT
   });
 };
 

@@ -16,6 +16,7 @@ const deserializeFromStorage = <T>(raw: string): T =>
 const shouldBypassSerialization = (key: string): boolean =>
   key === STORAGE_KEYS.WALLET ||
   key === STORAGE_KEYS.PRIVATE_KEY ||
+  key === STORAGE_KEYS.MNEMONIC ||
   key === STORAGE_KEYS.USER_ID;
 
 export const secureStorage = {
@@ -81,12 +82,26 @@ export const walletStorage = {
     return await secureStorage.getItem(STORAGE_KEYS.PRIVATE_KEY);
   },
 
+  async setMnemonic(mnemonic: string): Promise<void> {
+    await secureStorage.setItem(STORAGE_KEYS.MNEMONIC, mnemonic);
+  },
+
+  async getMnemonic(): Promise<string | null> {
+    return await secureStorage.getItem(STORAGE_KEYS.MNEMONIC);
+  },
+
+  async deleteMnemonic(): Promise<void> {
+    await secureStorage.deleteItem(STORAGE_KEYS.MNEMONIC);
+  },
+
   async deleteWallet(): Promise<void> {
     console.log("Deleting wallet from secure storage...");
     await secureStorage.deleteItem(STORAGE_KEYS.WALLET);
     console.log("Deleted wallet info");
     await secureStorage.deleteItem(STORAGE_KEYS.PRIVATE_KEY);
     console.log("Deleted private key");
+    await secureStorage.deleteItem(STORAGE_KEYS.MNEMONIC);
+    console.log("Deleted mnemonic");
     await secureStorage.deleteItem(STORAGE_KEYS.USER_ID);
     console.log("Deleted user ID");
     console.log("All wallet data deleted successfully");
@@ -113,9 +128,15 @@ export const walletStorage = {
     walletInfo: any,
     privateKey: string,
     salt: string,
-    userId: string
+    userId: string,
+    mnemonic?: string
   ): Promise<void> {
     await this.setWallet(walletInfo, privateKey);
+    if (mnemonic) {
+      await this.setMnemonic(mnemonic);
+    } else {
+      await this.deleteMnemonic();
+    }
     await this.setUserId(userId);
   }
 };

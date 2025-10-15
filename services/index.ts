@@ -15,6 +15,7 @@ export {
   useImportWallet,
   useWallet,
   useWalletKeypair,
+  useMnemonic,
   useHasWallet,
   useDeleteWallet,
   usePrivateKey,
