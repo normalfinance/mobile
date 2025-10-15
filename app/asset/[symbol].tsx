@@ -314,32 +314,62 @@ export default function AssetDetailScreen() {
             {infoExpanded ? (
               <YStack space='$3'>
                 {metrics.length > 0 ? (
-                  metrics.map((detail) => (
-                    <XStack
-                      key={`${assetSymbol}-${detail.label}`}
-                      justifyContent='space-between'
-                      alignItems='center'
-                      space='$2'
-                    >
-                      <Text
-                        fontSize='$2'
-                        color='#637381'
-                        fontWeight='600'
-                        fontFamily='$numeric'
+                  metrics.map((detail) => {
+                    const isChangeMetric = detail.label.includes("Change");
+                    const isPositive = detail.value.startsWith("+");
+                    const valueWithoutSign = detail.value.replace(/^[+-]/, "");
+                    const metricChangeIconUri = isPositive
+                      ? increaseIconUri
+                      : decreaseIconUri;
+
+                    return (
+                      <XStack
+                        key={`${assetSymbol}-${detail.label}`}
+                        justifyContent='space-between'
+                        alignItems='center'
+                        paddingVertical='$2'
                       >
-                        {detail.label}
-                      </Text>
-                      <Text
-                        fontSize='$2'
-                        color='#1C252E'
-                        fontWeight='600'
-                        fontFamily='$numeric'
-                        textAlign='right'
-                      >
-                        {detail.value}
-                      </Text>
-                    </XStack>
-                  ))
+                        <Text
+                          fontSize='$2'
+                          color='#637381'
+                          fontWeight='600'
+                          fontFamily='$numeric'
+                        >
+                          {detail.label}
+                        </Text>
+                        {isChangeMetric ? (
+                          <XStack alignItems='center' space='$1'>
+                            {metricChangeIconUri && (
+                              <SvgUri
+                                width={16}
+                                height={16}
+                                uri={metricChangeIconUri}
+                              />
+                            )}
+                            <Text
+                              fontSize='$2'
+                              color='#1C252E'
+                              fontWeight='600'
+                              fontFamily='$numeric'
+                              textAlign='right'
+                            >
+                              {valueWithoutSign}
+                            </Text>
+                          </XStack>
+                        ) : (
+                          <Text
+                            fontSize='$2'
+                            color='#1C252E'
+                            fontWeight='600'
+                            fontFamily='$numeric'
+                            textAlign='right'
+                          >
+                            {detail.value}
+                          </Text>
+                        )}
+                      </XStack>
+                    );
+                  })
                 ) : (
                   <Text fontSize='$2' color='#637381'>
                     No additional market data available.
