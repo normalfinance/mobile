@@ -36,6 +36,7 @@ export default function HomeScreen() {
     chartData,
     transactions,
     isLoading,
+    isChartRefreshing,
     hasError,
     selectedPeriod,
     selectedCategory,
@@ -221,7 +222,7 @@ export default function HomeScreen() {
                     data={chartData}
                     selectedPeriod={selectedPeriod}
                     onPeriodChange={handlePeriodChange}
-                    isLoading={isLoading}
+                    isRefreshing={isChartRefreshing}
                   />
                 )}
 

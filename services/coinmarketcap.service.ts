@@ -276,7 +276,10 @@ const fetchHistoricalQuotes = async ({
     }
 
     const json = (await response.json()) as CoinMarketCapHistoricalResponse;
-    console.log("json3 in fetchHistoricalQuotes", json.data?.[symbol][0].quotes![0].quote?.[convert]);
+    console.log(
+      "json3 in fetchHistoricalQuotes",
+      json.data?.[symbol][0].quotes![0].quote?.[convert]
+    );
     return parseHistoricalResponse(json, symbol, convert);
   } catch (error) {
     throw handleHttpError(error);
@@ -334,7 +337,9 @@ export const useHistoricalPrices = ({
     queryFn: () => fetchHistoricalPricesForSymbols(symbols, period),
     enabled: enabled && symbols.length > 0,
     staleTime: STALE_TIMES.SHORT,
-    gcTime: STALE_TIMES.LONG
+    gcTime: STALE_TIMES.LONG,
+    keepPreviousData: true,
+    placeholderData: (previousData) => previousData
   });
 
   return {

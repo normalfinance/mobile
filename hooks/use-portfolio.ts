@@ -38,6 +38,7 @@ export const usePortfolio = () => {
   const {
     data: historicalPrices,
     isLoading: isLoadingHistorical,
+    isFetching: isFetchingHistorical,
     errors: historicalErrors
   } = useHistoricalPrices({
     symbols: assetSymbols,
@@ -84,15 +85,25 @@ export const usePortfolio = () => {
     refetch: refetchTransactions
   } = useWalletTransactions();
 
-  const isLoading =
+  const isInitialLoad =
     isLoadingBalances ||
     isLoadingPrices ||
-    isLoadingHistorical ||
-    isLoadingTransactions;
+    (walletAssets.length > 0 && isLoadingHistorical);
+
+  const isChartRefreshing =
+    walletAssets.length > 0 && !isLoadingHistorical && isFetchingHistorical;
+
+  const isLoading = isInitialLoad || isLoadingTransactions;
 
   console.log("!!balancesError", balancesError);
-  console.log("Object.keys(priceErrors).length > 0 ", Object.keys(priceErrors).length > 0);
-  console.log(" Object.keys(historicalErrors).length > 0", Object.keys(historicalErrors).length > 0);
+  console.log(
+    "Object.keys(priceErrors).length > 0 ",
+    Object.keys(priceErrors).length > 0
+  );
+  console.log(
+    " Object.keys(historicalErrors).length > 0",
+    Object.keys(historicalErrors).length > 0
+  );
   console.log("Boolean(transactionsError)", Boolean(transactionsError));
 
   const hasError =
@@ -117,6 +128,7 @@ export const usePortfolio = () => {
 
     // Loading states
     isLoading,
+    isChartRefreshing,
     hasError,
     balancesError,
     priceErrors,

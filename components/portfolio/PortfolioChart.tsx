@@ -1,7 +1,7 @@
 import React from "react";
 import { YStack, XStack, Text, Button } from "tamagui";
 import { LineChart } from "react-native-gifted-charts";
-import { Dimensions } from "react-native";
+import { ActivityIndicator, Dimensions } from "react-native";
 
 interface ChartDataPoint {
   timestamp: number;
@@ -15,7 +15,7 @@ interface PortfolioChartProps {
   data: ChartDataPoint[];
   selectedPeriod: ChartPeriod;
   onPeriodChange: (period: ChartPeriod) => void;
-  isLoading?: boolean;
+  isRefreshing?: boolean;
 }
 
 const periods: { label: string; value: ChartPeriod }[] = [
@@ -31,7 +31,7 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
   data,
   selectedPeriod,
   onPeriodChange,
-  isLoading = false
+  isRefreshing = false
 }) => {
   const screenWidth = Dimensions.get("window").width;
   const chartWidth = screenWidth - 64; // Account for padding
@@ -42,44 +42,10 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
     label: point.date
   }));
 
-  if (isLoading) {
-    return (
-      <YStack space='$4' marginBottom='$4'>
-        <YStack
-          height={200}
-          backgroundColor='$gray2'
-          borderRadius='$4'
-          justifyContent='center'
-          alignItems='center'
-        >
-          <Text color='$textSecondary'>Loading chart...</Text>
-        </YStack>
-
-        {/* Time period selector */}
-        <XStack justifyContent='space-between' paddingHorizontal='$2'>
-          {periods.map((period) => (
-            <Button
-              key={period.value}
-              size='$2'
-              backgroundColor='transparent'
-              color='$textSecondary'
-              fontSize='$3'
-              fontWeight='500'
-              onPress={() => onPeriodChange(period.value)}
-              disabled
-            >
-              {period.label}
-            </Button>
-          ))}
-        </XStack>
-      </YStack>
-    );
-  }
-
   return (
     <YStack marginBottom='$4'>
       {/* Chart container */}
-      <YStack height={200} space='$0'>
+      <YStack height={200} space='$0' position='relative'>
         <LineChart
           data={chartData}
           width={chartWidth}
@@ -107,6 +73,21 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
             padding: 0
           }}
         />
+        {isRefreshing ? (
+          <YStack
+            position='absolute'
+            top={0}
+            left={0}
+            right={0}
+            bottom={0}
+            justifyContent='center'
+            alignItems='center'
+            backgroundColor='rgba(255, 255, 255, 0.6)'
+            borderRadius='$4'
+          >
+            {/* <ActivityIndicator color='#1C252E' size='small' /> */}
+          </YStack>
+        ) : null}
       </YStack>
 
       {/* Time period selector */}
@@ -127,6 +108,7 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
             borderRadius='$8'
             paddingHorizontal='$3'
             onPress={() => onPeriodChange(period.value)}
+            disabled={isRefreshing && selectedPeriod !== period.value}
             fontFamily='$numericl'
           >
             {period.label}
