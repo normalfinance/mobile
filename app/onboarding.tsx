@@ -107,7 +107,8 @@ export default function OnboardingScreen() {
 
   const completeOnboarding = useCallback(async () => {
     try {
-      await secureStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETE, "true");
+      //DEBUG: Disable onboarding completion - Enable later
+      // await secureStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETE, "true");
     } catch (error) {
       console.error("Failed to persist onboarding completion", error);
     } finally {
@@ -117,7 +118,7 @@ export default function OnboardingScreen() {
 
   const handleNext = useCallback(() => {
     if (currentIndex === SLIDES.length - 1) {
-      void completeOnboarding();
+      completeOnboarding();
       return;
     }
 
@@ -126,7 +127,7 @@ export default function OnboardingScreen() {
 
   const handleSkip = useCallback(() => {
     if (currentSlide.showSkip) {
-      void completeOnboarding();
+      completeOnboarding();
     }
   }, [completeOnboarding, currentSlide.showSkip]);
 
@@ -136,22 +137,26 @@ export default function OnboardingScreen() {
 
   return (
     <SafeAreaView style={styles.root}>
-      <YStack flex={1} paddingHorizontal='$5' paddingBottom='$6'>
+      <YStack
+        flex={1}
+        paddingHorizontal='$5'
+        paddingBottom='$6'
+        backgroundColor='#FFFFFF'
+      >
         <XStack
           alignItems='center'
           justifyContent='space-between'
           marginTop='$3'
           marginBottom='$4'
+          width='100%'
         >
-          <XStack width={72} />
-
-          <XStack flex={1} justifyContent='center' space='$2'>
+          <XStack justifyContent='center' space='$2'>
             {SLIDES.map((slide, index) => {
               const isActive = index === currentIndex;
               return (
                 <YStack
                   key={slide.key}
-                  width={isActive ? 28 : 8}
+                  width={8}
                   height={8}
                   borderRadius={9999}
                   backgroundColor={isActive ? "#1C2430" : "#D4D9E3"}
@@ -162,13 +167,11 @@ export default function OnboardingScreen() {
 
           {currentSlide.showSkip ? (
             <Button unstyled onPress={handleSkip} paddingHorizontal={0}>
-              <Text color='#667085' fontSize={16} fontWeight='500'>
+              <Text color='#1C252E' fontSize={16} fontWeight='500'>
                 Skip
               </Text>
             </Button>
-          ) : (
-            <XStack width={72} />
-          )}
+          ) : null}
         </XStack>
 
         <YStack flex={1} alignItems='center' justifyContent='space-between'>
@@ -192,44 +195,40 @@ export default function OnboardingScreen() {
 
           <YStack
             width='100%'
-            backgroundColor='#FFFFFF'
-            borderRadius={28}
-            paddingVertical='$6'
+            backgroundColor='#F8FAFC'
+            borderRadius={12}
+            paddingVertical='$4'
             paddingHorizontal='$5'
             space='$5'
-            shadowColor='rgba(15, 23, 42, 0.08)'
-            shadowOffset={{ width: 0, height: 18 }}
-            shadowOpacity={1}
-            shadowRadius={32}
-            elevation={16}
           >
             <YStack space='$3' alignItems='center'>
               <Text
                 textAlign='center'
-                color='#0D0D12'
-                fontSize={28}
-                fontWeight='600'
-                lineHeight={34}
+                color='#1C252E'
+                fontSize={36}
+                fontWeight='700'
+                lineHeight={40}
               >
                 {currentSlide.title}
               </Text>
               <Paragraph
                 textAlign='center'
-                color='#667085'
+                color='#637381'
                 fontSize={16}
-                lineHeight={24}
+                fontWeight='500'
+                lineHeight={18}
               >
                 {currentSlide.description}
               </Paragraph>
             </YStack>
 
             <Button
-              height={56}
-              borderRadius={14}
-              backgroundColor='#101828'
+              height={40}
+              borderRadius={4}
+              backgroundColor='#1C252E'
               onPress={handleNext}
             >
-              <Text color='#FFFFFF' fontSize={16} fontWeight='600'>
+              <Text color='#FFFFFF' fontSize={14} fontWeight='700'>
                 {currentSlide.ctaLabel}
               </Text>
             </Button>
