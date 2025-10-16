@@ -102,7 +102,7 @@ export default function OnboardingScreen() {
   const completeOnboarding = useCallback(async () => {
     try {
       //DEBUG: Disable onboarding completion - Enable later
-      // await secureStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETE, "true");
+      await secureStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETE, "true");
     } catch (error) {
       console.error("Failed to persist onboarding completion", error);
     } finally {
@@ -143,6 +143,7 @@ export default function OnboardingScreen() {
           marginTop='$3'
           marginBottom='$4'
           width='100%'
+          minHeight={40}
         >
           <XStack alignItems='center' space='$2'>
             {SLIDES.map((slide, index) => {
