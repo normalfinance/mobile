@@ -5,6 +5,8 @@ import React, { useEffect } from "react";
 import { Alert } from "react-native";
 import { Image } from "expo-image";
 import PasswordlessSignIn from "@/components/passwordless-signin";
+import { secureStorage } from "@/lib/utils";
+import { STORAGE_KEYS } from "@/lib/constants";
 import { Button, Paragraph, Text, XStack, YStack, Separator } from "tamagui";
 
 const useWarmUpBrowser = () => {
@@ -32,10 +34,13 @@ export default function SignInScreen() {
     try {
       const { createdSessionId, setActive } = await startGoogleOAuthFlow({});
 
-      if (createdSessionId) {
-        setActive?.({ session: createdSessionId });
-        router.replace("/");
+      if (!createdSessionId) {
+        return;
       }
+
+      setActive?.({ session: createdSessionId });
+      await secureStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETE, "true");
+      router.replace("/");
     } catch (err) {
       console.error("Google OAuth error", err);
       Alert.alert("Error", "Failed to sign in with Google");
@@ -46,10 +51,13 @@ export default function SignInScreen() {
     try {
       const { createdSessionId, setActive } = await startAppleOAuthFlow({});
 
-      if (createdSessionId) {
-        setActive?.({ session: createdSessionId });
-        router.replace("/");
+      if (!createdSessionId) {
+        return;
       }
+
+      setActive?.({ session: createdSessionId });
+      await secureStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETE, "true");
+      router.replace("/");
     } catch (err) {
       console.error("Apple OAuth error", err);
       Alert.alert("Error", "Failed to sign in with Apple");
@@ -101,7 +109,12 @@ export default function SignInScreen() {
         </YStack>
       </YStack>
 
-      <PasswordlessSignIn onSuccess={() => router.replace("/")} />
+      <PasswordlessSignIn
+        onSuccess={async () => {
+          await secureStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETE, "true");
+          router.replace("/");
+        }}
+      />
       <XStack
         // @ts-ignore
         justifyContent='center'

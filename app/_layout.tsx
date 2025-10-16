@@ -70,6 +70,10 @@ export default function RootLayout() {
                     options={{ headerShown: false, animation: "none" }}
                   />
                   <Stack.Screen
+                    name='onboarding'
+                    options={{ headerShown: false }}
+                  />
+                  <Stack.Screen
                     name='(auth)'
                     options={{ headerShown: false }}
                   />

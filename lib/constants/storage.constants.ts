@@ -3,7 +3,8 @@ export const STORAGE_KEYS = {
   PRIVATE_KEY: "stellar_private_key",
   MNEMONIC: "stellar_mnemonic",
   USER_ID: "user_id",
-  ORACLE_CACHE_KEYS: "oracle_cache_keys"
+  ORACLE_CACHE_KEYS: "oracle_cache_keys",
+  ONBOARDING_COMPLETE: "onboarding_complete"
 } as const;
 
 export const STORAGE_ERRORS = {
