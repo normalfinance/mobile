@@ -20,23 +20,16 @@ type Slide = {
 
 const normalIconContainer = (
   <YStack
-    width={120}
-    height={120}
+    width={240}
+    height={240}
     borderRadius={76}
-    borderWidth={4}
-    borderColor='rgba(148,163,184,0.18)'
     backgroundColor='#FFFFFF'
     alignItems='center'
     justifyContent='center'
-    shadowColor='rgba(15,23,42,0.12)'
-    shadowOffset={{ width: 0, height: 18 }}
-    shadowOpacity={1}
-    shadowRadius={30}
-    elevation={14}
   >
     <Image
-      source={require("@/assets/icons/normal.png")}
-      style={{ width: 96, height: 96 }}
+      source={require("@/assets/icons/mcn.png")}
+      style={{ width: 192, height: 192 }}
     />
   </YStack>
 );
@@ -68,7 +61,7 @@ const SLIDES: Slide[] = [
   },
   {
     key: "welcome",
-    title: "Welcome to Normalfinance",
+    title: "Welcome to Normal Finance",
     description:
       "Your all-in-one gateway to decentralized investing. Invest smarter. Manage everything in one place.",
     ctaLabel: "Get Started",
@@ -104,6 +97,7 @@ export default function OnboardingScreen() {
   }, [router]);
 
   const currentSlide = useMemo(() => SLIDES[currentIndex], [currentIndex]);
+  const isWelcomeSlide = currentSlide.key === "welcome";
 
   const completeOnboarding = useCallback(async () => {
     try {
@@ -150,7 +144,7 @@ export default function OnboardingScreen() {
           marginBottom='$4'
           width='100%'
         >
-          <XStack justifyContent='center' space='$2'>
+          <XStack alignItems='center' space='$2'>
             {SLIDES.map((slide, index) => {
               const isActive = index === currentIndex;
               return (
@@ -180,9 +174,23 @@ export default function OnboardingScreen() {
             alignItems='center'
             justifyContent='center'
             width='100%'
-            paddingHorizontal='$2'
+            paddingHorizontal='$1'
           >
-            {currentSlide.customVisual ? (
+            {isWelcomeSlide ? (
+              <YStack alignItems='center' space='$1'>
+                <Text
+                  textAlign='center'
+                  color='#1C252E'
+                  fontSize={42}
+                  fontWeight='700'
+                  lineHeight={48}
+                  marginBottom='$5'
+                >
+                  {currentSlide.title}
+                </Text>
+                {currentSlide.customVisual}
+              </YStack>
+            ) : currentSlide.customVisual ? (
               currentSlide.customVisual
             ) : (
               <Image
@@ -202,15 +210,17 @@ export default function OnboardingScreen() {
             space='$5'
           >
             <YStack space='$3' alignItems='center'>
-              <Text
-                textAlign='center'
-                color='#1C252E'
-                fontSize={36}
-                fontWeight='700'
-                lineHeight={40}
-              >
-                {currentSlide.title}
-              </Text>
+              {!isWelcomeSlide ? (
+                <Text
+                  textAlign='center'
+                  color='#1C252E'
+                  fontSize={36}
+                  fontWeight='700'
+                  lineHeight={40}
+                >
+                  {currentSlide.title}
+                </Text>
+              ) : null}
               <Paragraph
                 textAlign='center'
                 color='#637381'
