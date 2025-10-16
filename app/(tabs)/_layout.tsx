@@ -1,8 +1,11 @@
 import { Redirect, usePathname, useRouter } from "expo-router";
 import React from "react";
 import { useAuth } from "@clerk/clerk-expo";
-import { Tabs, YStack, Text, View, Spinner } from "tamagui";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { Tabs, YStack, Text, View } from "tamagui";
+import {
+  SafeAreaView,
+  useSafeAreaInsets
+} from "react-native-safe-area-context";
 
 import HomeScreen from "./index";
 import InvestScreen from "./invest";
@@ -24,12 +27,25 @@ import {
   SettingsIcon,
   type NavbarIconProps
 } from "@/components/icons/navbar";
+import { SkeletonBox } from "@/components/ui/skeleton";
 
-type TabKey = "home" | "prices" | "invest" | "indexes" | "settings" | "wallet-settings";
+type TabKey =
+  | "home"
+  | "prices"
+  | "invest"
+  | "indexes"
+  | "settings"
+  | "wallet-settings";
 
 const tabRoutes: Record<
   TabKey,
-  `/(${"tabs"})${"" | "/prices" | "/invest" | "/indexes" | "/settings" | "/wallet-settings"}`
+  `/(${"tabs"})${
+    | ""
+    | "/prices"
+    | "/invest"
+    | "/indexes"
+    | "/settings"
+    | "/wallet-settings"}`
 > = {
   home: "/(tabs)",
   prices: "/(tabs)/prices",
@@ -154,16 +170,22 @@ export default function TabLayout() {
         // @ts-ignore
         <YStack
           flex={1}
-          // @ts-ignore
-          justifyContent='center'
-          alignItems='center'
           backgroundColor='$background'
+          paddingHorizontal='$5'
+          paddingTop='$6'
+          paddingBottom='$4'
+          space='$6'
         >
-          <Spinner size='large' color='$blue10' />
-          {/* @ts-ignore */}
-          <Text marginTop='$4' color='$color11'>
-            Checking wallet...
-          </Text>
+          <YStack width='100%' space='$3'>
+            <SkeletonBox width='60%' height={28} />
+            <SkeletonBox width='80%' height={20} />
+          </YStack>
+
+          <YStack width='100%' space='$3'>
+            {Array.from({ length: 4 }).map((_, index) => (
+              <SkeletonBox key={index} width='100%' height={56} radius={18} />
+            ))}
+          </YStack>
         </YStack>
       ) : resolvedHasWallet === false ? (
         <>
@@ -175,10 +197,7 @@ export default function TabLayout() {
         <View flex={1} backgroundColor='$background'>
           <YStack flex={1}>
             <SafeAreaView style={{ flex: 1, paddingBottom: 0 }}>
-              <YStack 
-                flex={1} 
-                paddingBottom={20 + insets.bottom}
-              >
+              <YStack flex={1} paddingBottom={20 + insets.bottom}>
                 {renderTabContent()}
               </YStack>
             </SafeAreaView>
@@ -205,7 +224,9 @@ export default function TabLayout() {
               >
                 {TAB_ITEMS.map(({ key, label, Icon }) => {
                   const isActive = activeTab === key;
-                  const color = isActive ? ACTIVE_TAB_COLOR : INACTIVE_TAB_COLOR;
+                  const color = isActive
+                    ? ACTIVE_TAB_COLOR
+                    : INACTIVE_TAB_COLOR;
 
                   return (
                     <Tabs.Tab
