@@ -1,11 +1,22 @@
 {
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
-    "strict": true,
+    "jsx": "react-jsx",
+    "jsxImportSource": "tamagui",
+    "skipLibCheck": true,
+    "noEmitOnError": false,
+    "checkJs": false,
+    "types": ["tamagui"],
     "paths": {
       "@/*": ["./*"],
       "@svgs/*": ["./assets/svgs/*"]
     }
   },
-  "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"]
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts",
+    "tamagui.d.ts"
+  ]
 }
