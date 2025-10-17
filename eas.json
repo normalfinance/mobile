@@ -5,13 +5,22 @@
   },
   "build": {
     "development": {
+      "env": {
+        "EAS_BUILD_SKIP_DEPENDENCY_INSTALL": "1"
+      },
       "developmentClient": true,
       "distribution": "internal"
     },
     "preview": {
+      "env": {
+        "EAS_BUILD_SKIP_DEPENDENCY_INSTALL": "1"
+      },
       "distribution": "internal"
     },
     "production": {
+      "env": {
+        "EAS_BUILD_SKIP_DEPENDENCY_INSTALL": "1"
+      },
       "autoIncrement": true,
       "node": "20.19.4"
     }

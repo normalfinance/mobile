@@ -2,6 +2,9 @@
   "name": "normal-app",
   "main": "expo-router/entry",
   "version": "1.0.0",
+  "engines": {
+    "node": "20.19.4"
+  },
   "scripts": {
     "start": "expo start",
     "reset-project": "node ./scripts/reset-project.js",
@@ -9,7 +12,8 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "postinstall": "rn-nodeify --install url,events,https,http,util,stream,crypto,vm,buffer --hack"
+    "postinstall": "rn-nodeify --install url,events,https,http,util,stream,crypto,vm,buffer --hack",
+    "eas-build-pre-build": "npm install"
   },
   "dependencies": {
     "@clerk/clerk-expo": "^2.15.0",
