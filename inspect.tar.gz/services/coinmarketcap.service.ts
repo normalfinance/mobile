@@ -1,0 +1,358 @@
+import { useQuery } from "@tanstack/react-query";
+
+import { formatNormalToken } from "@/lib/utils/format.utils";
+import { createTimeoutSignal, handleHttpError } from "@/lib/utils/http.utils";
+import { STALE_TIMES } from "@/lib/utils/query.utils";
+import type { PortfolioPeriod } from "@/services/portfolio.service";
+
+const COINMARKETCAP_BASE_URL = "https://pro-api.coinmarketcap.com";
+const DEFAULT_TIMEOUT = 15000;
+const DEFAULT_CONVERT = "USD";
+
+type StandardPortfolioPeriod = Exclude<PortfolioPeriod, "All"> | "All";
+
+type PeriodConfig = {
+  interval: string;
+  subtractMs: number;
+  count: number;
+};
+
+const PERIOD_CONFIG: Record<StandardPortfolioPeriod, PeriodConfig> = {
+  "1D": {
+    interval: "1h",
+    subtractMs: 24 * 60 * 60 * 1000,
+    count: 24
+  },
+  "7D": {
+    interval: "1d",
+    subtractMs: 7 * 24 * 60 * 60 * 1000,
+    count: 7
+  },
+  "30D": {
+    interval: "1d",
+    subtractMs: 30 * 24 * 60 * 60 * 1000,
+    count: 30
+  },
+  "180D": {
+    interval: "1d",
+    subtractMs: 180 * 24 * 60 * 60 * 1000,
+    count: 180
+  },
+  "365D": {
+    interval: "7d",
+    subtractMs: 365 * 24 * 60 * 60 * 1000,
+    count: 52
+  },
+  All: {
+    interval: "1M",
+    subtractMs: 5 * 365 * 24 * 60 * 60 * 1000,
+    count: 120
+  }
+};
+
+export interface HistoricalPricePoint {
+  timestamp: number;
+  price: number;
+  close?: number;
+  marketCap?: number;
+  volume24h?: number;
+  percentChange1h?: number;
+  percentChange24h?: number;
+  percentChange7d?: number;
+  percentChange30d?: number;
+  circulatingSupply?: number;
+  totalSupply?: number;
+}
+
+export type HistoricalPriceMap = Record<string, HistoricalPricePoint[]>;
+
+interface CoinMarketCapHistoricalQuote {
+  time_stamp: string;
+  time_close: string;
+  quote: {
+    [convert: string]: {
+      circulating_supply: number;
+      total_supply: number;
+      market_cap: number;
+      volume_24h: number;
+      percent_change_1h: number;
+      percent_change_24h: number;
+      percent_change_7d: number;
+      percent_change_30d: number;
+      timestamp: number;
+      price: number;
+      close: number;
+      open: number;
+      high: number;
+      low: number;
+      volume: number;
+    };
+  };
+}
+
+interface CoinMarketCapHistoricalDataItem {
+  id?: number;
+  name?: string;
+  symbol?: string;
+  slug?: string;
+  quotes?: CoinMarketCapHistoricalQuote[];
+}
+
+interface CoinMarketCapHistoricalResponse {
+  status: {
+    error_code: number;
+    error_message: string | null;
+  };
+  data?: {
+    [symbol: string]: CoinMarketCapHistoricalDataItem[];
+  };
+}
+
+export const coinMarketCapQueryKeys = {
+  all: ["coinmarketcap"] as const,
+  historical: (period: PortfolioPeriod, symbols: readonly string[]) =>
+    [
+      ...coinMarketCapQueryKeys.all,
+      "historical",
+      period,
+      [...symbols].sort().join("|")
+    ] as const
+};
+
+interface FetchHistoricalParams {
+  symbol: string;
+  period: PortfolioPeriod;
+  convert?: string;
+}
+
+const ensureApiKey = (): string => {
+  const apiKey = process.env.EXPO_PUBLIC_CMC_API_KEY;
+
+  if (!apiKey) {
+    throw new Error(
+      "CoinMarketCap API key is not configured. Please set EXPO_PUBLIC_CMC_API_KEY."
+    );
+  }
+
+  return apiKey;
+};
+
+const normalizeSymbol = (symbol: string): string =>
+  formatNormalToken(symbol, "without-n").toUpperCase();
+
+const buildHistoricalUrl = ({
+  symbol,
+  period,
+  convert
+}: FetchHistoricalParams): string => {
+  const normalizedPeriod = PERIOD_CONFIG[period as StandardPortfolioPeriod];
+
+  if (!normalizedPeriod) {
+    throw new Error(`Unsupported portfolio period: ${period}`);
+  }
+
+  const now = Date.now();
+  const timeStart = new Date(now - normalizedPeriod.subtractMs).toISOString();
+  const params = new URLSearchParams({
+    symbol,
+    convert: convert ?? DEFAULT_CONVERT,
+    time_start: timeStart,
+    time_end: new Date(now).toISOString(),
+    interval: normalizedPeriod.interval,
+    count: String(normalizedPeriod.count)
+  });
+
+  return `${COINMARKETCAP_BASE_URL}/v2/cryptocurrency/quotes/historical?${params.toString()}`;
+};
+
+const parseHistoricalResponse = (
+  json: CoinMarketCapHistoricalResponse,
+  symbol: string,
+  convert: string
+): HistoricalPricePoint[] => {
+  if (json.status?.error_code && json.status.error_code !== 0) {
+    const message =
+      json.status.error_message ||
+      `CoinMarketCap request failed with code ${json.status.error_code}`;
+    throw new Error(message);
+  }
+
+  //   console.log("json in parseHistoricalResponse", json);
+
+  const symbolData = json.data?.[symbol];
+  if (!symbolData?.length) {
+    return [];
+  }
+
+  const quotes = symbolData.flatMap((entry) => entry.quotes ?? []);
+
+  if (quotes.length === 0) {
+    return [];
+  }
+
+  return quotes
+    .map((quote) => {
+      const usdQuote = quote.quote?.[convert];
+
+      // console.log("usdQuote in parseHistoricalResponse", usdQuote);
+
+      if (!usdQuote) {
+        return null;
+      }
+
+      const timestampSource =
+        usdQuote.timestamp ?? quote.time_close ?? quote.time_stamp;
+      const timestamp = timestampSource
+        ? new Date(timestampSource).getTime()
+        : Number.NaN;
+
+      // console.log("timestamp in parseHistoricalResponse", timestamp);
+
+      if (!Number.isFinite(timestamp)) {
+        return null;
+      }
+
+      const toFiniteNumber = (value: unknown): number | undefined => {
+        if (typeof value === "number") {
+          return Number.isFinite(value) ? value : undefined;
+        }
+
+        if (typeof value === "string") {
+          const parsed = Number.parseFloat(value);
+          return Number.isFinite(parsed) ? parsed : undefined;
+        }
+
+        return undefined;
+      };
+
+      const price = toFiniteNumber(
+        usdQuote.price ?? usdQuote.close ?? usdQuote.open
+      );
+
+      if (price === undefined) {
+        return null;
+      }
+
+      return {
+        timestamp,
+        price,
+        close: price,
+        marketCap: toFiniteNumber(usdQuote.market_cap),
+        volume24h: toFiniteNumber(usdQuote.volume_24h),
+        percentChange1h: toFiniteNumber(usdQuote.percent_change_1h),
+        percentChange24h: toFiniteNumber(usdQuote.percent_change_24h),
+        percentChange7d: toFiniteNumber(usdQuote.percent_change_7d),
+        percentChange30d: toFiniteNumber(usdQuote.percent_change_30d),
+        circulatingSupply: toFiniteNumber(usdQuote.circulating_supply),
+        totalSupply: toFiniteNumber(usdQuote.total_supply)
+      } satisfies HistoricalPricePoint;
+    })
+    .filter(Boolean) as HistoricalPricePoint[];
+};
+
+const fetchHistoricalQuotes = async ({
+  symbol,
+  period,
+  convert = DEFAULT_CONVERT
+}: FetchHistoricalParams): Promise<HistoricalPricePoint[]> => {
+  const apiKey = ensureApiKey();
+  const url = buildHistoricalUrl({ symbol, period, convert });
+
+  console.log("url in fetchHistoricalQuotes", url);
+  console.log("apiKey in fetchHistoricalQuotes", apiKey);
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        Accept: "application/json",
+        "X-CMC_PRO_API_KEY": apiKey
+      },
+      signal: createTimeoutSignal(DEFAULT_TIMEOUT)
+    });
+
+    if (!response.ok) {
+      console.log("response in fetchHistoricalQuotes", response);
+      throw handleHttpError(new Error(response.statusText));
+    }
+
+    const json = (await response.json()) as CoinMarketCapHistoricalResponse;
+    console.log(
+      "json3 in fetchHistoricalQuotes",
+      json.data?.[symbol][0].quotes![0].quote?.[convert]
+    );
+    return parseHistoricalResponse(json, symbol, convert);
+  } catch (error) {
+    throw handleHttpError(error);
+  }
+};
+
+const fetchHistoricalPricesForSymbols = async (
+  symbols: readonly string[],
+  period: PortfolioPeriod
+): Promise<{ data: HistoricalPriceMap; errors: Record<string, string> }> => {
+  const uniqueSymbols = Array.from(new Set(symbols.filter(Boolean)));
+  const results: HistoricalPriceMap = {};
+  const errors: Record<string, string> = {};
+
+  await Promise.allSettled(
+    uniqueSymbols.map(async (symbol) => {
+      console.log("symbol", symbol);
+      const coinSymbol = normalizeSymbol(symbol);
+      console.log("coinSymbol", coinSymbol);
+      try {
+        const points = await fetchHistoricalQuotes({
+          symbol: coinSymbol,
+          period
+        });
+        // console.log("points", points);
+
+        results[symbol] = points;
+      } catch (error) {
+        console.log("errorfromfetchHistoricalPricesForSymbols", error);
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Unknown error fetching data";
+        errors[symbol] = message;
+      }
+    })
+  );
+
+  return { data: results, errors };
+};
+
+interface UseHistoricalPricesOptions {
+  symbols: readonly string[];
+  period: PortfolioPeriod;
+  enabled?: boolean;
+}
+
+export const useHistoricalPrices = ({
+  symbols,
+  period,
+  enabled = true
+}: UseHistoricalPricesOptions) => {
+  const query = useQuery({
+    queryKey: coinMarketCapQueryKeys.historical(period, symbols),
+    queryFn: () => fetchHistoricalPricesForSymbols(symbols, period),
+    enabled: enabled && symbols.length > 0,
+    staleTime: STALE_TIMES.SHORT,
+    gcTime: STALE_TIMES.LONG,
+    keepPreviousData: true,
+    placeholderData: (previousData) => previousData
+  });
+
+  return {
+    data: query.data?.data ?? ({} as HistoricalPriceMap),
+    errors: query.data?.errors ?? ({} as Record<string, string>),
+    isLoading: query.isLoading,
+    isFetching: query.isFetching,
+    error: query.error,
+    refetch: query.refetch
+  };
+};
+
+export const coinMarketCapService = {
+  fetchHistoricalQuotes,
+  fetchHistoricalPricesForSymbols
+};
