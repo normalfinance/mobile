@@ -109,7 +109,7 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
             paddingHorizontal='$3'
             onPress={() => onPeriodChange(period.value)}
             disabled={isRefreshing && selectedPeriod !== period.value}
-            fontFamily='$numericl'
+            fontFamily='$numeric'
           >
             {period.label}
           </Button>
