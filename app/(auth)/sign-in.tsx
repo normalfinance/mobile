@@ -8,6 +8,7 @@ import PasswordlessSignIn from "@/components/passwordless-signin";
 import { secureStorage } from "@/lib/utils";
 import { STORAGE_KEYS } from "@/lib/constants";
 import { Button, Paragraph, Text, XStack, YStack, Separator } from "tamagui";
+import { useClerk, useSignIn } from "@clerk/clerk-expo";
 
 const useWarmUpBrowser = () => {
   useEffect(() => {
@@ -19,11 +20,15 @@ const useWarmUpBrowser = () => {
 };
 
 export default function SignInScreen() {
+  const { loaded } = useClerk();
+  const { signIn, isLoaded } = useSignIn();
+
   const { startOAuthFlow: startGoogleOAuthFlow } = useOAuth({
     strategy: "oauth_google"
   });
   const { startOAuthFlow: startAppleOAuthFlow } = useOAuth({
-    strategy: "oauth_apple"
+    strategy: "oauth_apple",
+    redirectUrl: "normalapp://oauth-callback"
   });
 
   const router = useRouter();
@@ -48,6 +53,9 @@ export default function SignInScreen() {
   }, [startGoogleOAuthFlow, router]);
 
   const onAppleSignInPress = React.useCallback(async () => {
+    console.log("onAppleSignInPress", loaded, isLoaded);
+    if (!loaded || !isLoaded) return;
+
     try {
       const { createdSessionId, setActive } = await startAppleOAuthFlow({});
 
@@ -63,6 +71,15 @@ export default function SignInScreen() {
       Alert.alert("Error", "Failed to sign in with Apple");
     }
   }, [startAppleOAuthFlow, router]);
+
+  useEffect(() => {
+    if (!isLoaded || !signIn) return;
+    const strategies =
+      signIn.supportedSecondFactors?.map((factor) => factor.strategy) ??
+      signIn.supportedFirstFactors?.map((factor) => factor.strategy) ??
+      [];
+    console.log("Supported OAuth strategies:", strategies);
+  }, [isLoaded, signIn]);
 
   return (
     <YStack

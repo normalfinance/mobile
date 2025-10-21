@@ -1,5 +1,5 @@
 import { createTamagui, createFont, CreateTamaguiProps } from "tamagui";
-import { defaultConfig } from "@tamagui/config/v4";
+import { config as defaultConfig } from "@tamagui/config";
 
 const {
   themes: baseThemes,
