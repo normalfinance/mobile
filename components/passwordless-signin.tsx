@@ -138,6 +138,8 @@ export default function PasswordlessSignIn({
             editable={!isLoading}
             borderWidth={1}
             borderColor='$borderColor'
+            backgroundColor='$background'
+            color='$text'
           />
 
           <Button
