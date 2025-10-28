@@ -10,6 +10,17 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
    npm install
    ```
 
+### Environment variables
+
+Create an `.env` (or `.env.local`) file with the Supabase credentials used across the Expo app:
+
+```
+EXPO_PUBLIC_SUPABASE_URL=your_supabase_project_url
+EXPO_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+```
+
+The Expo bundler inlines values that start with `EXPO_PUBLIC_`, so keep secrets in server-side storage only.
+
 2. Start the app
 
    ```bash

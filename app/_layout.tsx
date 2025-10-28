@@ -6,8 +6,6 @@ import {
   DefaultTheme,
   ThemeProvider
 } from "@react-navigation/native";
-import { ClerkProvider } from "@clerk/clerk-expo";
-import { tokenCache } from "@clerk/clerk-expo/token-cache";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import "react-native-reanimated";
@@ -15,6 +13,7 @@ import { TamaguiProvider, PortalProvider } from "tamagui";
 import tamaguiConfig from "../tamagui.config";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ToastProvider } from "@/hooks/useToast";
+import { SupabaseAuthProvider } from "@/providers/supabase-auth-provider";
 
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { loadFonts } from "@/lib/fonts";
@@ -57,10 +56,7 @@ export default function RootLayout() {
       >
         <PortalProvider>
           <ToastProvider>
-            <ClerkProvider
-              tokenCache={tokenCache}
-              publishableKey={process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY}
-            >
+            <SupabaseAuthProvider>
               <ThemeProvider
                 value={colorScheme === "dark" ? DarkTheme : DefaultTheme}
               >
@@ -92,7 +88,7 @@ export default function RootLayout() {
                 </Stack>
                 <StatusBar style='auto' />
               </ThemeProvider>
-            </ClerkProvider>
+            </SupabaseAuthProvider>
           </ToastProvider>
         </PortalProvider>
       </TamaguiProvider>

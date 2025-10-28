@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useState } from "react";
 import { useRouter } from "expo-router";
-import { useAuth } from "@clerk/clerk-expo";
+import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
 import { Alert } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { Image } from "expo-image";
@@ -54,7 +54,8 @@ const chunkArray = <T,>(array: T[], size: number): T[][] => {
 
 // Utility functions
 export default function WalletSetupScreen() {
-  const { userId } = useAuth();
+  const { user } = useSupabaseAuth();
+  const userId = user?.id;
   const router = useRouter();
   const [showImportForm, setShowImportForm] = useState(false);
   const [importType, setImportType] = useState<"private-key" | "mnemonic">(

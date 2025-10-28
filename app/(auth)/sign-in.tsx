@@ -1,100 +1,26 @@
-import { useOAuth } from "@clerk/clerk-expo";
-import { Link, useRouter } from "expo-router";
-import * as WebBrowser from "expo-web-browser";
-import React, { useEffect } from "react";
+import { useRouter } from "expo-router";
+import React from "react";
 import { Alert } from "react-native";
 import { Image } from "expo-image";
 import PasswordlessSignIn from "@/components/passwordless-signin";
 import { secureStorage } from "@/lib/utils";
 import { STORAGE_KEYS } from "@/lib/constants";
 import { Button, Paragraph, Text, XStack, YStack, Separator } from "tamagui";
-import { useClerk, useSignIn } from "@clerk/clerk-expo";
-import * as AuthSession from "expo-auth-session";
-
-WebBrowser.maybeCompleteAuthSession();
-
-const useWarmUpBrowser = () => {
-  useEffect(() => {
-    void WebBrowser.warmUpAsync();
-    return () => {
-      void WebBrowser.coolDownAsync();
-    };
-  }, []);
-};
+import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
 
 export default function SignInScreen() {
-  const { loaded } = useClerk();
-  const { signIn, isLoaded } = useSignIn();
-
-  const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
-
-  const redirectUrl = AuthSession.makeRedirectUri({
-    scheme: "normal-app",
-    path: "oauth/callback"
-  });
-
-  console.log("redirectUrl", redirectUrl);
-
-  const { startOAuthFlow: startGoogleOAuthFlow } = useOAuth({
-    strategy: "oauth_google",
-    redirectUrl: "https://clerk.normalfinance.io/v1/oauth_callback"
-  });
-  const { startOAuthFlow: startAppleOAuthFlow } = useOAuth({
-    strategy: "oauth_apple",
-    redirectUrl: redirectUrl
-  });
-
   const router = useRouter();
+  const { isLoading: authLoading } = useSupabaseAuth();
 
-  useWarmUpBrowser();
-
-  const onGoogleSignInPress = React.useCallback(async () => {
-    try {
-      const { createdSessionId, setActive } = await startGoogleOAuthFlow({});
-
-      if (!createdSessionId) {
-        return;
-      }
-
-      setActive?.({ session: createdSessionId });
-      await secureStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETE, "true");
-      router.replace("/");
-    } catch (err) {
-      setErrorMessage(JSON.stringify(err));
-      console.error("Google OAuth error", err);
-      Alert.alert("Error", "Failed to sign in with Google");
-    }
-  }, [startGoogleOAuthFlow, router]);
-
-  const onAppleSignInPress = React.useCallback(async () => {
-    console.log("onAppleSignInPress", loaded, isLoaded);
-    if (!loaded || !isLoaded) return;
-
-    try {
-      const { createdSessionId, setActive } = await startAppleOAuthFlow({});
-
-      if (!createdSessionId) {
-        return;
-      }
-
-      setActive?.({ session: createdSessionId });
-      await secureStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETE, "true");
-      router.replace("/");
-    } catch (err) {
-      setErrorMessage(JSON.stringify(err));
-      console.error("Apple OAuth error", err);
-      Alert.alert("Error", "Failed to sign in with Apple");
-    }
-  }, [startAppleOAuthFlow, router]);
-
-  useEffect(() => {
-    if (!isLoaded || !signIn) return;
-    const strategies =
-      signIn.supportedSecondFactors?.map((factor) => factor.strategy) ??
-      signIn.supportedFirstFactors?.map((factor) => factor.strategy) ??
-      [];
-    console.log("Supported OAuth strategies:", strategies);
-  }, [isLoaded, signIn]);
+  const onSocialAuthPress = React.useCallback(
+    (provider: "Google" | "Apple") => {
+      Alert.alert(
+        "Coming Soon",
+        `${provider} sign-in is not yet available. Please use email sign-in for now.`
+      );
+    },
+    []
+  );
 
   return (
     <YStack
@@ -130,16 +56,19 @@ export default function SignInScreen() {
           <Text fontSize={24} fontWeight='500' color='#0D0D12'>
             Sign in to Normal
           </Text>
-          <Text>{redirectUrl}</Text>
-          <Text color='black'>{errorMessage}</Text>
           <Paragraph
             color='#666D80'
             textAlign='center'
             fontWeight='400'
             fontSize={16}
           >
-            Welcome back! Please enter your details
+            Welcome back! Enter your email to receive a one-time sign-in code.
           </Paragraph>
+          {authLoading && (
+            <Text color='#666D80' fontSize={14}>
+              Checking your session...
+            </Text>
+          )}
         </YStack>
       </YStack>
 
@@ -168,7 +97,7 @@ export default function SignInScreen() {
           borderWidth={1}
           borderRadius={6}
           fontWeight='600'
-          onPress={onGoogleSignInPress}
+          onPress={() => onSocialAuthPress("Google")}
         >
           <XStack alignItems='center' justifyContent='center' space='$3'>
             <Image
@@ -187,7 +116,7 @@ export default function SignInScreen() {
           borderColor='$borderColor'
           borderWidth={1}
           borderRadius={6}
-          onPress={onAppleSignInPress}
+          onPress={() => onSocialAuthPress("Apple")}
         >
           <XStack alignItems='center' justifyContent='center' space='$3'>
             <Image

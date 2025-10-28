@@ -1,6 +1,6 @@
 import { Redirect, usePathname, useRouter } from "expo-router";
 import React from "react";
-import { useAuth } from "@clerk/clerk-expo";
+import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
 import { Tabs, YStack, Text, View } from "tamagui";
 import {
   SafeAreaView,
@@ -93,7 +93,9 @@ const ACTIVE_TAB_COLOR = "#1C252E";
 const INACTIVE_TAB_COLOR = "#9DB2CE";
 
 export default function TabLayout() {
-  const { isSignedIn, userId } = useAuth();
+  const { session, user, isLoading: isAuthLoading } = useSupabaseAuth();
+  const isSignedIn = !!session;
+  const userId = user?.id;
   const router = useRouter();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
@@ -165,7 +167,9 @@ export default function TabLayout() {
   return (
     <>
       {!isSignedIn ? (
-        <Redirect href='/sign-in' />
+        isAuthLoading ? null : (
+          <Redirect href='/sign-in' />
+        )
       ) : isCheckingWallet ? (
         // @ts-ignore
         <YStack

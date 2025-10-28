@@ -1,13 +1,12 @@
-import { useClerk } from "@clerk/clerk-expo";
 import { useRouter } from "expo-router";
 import { Button, Text } from "tamagui";
 import { useDeleteWallet } from "@/services";
 import { secureStorage } from "@/lib/utils";
 import { STORAGE_KEYS } from "@/lib/constants";
+import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
 
 export const SignOutButton = () => {
-  // Use `useClerk()` to access the `signOut()` function
-  const { signOut } = useClerk();
+  const { signOut } = useSupabaseAuth();
   const router = useRouter();
   const deleteWallet = useDeleteWallet();
 
@@ -21,8 +20,8 @@ export const SignOutButton = () => {
       await secureStorage.deleteItem(STORAGE_KEYS.ONBOARDING_COMPLETE);
       console.log("Onboarding state cleared");
 
-      // Then sign out from Clerk
-      console.log("Signing out from Clerk...");
+      // Then sign out from Supabase
+      console.log("Signing out from Supabase...");
       await signOut();
       console.log("Signed out successfully");
 

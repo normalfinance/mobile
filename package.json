@@ -16,7 +16,7 @@
     "eas-build-pre-build": "npm install"
   },
   "dependencies": {
-    "@clerk/clerk-expo": "^2.15.0",
+    "@react-native-async-storage/async-storage": "^2.0.0",
     "@craftzdog/react-native-buffer": "^6.1.0",
     "@expo/vector-icons": "^15.0.2",
     "@gorhom/bottom-sheet": "^5.2.6",
@@ -26,6 +26,7 @@
     "@react-navigation/elements": "^2.6.3",
     "@react-navigation/native": "^7.1.8",
     "@shipt/segmented-arc-for-react-native": "^2.0.0",
+    "@supabase/supabase-js": "^2.48.1",
     "@stellar/stellar-sdk": "^14.2.0",
     "@stellar/typescript-wallet-sdk-km": "^1.9.0",
     "@tamagui/babel-plugin": "^1.133.1",
@@ -76,6 +77,7 @@
     "react-native-randombytes": "^3.6.2",
     "react-native-reanimated": "~4.1.0",
     "react-native-safe-area-context": "~5.6.0",
+    "react-native-url-polyfill": "^2.0.0",
     "react-native-screens": "~4.16.0",
     "react-native-svg": "15.12.1",
     "react-native-web": "~0.21.0",

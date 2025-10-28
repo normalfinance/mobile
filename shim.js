@@ -1,5 +1,6 @@
 // Modern React Native polyfill setup for Node.js modules
 import "react-native-get-random-values";
+import "react-native-url-polyfill/auto";
 import { getRandomValues } from "expo-crypto";
 
 // Global polyfills

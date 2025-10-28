@@ -141,7 +141,7 @@ export const getApiStatus = async (): Promise<{
 };
 
 export const checkWallet = async (
-  userId: string, // Email address from Clerk auth (for backend lookup)
+  userId: string, // Email address from Supabase auth (for backend lookup)
   publicKey?: string // Optional: for verification
 ): Promise<CheckWalletResponse> => {
   try {
