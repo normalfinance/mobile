@@ -1,10 +1,17 @@
 import { useQuery } from "@tanstack/react-query";
+import * as AuthSession from "expo-auth-session";
+import * as WebBrowser from "expo-web-browser";
+import type { Session } from "@supabase/supabase-js";
+
+import { supabase } from "@/lib/supabase";
 import { STALE_TIMES } from "@/lib/utils/query.utils";
 import {
   getCachedSession,
   getCachedUser,
   useSupabaseAuth
 } from "@/providers/supabase-auth-provider";
+
+WebBrowser.maybeCompleteAuthSession();
 
 export interface AuthCredentials {
   userId: string; // Email address for account consistency and backend lookup
@@ -93,6 +100,62 @@ export const useAuthStatus = (): AuthStatus => {
     isLoading: authLoading || credentialsQuery.isLoading,
     error: credentialsQuery.error as Error | null
   };
+};
+
+export const signInWithGoogle = async (): Promise<Session | null> => {
+  const redirectTo = AuthSession.makeRedirectUri({
+    scheme: "normalapp",
+    path: "auth/callback"
+  });
+
+  // Ensure the Supabase Google provider redirect matches `normalapp://auth/callback`
+  // and the provider is enabled in the Supabase dashboard before using this helper.
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo,
+      skipBrowserRedirect: true
+    }
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  const { url } = data ?? {};
+
+  if (!url) {
+    throw new Error("Unable to start Google authentication flow.");
+  }
+
+  const authResult = await AuthSession.startAsync({
+    authUrl: url,
+    returnUrl: redirectTo
+  });
+
+  if (authResult.type !== "success") {
+    return null;
+  }
+
+  const code = (authResult.params as Record<string, string> | undefined)?.code;
+
+  if (!code) {
+    throw new Error("Google sign-in did not return an authorization code.");
+  }
+
+  const exchangeResponse = await supabase.auth.exchangeCodeForSession(code);
+
+  if (exchangeResponse.error) {
+    throw exchangeResponse.error;
+  }
+
+  const session = exchangeResponse.data?.session ?? null;
+
+  if (!session) {
+    throw new Error("Google sign-in did not return a session.");
+  }
+
+  return session;
 };
 
 // Utility function for components that need auth

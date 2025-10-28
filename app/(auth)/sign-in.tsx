@@ -7,20 +7,43 @@ import { secureStorage } from "@/lib/utils";
 import { STORAGE_KEYS } from "@/lib/constants";
 import { Button, Paragraph, Text, XStack, YStack, Separator } from "tamagui";
 import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
+import { signInWithGoogle } from "@/services";
 
 export default function SignInScreen() {
   const router = useRouter();
   const { isLoading: authLoading } = useSupabaseAuth();
+  const [isGoogleLoading, setIsGoogleLoading] = React.useState(false);
 
-  const onSocialAuthPress = React.useCallback(
-    (provider: "Google" | "Apple") => {
-      Alert.alert(
-        "Coming Soon",
-        `${provider} sign-in is not yet available. Please use email sign-in for now.`
-      );
-    },
-    []
-  );
+  const handleGoogleSignIn = React.useCallback(async () => {
+    setIsGoogleLoading(true);
+
+    try {
+      const session = await signInWithGoogle();
+
+      if (!session) {
+        return;
+      }
+
+      await secureStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETE, "true");
+      router.replace("/");
+    } catch (error) {
+      console.error("Google sign-in error:", error);
+      const message =
+        error instanceof Error
+          ? error.message
+          : "We couldn't complete Google sign-in. Please try again.";
+      Alert.alert("Google Sign-In Failed", message);
+    } finally {
+      setIsGoogleLoading(false);
+    }
+  }, [router]);
+
+  const handleAppleSignIn = React.useCallback(() => {
+    Alert.alert(
+      "Coming Soon",
+      "Apple sign-in is not yet available. Please use email sign-in for now."
+    );
+  }, []);
 
   return (
     <YStack
@@ -97,7 +120,9 @@ export default function SignInScreen() {
           borderWidth={1}
           borderRadius={6}
           fontWeight='600'
-          onPress={() => onSocialAuthPress("Google")}
+          onPress={handleGoogleSignIn}
+          disabled={isGoogleLoading}
+          opacity={isGoogleLoading ? 0.6 : 1}
         >
           <XStack alignItems='center' justifyContent='center' space='$3'>
             <Image
@@ -105,7 +130,7 @@ export default function SignInScreen() {
               style={{ width: 24, height: 24 }}
             />
             <Text color='#101828' fontWeight='600'>
-              Sign in with Google
+              {isGoogleLoading ? "Signing in..." : "Sign in with Google"}
             </Text>
           </XStack>
         </Button>
@@ -116,7 +141,7 @@ export default function SignInScreen() {
           borderColor='$borderColor'
           borderWidth={1}
           borderRadius={6}
-          onPress={() => onSocialAuthPress("Apple")}
+          onPress={handleAppleSignIn}
         >
           <XStack alignItems='center' justifyContent='center' space='$3'>
             <Image
