@@ -9,6 +9,9 @@ import { secureStorage } from "@/lib/utils";
 import { STORAGE_KEYS } from "@/lib/constants";
 import { Button, Paragraph, Text, XStack, YStack, Separator } from "tamagui";
 import { useClerk, useSignIn } from "@clerk/clerk-expo";
+import * as AuthSession from "expo-auth-session";
+
+WebBrowser.maybeCompleteAuthSession();
 
 const useWarmUpBrowser = () => {
   useEffect(() => {
@@ -23,12 +26,22 @@ export default function SignInScreen() {
   const { loaded } = useClerk();
   const { signIn, isLoaded } = useSignIn();
 
+  const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
+
+  const redirectUrl = AuthSession.makeRedirectUri({
+    scheme: "normal-app",
+    path: "oauth/callback"
+  });
+
+  console.log("redirectUrl", redirectUrl);
+
   const { startOAuthFlow: startGoogleOAuthFlow } = useOAuth({
-    strategy: "oauth_google"
+    strategy: "oauth_google",
+    redirectUrl: "https://clerk.normalfinance.io/v1/oauth_callback"
   });
   const { startOAuthFlow: startAppleOAuthFlow } = useOAuth({
     strategy: "oauth_apple",
-    redirectUrl: "normalapp://oauth-callback"
+    redirectUrl: redirectUrl
   });
 
   const router = useRouter();
@@ -47,6 +60,7 @@ export default function SignInScreen() {
       await secureStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETE, "true");
       router.replace("/");
     } catch (err) {
+      setErrorMessage(JSON.stringify(err));
       console.error("Google OAuth error", err);
       Alert.alert("Error", "Failed to sign in with Google");
     }
@@ -67,6 +81,7 @@ export default function SignInScreen() {
       await secureStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETE, "true");
       router.replace("/");
     } catch (err) {
+      setErrorMessage(JSON.stringify(err));
       console.error("Apple OAuth error", err);
       Alert.alert("Error", "Failed to sign in with Apple");
     }
@@ -113,8 +128,10 @@ export default function SignInScreen() {
 
         <YStack space='$2' alignItems='center'>
           <Text fontSize={24} fontWeight='500' color='#0D0D12'>
-            Sign in to your account
+            Sign in to Normal
           </Text>
+          <Text>{redirectUrl}</Text>
+          <Text color='black'>{errorMessage}</Text>
           <Paragraph
             color='#666D80'
             textAlign='center'
