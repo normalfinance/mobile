@@ -60,7 +60,7 @@ export default function PasswordlessVerify({
           onSuccess();
         } else {
           setTimeout(() => {
-            router.replace("/");
+            router.replace("/(tabs)");
           }, 1500);
         }
       } else {

@@ -25,7 +25,7 @@ export default function SignInScreen() {
       }
 
       await secureStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETE, "true");
-      router.replace("/");
+      router.replace("/(tabs)");
     } catch (error) {
       console.error("Google sign-in error:", error);
       const message =
@@ -85,7 +85,7 @@ export default function SignInScreen() {
             fontWeight='400'
             fontSize={16}
           >
-            Welcome back! Enter your email to receive a one-time sign-in code.
+            Welcome back!
           </Paragraph>
           {authLoading && (
             <Text color='#666D80' fontSize={14}>
@@ -98,7 +98,7 @@ export default function SignInScreen() {
       <PasswordlessSignIn
         onSuccess={async () => {
           await secureStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETE, "true");
-          router.replace("/");
+          router.replace("/(tabs)");
         }}
       />
       <XStack

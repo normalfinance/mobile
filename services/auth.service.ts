@@ -128,16 +128,14 @@ export const signInWithGoogle = async (): Promise<Session | null> => {
     throw new Error("Unable to start Google authentication flow.");
   }
 
-  const authResult = await AuthSession.startAsync({
-    authUrl: url,
-    returnUrl: redirectTo
-  });
+  const authResult = await WebBrowser.openAuthSessionAsync(url, redirectTo);
 
-  if (authResult.type !== "success") {
+  if (authResult.type !== "success" || !authResult.url) {
     return null;
   }
 
-  const code = (authResult.params as Record<string, string> | undefined)?.code;
+  const parsedUrl = new URL(authResult.url);
+  const code = parsedUrl.searchParams.get("code");
 
   if (!code) {
     throw new Error("Google sign-in did not return an authorization code.");

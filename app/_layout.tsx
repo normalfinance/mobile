@@ -61,6 +61,10 @@ export default function RootLayout() {
                     options={{ headerShown: false }}
                   />
                   <Stack.Screen
+                    name='auth/callback'
+                    options={{ headerShown: false }}
+                  />
+                  <Stack.Screen
                     name='wallet-setup'
                     options={{ headerShown: false, presentation: "modal" }}
                   />
