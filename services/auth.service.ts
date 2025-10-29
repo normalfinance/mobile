@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import * as AuthSession from "expo-auth-session";
 import * as WebBrowser from "expo-web-browser";
 import type { Session } from "@supabase/supabase-js";
+import Constants from "expo-constants";
 
 import { supabase } from "@/lib/supabase";
 import { STALE_TIMES } from "@/lib/utils/query.utils";
@@ -102,13 +103,14 @@ export const useAuthStatus = (): AuthStatus => {
   };
 };
 
-export const signInWithGoogle = async (): Promise<Session | null> => {
+export const signInWithGoogle = async (): Promise<boolean> => {
   const redirectTo = AuthSession.makeRedirectUri({
     scheme: "normalapp",
-    path: "auth/callback"
+    path: "wallet-setup",
+    native: "normalapp://wallet-setup"
   });
 
-  // Ensure the Supabase Google provider redirect matches `normalapp://auth/callback`
+  // Ensure the Supabase Google provider redirect matches `normalapp://wallet-setup`
   // and the provider is enabled in the Supabase dashboard before using this helper.
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
@@ -128,32 +130,13 @@ export const signInWithGoogle = async (): Promise<Session | null> => {
     throw new Error("Unable to start Google authentication flow.");
   }
 
+  // Open the browser for OAuth - the redirect will bring user back to wallet-setup
+  // where the code exchange will happen
   const authResult = await WebBrowser.openAuthSessionAsync(url, redirectTo);
 
-  if (authResult.type !== "success" || !authResult.url) {
-    return null;
-  }
-
-  const parsedUrl = new URL(authResult.url);
-  const code = parsedUrl.searchParams.get("code");
-
-  if (!code) {
-    throw new Error("Google sign-in did not return an authorization code.");
-  }
-
-  const exchangeResponse = await supabase.auth.exchangeCodeForSession(code);
-
-  if (exchangeResponse.error) {
-    throw exchangeResponse.error;
-  }
-
-  const session = exchangeResponse.data?.session ?? null;
-
-  if (!session) {
-    throw new Error("Google sign-in did not return a session.");
-  }
-
-  return session;
+  // Return true if user completed OAuth (even if we don't have session yet)
+  // The code exchange will happen on the wallet-setup page
+  return authResult.type === "success";
 };
 
 // Utility function for components that need auth

@@ -66,7 +66,7 @@ export default function RootLayout() {
                   />
                   <Stack.Screen
                     name='wallet-setup'
-                    options={{ headerShown: false, presentation: "modal" }}
+                    options={{ headerShown: false }}
                   />
                   <Stack.Screen
                     name='verify-magic-link'

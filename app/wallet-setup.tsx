@@ -1,6 +1,7 @@
-import React, { useCallback, useMemo, useState } from "react";
-import { useRouter } from "expo-router";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
+import { supabase } from "@/lib/supabase";
 import { Alert } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { Image } from "expo-image";
@@ -54,10 +55,17 @@ const chunkArray = <T,>(array: T[], size: number): T[][] => {
 
 // Utility functions
 export default function WalletSetupScreen() {
-  const { user } = useSupabaseAuth();
-  const userId = user?.id;
+  console.log("🚀 WalletSetupScreen RENDERED");
+
+  const { user, isLoading: isAuthLoading } = useSupabaseAuth();
   const router = useRouter();
+  const params = useLocalSearchParams();
+
+  console.log("📱 Initial params:", params);
+
   const [showImportForm, setShowImportForm] = useState(false);
+  const [isExchangingCode, setIsExchangingCode] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [importType, setImportType] = useState<"private-key" | "mnemonic">(
     "private-key"
   );
@@ -81,6 +89,106 @@ export default function WalletSetupScreen() {
   const [answerErrors, setAnswerErrors] = useState<Record<number, string>>({});
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
 
+  const [session, setSession] = useState<any | null>(null);
+
+  console.log("🚀 WalletSetupScreen RENDERED", currentUserId);
+
+  // Get user ID directly from Supabase session (not relying on React context)
+  useEffect(() => {
+    const getUserId = async () => {
+      const {
+        data: { session }
+      } = await supabase.auth.getSession();
+      console.log("🚀 WalletSetupScreen RENDERED", session);
+      setSession(session);
+      if (session?.user?.id) {
+        console.log("Setting userId from Supabase session:", session.user.id);
+        setCurrentUserId(session.user.id);
+      } else {
+        console.log("No session found in Supabase");
+        setCurrentUserId(null);
+      }
+    };
+
+    void getUserId();
+  }, [user, isExchangingCode, isAuthLoading]); // Re-check when user context changes or after code exchange
+
+  // Handle OAuth code exchange when redirected from Google
+  useEffect(() => {
+    const handleOAuthCode = async () => {
+      console.log("=== OAuth Debug START ===");
+      console.log("All params:", params);
+      const code = params.code as string | undefined;
+
+      console.log("Code from params:", code);
+      console.log("Is exchanging:", isExchangingCode);
+
+      if (code && !isExchangingCode) {
+        console.log("✅ OAuth code detected, starting exchange...");
+        setIsExchangingCode(true);
+
+        try {
+          console.log("Calling exchangeCodeForSession...");
+          const { data, error } = await supabase.auth.exchangeCodeForSession(
+            code
+          );
+
+          console.log("Exchange response:", {
+            data: !!data,
+            error: error?.message
+          });
+
+          if (error) {
+            console.error("❌ Error exchanging code for session:", error);
+            Alert.alert(
+              "Authentication Error",
+              "Failed to complete Google sign-in. Please try again."
+            );
+            router.replace("/sign-in");
+            return;
+          }
+
+          if (data.session) {
+            console.log("✅ Session established successfully!");
+            console.log("User ID:", data.session.user.id);
+            console.log("User email:", data.session.user.email);
+
+            // Set the user ID immediately from the session response
+            setCurrentUserId(data.session.user.id);
+            console.log("✅ User ID set in state");
+          } else {
+            console.warn("⚠️ No session in response");
+          }
+        } catch (error) {
+          console.error("❌ Error during code exchange:", error);
+          Alert.alert(
+            "Authentication Error",
+            "An unexpected error occurred. Please try again."
+          );
+          router.replace("/sign-in");
+        } finally {
+          setIsExchangingCode(false);
+        }
+      }
+    };
+
+    void handleOAuthCode();
+  }, [params.code, isExchangingCode, router]);
+
+  // Safety mechanism: redirect to sign-in if user doesn't become available within 10 seconds
+  useEffect(() => {
+    if (!currentUserId && !isAuthLoading && !isExchangingCode && !params.code) {
+      const timeout = setTimeout(() => {
+        console.warn(
+          "User not available after timeout, redirecting to sign-in"
+        );
+        router.replace("/sign-in");
+      }, 10000);
+
+      return () => clearTimeout(timeout);
+    }
+  }, [currentUserId, isAuthLoading, isExchangingCode, params.code, router]);
+
   const createWallet = useCreateWallet();
   const importWallet = useImportWallet();
   const createDeterministicWallet = useCreateDeterministicWallet();
@@ -91,6 +199,8 @@ export default function WalletSetupScreen() {
     useCheckWalletExists(credentials);
 
   const isLoading =
+    isAuthLoading ||
+    isExchangingCode ||
     createWallet.isPending ||
     importWallet.isPending ||
     createDeterministicWallet.isPending ||
@@ -99,8 +209,10 @@ export default function WalletSetupScreen() {
     checkingWallet;
 
   const handleCreateNewWallet = async () => {
-    if (!userId) {
-      Alert.alert("Error", "User not authenticated");
+    console.log("Create wallet clicked, currentUserId:", currentUserId);
+
+    if (!currentUserId) {
+      Alert.alert("Error", "User not authenticated - debug");
       return;
     }
 
@@ -113,7 +225,7 @@ export default function WalletSetupScreen() {
       return;
     }
 
-    console.log("Creating new wallet with mnemonic for user:", userId);
+    console.log("Creating new wallet with mnemonic for user:", currentUserId);
 
     try {
       const result = await createWalletWithMnemonic.mutateAsync();
@@ -129,7 +241,7 @@ export default function WalletSetupScreen() {
   };
 
   const handleImportWallet = async () => {
-    if (!userId) {
+    if (!currentUserId) {
       Alert.alert("Error", "User not authenticated");
       return;
     }
@@ -144,7 +256,7 @@ export default function WalletSetupScreen() {
     }
 
     setPrivateKeyError("");
-    console.log("Importing wallet for user:", userId);
+    console.log("Importing wallet for user:", currentUserId);
 
     try {
       const result = await importWallet.mutateAsync({
@@ -176,7 +288,7 @@ export default function WalletSetupScreen() {
   };
 
   const handleMnemonicImport = async (mnemonic: string) => {
-    if (!userId) {
+    if (!currentUserId) {
       Alert.alert("Error", "User not authenticated");
       return;
     }
@@ -743,7 +855,8 @@ export default function WalletSetupScreen() {
     }
   }
 
-  if (isLoading) {
+  // Show loading while auth is initializing or while checking wallet
+  if (isLoading || !currentUserId) {
     return (
       <YStack
         flex={1}
@@ -753,7 +866,13 @@ export default function WalletSetupScreen() {
       >
         <Spinner size='large' color='#2563EB' />
         <Text mt='$4' color='#4B5567'>
-          {showImportForm ? "Importing wallet..." : "Creating wallet..."}
+          {isExchangingCode
+            ? "Completing sign-in..."
+            : isAuthLoading
+            ? "Signing you in..."
+            : showImportForm
+            ? "Importing wallet..."
+            : "Loading..."}
         </Text>
       </YStack>
     );

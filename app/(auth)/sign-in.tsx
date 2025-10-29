@@ -18,14 +18,16 @@ export default function SignInScreen() {
     setIsGoogleLoading(true);
 
     try {
-      const session = await signInWithGoogle();
+      // signInWithGoogle will open OAuth browser and redirect to wallet-setup
+      // The wallet-setup page will handle the code exchange
+      const completed = await signInWithGoogle();
 
-      if (!session) {
-        return;
+      if (completed) {
+        // Mark onboarding as complete
+        await secureStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETE, "true");
+        // Note: The OAuth redirect will automatically open wallet-setup
+        // so we don't need to navigate manually
       }
-
-      await secureStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETE, "true");
-      router.replace("/(tabs)");
     } catch (error) {
       console.error("Google sign-in error:", error);
       const message =
@@ -36,7 +38,7 @@ export default function SignInScreen() {
     } finally {
       setIsGoogleLoading(false);
     }
-  }, [router]);
+  }, []);
 
   const handleAppleSignIn = React.useCallback(() => {
     Alert.alert(
@@ -98,7 +100,7 @@ export default function SignInScreen() {
       <PasswordlessSignIn
         onSuccess={async () => {
           await secureStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETE, "true");
-          router.replace("/(tabs)");
+          router.replace("/wallet-setup");
         }}
       />
       <XStack

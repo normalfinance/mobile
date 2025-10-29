@@ -8,6 +8,8 @@ export default function AuthCallbackScreen() {
   const router = useRouter();
   const { session, isLoading } = useSupabaseAuth();
 
+  console.log("AuthCallbackScreen", isLoading, session);
+
   useEffect(() => {
     console.log("AuthCallbackScreen", isLoading, session);
     if (isLoading) {
@@ -15,7 +17,7 @@ export default function AuthCallbackScreen() {
     }
 
     if (session) {
-      router.replace("/(tabs)");
+      router.replace("/wallet-setup");
     } else {
       router.replace("/sign-in");
     }

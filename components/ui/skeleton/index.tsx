@@ -1,6 +1,5 @@
 import React from 'react';
 import { Skeleton } from 'moti/skeleton';
-import { useColorScheme } from '@/hooks/use-color-scheme';
 import { View } from 'tamagui';
 
 interface BaseSkeletonProps {
@@ -18,13 +17,11 @@ export function SkeletonBox({
   radius = 8,
   children 
 }: BaseSkeletonProps) {
-  const colorScheme = useColorScheme();
-  
   return (
     <Skeleton
       show={show}
       radius={radius}
-      colorMode={colorScheme}
+      colorMode="light"
       width={width}
       height={height}
     >
@@ -39,14 +36,13 @@ export function SkeletonCircle({
   height,
   children 
 }: BaseSkeletonProps) {
-  const colorScheme = useColorScheme();
   const size = height || width;
   
   return (
     <Skeleton
       show={show}
       radius="round"
-      colorMode={colorScheme}
+      colorMode="light"
       width={size}
       height={size}
     >

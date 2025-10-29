@@ -28,7 +28,7 @@ export default function UnAuthenticatedLayout() {
   }
 
   if (session) {
-    return <Redirect href='/(tabs)/assets' />;
+    return <Redirect href='/wallet-setup' />;
   }
 
   if (hasCompletedOnboarding === null) {
