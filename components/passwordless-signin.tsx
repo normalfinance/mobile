@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Alert } from "react-native";
-import { useSignIn } from "@clerk/clerk-expo";
 import { Button, Text, Input, YStack, H6, XStack, Separator } from "tamagui";
+import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
 
 interface PasswordlessSignInProps {
   onSuccess?: () => void;
@@ -12,7 +12,7 @@ export default function PasswordlessSignIn({
   onSuccess,
   onEmailSent
 }: PasswordlessSignInProps) {
-  const { signIn, setActive, isLoaded } = useSignIn();
+  const { supabase } = useSupabaseAuth();
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -21,77 +21,69 @@ export default function PasswordlessSignIn({
   const [cooldown, setCooldown] = useState(0);
 
   const sendCode = async () => {
-    if (!isLoaded || !email.trim()) return;
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail) return;
 
     setIsLoading(true);
     try {
-      const signInAttempt = await signIn.create({
-        identifier: email
+      const { error } = await supabase.auth.signInWithOtp({
+        email: normalizedEmail,
+        options: {
+          shouldCreateUser: true
+        }
       });
 
-      if (!signInAttempt.supportedFirstFactors) {
-        throw new Error("Email code factor not supported");
+      if (error) {
+        throw error;
       }
 
-      const strategy = signInAttempt.supportedFirstFactors.find(
-        (factor: any) => factor.strategy === "email_code"
-      ) as {
-        emailAddressId: string;
-        strategy: string;
-        primary: boolean;
-        safeIdentifier: string;
-      };
-
-      if (strategy) {
-        await signIn.prepareFirstFactor({
-          strategy: "email_code",
-          emailAddressId: strategy.emailAddressId
-        });
-
-        setEmailSent(true);
-        setCooldown(60); // 60 second cooldown
-        startCooldownTimer();
-        onEmailSent?.();
-      }
-    } catch (error: any) {
+      setEmailSent(true);
+      setCooldown(60);
+      startCooldownTimer();
+      onEmailSent?.();
+    } catch (error) {
       console.error("Send code error:", error);
-      Alert.alert(
-        "Error",
-        error.errors?.[0]?.message ||
-          "Failed to send verification code. Please try again."
-      );
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Failed to send verification code. Please try again.";
+      Alert.alert("Error", message);
     } finally {
       setIsLoading(false);
     }
   };
 
   const verifyCode = async () => {
-    if (!isLoaded || !code.trim() || code.length !== 6) return;
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail || !code.trim() || code.length !== 6) return;
 
     setIsVerifying(true);
     try {
-      const signInAttempt = await signIn.attemptFirstFactor({
-        strategy: "email_code",
-        code: code.trim()
+      const { data, error } = await supabase.auth.verifyOtp({
+        email: normalizedEmail,
+        token: code.trim(),
+        type: "email"
       });
 
-      if (signInAttempt.status === "complete") {
-        await setActive({ session: signInAttempt.createdSessionId });
+      if (error) {
+        throw error;
+      }
+
+      if (data.session) {
         onSuccess?.();
       } else {
-        console.error("Sign-in not complete:", signInAttempt);
         Alert.alert(
-          "Verification Failed",
-          "The verification process is not complete. Please try again."
+          "Verification Incomplete",
+          "We couldn't verify your session. Please request a new code."
         );
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error("Code verification error:", error);
-      Alert.alert(
-        "Invalid Code",
-        error.errors?.[0]?.message ||
-          "The code you entered is invalid or has expired. Please check your email and try again."
-      );
+      const message =
+        error instanceof Error
+          ? error.message
+          : "The code you entered is invalid or has expired. Please check your email and try again.";
+      Alert.alert("Invalid Code", message);
       setCode(""); // Clear the code field on error
     } finally {
       setIsVerifying(false);
@@ -138,6 +130,8 @@ export default function PasswordlessSignIn({
             editable={!isLoading}
             borderWidth={1}
             borderColor='$borderColor'
+            backgroundColor='$background'
+            color='$text'
           />
 
           <Button

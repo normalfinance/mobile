@@ -1,10 +1,22 @@
-import { useAuth, useUser } from "@clerk/clerk-expo";
 import { useQuery } from "@tanstack/react-query";
-import { STALE_TIMES } from "../lib/utils/query.utils";
+import * as AuthSession from "expo-auth-session";
+import * as WebBrowser from "expo-web-browser";
+import type { Session } from "@supabase/supabase-js";
+import Constants from "expo-constants";
+
+import { supabase } from "@/lib/supabase";
+import { STALE_TIMES } from "@/lib/utils/query.utils";
+import {
+  getCachedSession,
+  getCachedUser,
+  useSupabaseAuth
+} from "@/providers/supabase-auth-provider";
+
+WebBrowser.maybeCompleteAuthSession();
 
 export interface AuthCredentials {
   userId: string; // Email address for account consistency and backend lookup
-  sessionSecret: string; // Clerk's stable user ID (consistent across all auth sessions)
+  sessionSecret: string; // Stable Supabase user ID (consistent across sessions)
 }
 
 export interface AuthStatus {
@@ -15,28 +27,16 @@ export interface AuthStatus {
 }
 
 export const getAuthCredentials = (): AuthCredentials | null => {
-  const auth = useAuth();
-  const { user } = useUser();
+  const session = getCachedSession();
+  const user = getCachedUser();
 
-  console.log("Auth", auth);
-  if (!auth.isSignedIn || !user) {
-    return null;
-  }
-
-  // Access user email and Clerk user ID
-  const userEmail = user.primaryEmailAddress?.emailAddress;
-  const clerkUserId = auth.userId;
-
-  console.log("User email", userEmail);
-  console.log("Clerk user ID", clerkUserId);
-
-  if (!userEmail || !clerkUserId) {
+  if (!session || !user || !user.email) {
     return null;
   }
 
   return {
-    userId: userEmail, // Use email as stable identifier for backend lookup
-    sessionSecret: clerkUserId // Use Clerk's stable user ID (same across all sessions)
+    userId: user.email,
+    sessionSecret: user.id
   };
 };
 
@@ -51,8 +51,7 @@ export const getCurrentSessionSecret = (): string | null => {
 };
 
 export const isUserAuthenticated = (): boolean => {
-  const auth = useAuth();
-  return auth.isSignedIn ?? false;
+  return !!getCachedSession();
 };
 
 export const requireAuth = (): AuthCredentials => {
@@ -72,58 +71,72 @@ export const authQueryKeys = {
 
 // Custom Hooks
 export const useAuthCredentials = () => {
-  const auth = useAuth();
-  const { user } = useUser();
-
-  console.log("useAuthCredentials - auth:", { isSignedIn: auth.isSignedIn, userId: auth.userId, isLoaded: auth.isLoaded });
-  console.log("useAuthCredentials - user:", { 
-    id: user?.id, 
-    email: user?.primaryEmailAddress?.emailAddress,
-    hasUser: !!user 
-  });
+  const { session, user, isLoading } = useSupabaseAuth();
 
   return useQuery({
     queryKey: authQueryKeys.credentials(),
     queryFn: () => {
-      console.log("queryFn executing with auth.isSignedIn:", auth.isSignedIn, "user:", !!user);
-      
-      if (!auth.isSignedIn || !user) {
+      if (!session || !user?.email) {
         throw new Error("Not authenticated");
       }
 
-      const userEmail = user.primaryEmailAddress?.emailAddress;
-      const clerkUserId = auth.userId;
-
-      console.log("userEmail:", userEmail, "clerkUserId:", clerkUserId);
-
-      if (!userEmail || !clerkUserId) {
-        throw new Error("Missing user credentials");
-      }
-
-      const credentials = {
-        userId: userEmail,
-        sessionSecret: clerkUserId
-      } as AuthCredentials;
-
-      console.log("Returning credentials:", credentials);
-      return credentials;
+      return {
+        userId: user.email,
+        sessionSecret: user.id
+      } satisfies AuthCredentials;
     },
-    enabled: auth.isLoaded && auth.isSignedIn && !!user,
+    enabled: !isLoading && !!session && !!user?.email,
     staleTime: STALE_TIMES.SHORT,
-    retry: false // Don't retry auth failures
+    retry: false
   });
 };
 
 export const useAuthStatus = (): AuthStatus => {
-  const auth = useAuth();
+  const { session, isLoading: authLoading } = useSupabaseAuth();
   const credentialsQuery = useAuthCredentials();
 
   return {
-    isAuthenticated: (auth.isSignedIn ?? false) && !!credentialsQuery.data,
-    credentials: credentialsQuery.data || null,
-    isLoading: !(auth.isLoaded ?? false) || credentialsQuery.isLoading,
+    isAuthenticated: !!session && !!credentialsQuery.data,
+    credentials: credentialsQuery.data ?? null,
+    isLoading: authLoading || credentialsQuery.isLoading,
     error: credentialsQuery.error as Error | null
   };
+};
+
+export const signInWithGoogle = async (): Promise<boolean> => {
+  const redirectTo = AuthSession.makeRedirectUri({
+    scheme: "normalapp",
+    path: "wallet-setup",
+    native: "normalapp://wallet-setup"
+  });
+
+  // Ensure the Supabase Google provider redirect matches `normalapp://wallet-setup`
+  // and the provider is enabled in the Supabase dashboard before using this helper.
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo,
+      skipBrowserRedirect: true
+    }
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  const { url } = data ?? {};
+
+  if (!url) {
+    throw new Error("Unable to start Google authentication flow.");
+  }
+
+  // Open the browser for OAuth - the redirect will bring user back to wallet-setup
+  // where the code exchange will happen
+  const authResult = await WebBrowser.openAuthSessionAsync(url, redirectTo);
+
+  // Return true if user completed OAuth (even if we don't have session yet)
+  // The code exchange will happen on the wallet-setup page
+  return authResult.type === "success";
 };
 
 // Utility function for components that need auth
