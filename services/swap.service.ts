@@ -13,7 +13,7 @@ import {
 import { AVAILABLE_SWAP_TOKENS } from "../lib/constants/tokens.constants";
 import { getKeypair } from "./wallet.service";
 import { STALE_TIMES } from "../lib/utils/query.utils";
-import { Networks, Account } from "@stellar/stellar-sdk";
+import { Networks, Account, Horizon } from "@stellar/stellar-sdk";
 import { formatNormalToken } from "../lib/utils/format.utils";
 import { useSwap } from "../hooks/use-swap";
 
@@ -32,10 +32,10 @@ const getNetworkConfig = () => {
         "https://soroban.stellar.org",
       poolRouter:
         process.env.EXPO_PUBLIC_MAINNET_POOL_ROUTER ||
-        "CC3V24ALNMCANOEP2GFSSH4RGOGQXCECDBQISDJQEG23NULP4B4SKKQN",
+        "CCPHUHQYFOJJ6WQUGUYHHPJYQGFLRQHJJTRJNWQG54MHCHPRFLWQI7SE",
       reflectorOracle:
         process.env.EXPO_PUBLIC_MAINNET_REFLECTOR_ORACLE ||
-        "CAFJZQWSED6YAWZU3GWRTOCNPPCGBN32L7QV43XX5LZLFTK6JLN34DLN"
+        "CALI2BYU2JE6WVRUFYTS6MSBNEHGJ35P4AVCZYF3B6QOE3QKOB2PLE6M"
     };
   } else {
     return {
@@ -73,11 +73,16 @@ const createSwapQuoteCalculator = (swapOps: ReturnType<typeof useSwap>) => {
       (t) => t.symbol === formatNormalToken(request.tokenOut, "with-n")
     );
 
+    console.log("tokenInInfo", tokenInInfo);
+    console.log("tokenOutInfo", tokenOutInfo);
+
     if (!tokenInInfo || !tokenOutInfo) {
       throw new Error("Token not found");
     }
 
     const config = getNetworkConfig();
+
+    console.log("config for swap", config);
 
     try {
       const testingKeypair = await getKeypair();
@@ -86,7 +91,30 @@ const createSwapQuoteCalculator = (swapOps: ReturnType<typeof useSwap>) => {
         throw new Error("No wallet found");
       }
 
-      const testingSource = new Account(testingKeypair.publicKey(), "0");
+      // Load the actual account from Horizon to get the correct sequence number
+      const horizonServer = new Horizon.Server(config.horizonUrl);
+      let testingSource: Account;
+
+      try {
+        console.log(
+          "🔍 Loading account from Horizon:",
+          testingKeypair.publicKey()
+        );
+        const accountResponse = await horizonServer.loadAccount(
+          testingKeypair.publicKey()
+        );
+        testingSource = new Account(
+          accountResponse.accountId(),
+          accountResponse.sequence
+        );
+        console.log("✅ Account loaded from Horizon for simulation");
+        console.log("   Account ID:", accountResponse.accountId());
+        console.log("   Sequence:", accountResponse.sequence);
+        console.log("   Balances:", accountResponse.balances);
+      } catch (error) {
+        console.error("❌ Could not load account from Horizon:", error);
+        throw error; // Don't use mock account, throw the error
+      }
 
       const networkConfig = {
         rpcUrl: config.rpcUrl,

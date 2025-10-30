@@ -17,6 +17,10 @@ export function formatNormalToken(
     return "XLM";
   }
 
+  if (input === "USDC") {
+    return "USDC";
+  }
+
   if (format === "with-n") {
     return hasPrefix ? input : `n${input}`;
   } else if (format === "without-n") {
