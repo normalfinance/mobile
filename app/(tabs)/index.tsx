@@ -28,6 +28,7 @@ import { usePortfolio } from "@/hooks/use-portfolio";
 import { useWallet } from "@/services";
 import { useAssets } from "expo-asset";
 import { BlurView } from "expo-blur";
+import { getCurrentNetwork } from "@/lib/utils/stellar.utils";
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -53,6 +54,7 @@ export default function HomeScreen() {
     typeof setTimeout
   > | null>(null);
   const [priceChangeAssets] = useAssets(PRICE_CHANGE_ICON_SOURCES);
+  const currentNetwork = getCurrentNetwork();
 
   const normalizedSearchQuery = React.useMemo(
     () => searchQuery.trim().toLowerCase(),
@@ -78,8 +80,10 @@ export default function HomeScreen() {
       return "";
     }
 
-    return `https://stellar.expert/explorer/public/account/${walletAddress}`;
-  }, [walletAddress]);
+    const explorerSegment = currentNetwork === "mainnet" ? "public" : "testnet";
+
+    return `https://stellar.expert/explorer/${explorerSegment}/account/${walletAddress}`;
+  }, [walletAddress, currentNetwork]);
 
   const increaseAsset = priceChangeAssets?.[0];
   const decreaseAsset = priceChangeAssets?.[1];

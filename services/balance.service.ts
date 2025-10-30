@@ -1,8 +1,8 @@
 import { Horizon } from "@stellar/stellar-sdk";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  STELLAR_CONFIG,
-  STELLAR_ERRORS
+  STELLAR_ERRORS,
+  ACTIVE_HORIZON_URL
 } from "../lib/constants/stellar.constants";
 import {
   WalletBalance,
@@ -13,8 +13,8 @@ import {
 import { STALE_TIMES } from "../lib/utils/query.utils";
 import { getWallet } from "./wallet.service";
 
-// Initialize Horizon server (using testnet for development)
-const server = new Horizon.Server(STELLAR_CONFIG.HORIZON_URLS.TESTNET);
+// Initialize Horizon server based on configured network
+const server = new Horizon.Server(ACTIVE_HORIZON_URL);
 
 // Core balance functions
 export const fetchAccountBalances = async (

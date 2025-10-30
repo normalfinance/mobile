@@ -47,7 +47,7 @@ type PoolsResultEntry = [Buffer | Uint8Array | string, string];
 
 function normalizeTokenAddress(token: string): string {
   if (token === "XLM") {
-    return "native";
+    return "CAS3J7GYLGXMF6TDJBBYYSE3HQ6BBSMLNUQ34T6TZMYMW2EVH34XOWMA";
   }
 
   return token;
@@ -86,6 +86,10 @@ async function fetchPoolContext(
   client: PoolRouterClient,
   tokens: string[]
 ): Promise<PoolContext> {
+  console.log("fetchPoolContext", tokens);
+  if (tokens[1] === "native") {
+    tokens[1] = "CAS3J7GYLGXMF6TDJBBYYSE3HQ6BBSMLNUQ34T6TZMYMW2EVH34XOWMA";
+  }
   const poolsTx = await client.get_pools(
     { tokens },
     { simulate: true, fee: 1000 }
