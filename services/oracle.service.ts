@@ -1,4 +1,3 @@
-import { getOraclePrice } from "@/lib/utils/oracle.utils";
 import { formatTokenAmount } from "@/lib/utils/oracle.utils";
 import { cacheStorage } from "@/lib/utils/storage.utils";
 import type {
@@ -11,9 +10,10 @@ import type {
   CacheStats,
   BackgroundUpdateStatus
 } from "@/lib/types/oracle.types";
-import { STELLAR_CONFIG } from "@/lib/constants/stellar.constants";
-import { getKeypair } from "./wallet.service";
-import { Account } from "@stellar/stellar-sdk";
+import {
+  fetchLatestQuotes,
+  type LatestPricePoint
+} from "./coinmarketcap.service";
 
 // Service configuration
 const CONFIG: OracleServiceConfig = {
@@ -100,10 +100,27 @@ export const updateRateLimit = async (): Promise<void> => {
 };
 
 // Oracle price fetching
+const toScaledBigInt = (price: number, decimals: number): bigint => {
+  const fixed = price.toFixed(decimals);
+  const normalized = fixed.replace(".", "");
+  return BigInt(normalized);
+};
+
+const createPriceDataFromQuote = (
+  quote: LatestPricePoint,
+  decimals: number
+): PriceData => {
+  return {
+    price: toScaledBigInt(quote.price, decimals),
+    timestamp: quote.timestamp
+  };
+};
+
 export const fetchPriceFromOracle = async (
   asset: string
 ): Promise<PriceData> => {
-  const normalizedAsset = asset.trim().toUpperCase();
+  const trimmedAsset = asset.trim();
+  const normalizedAsset = trimmedAsset.toUpperCase();
   const requestKey = `${CONFIG.oracleAddress}:${normalizedAsset}`;
 
   const existingRequest = inFlightPriceRequests.get(requestKey);
@@ -115,21 +132,17 @@ export const fetchPriceFromOracle = async (
     await checkRateLimit();
 
     try {
-      const keypair = await getKeypair();
-      if (!keypair) {
-        throw new Error("No wallet found in secure storage");
-      }
-      const networkConfig = {
-        rpcUrl: STELLAR_CONFIG.SOROBAN_RPC_URLS.TESTNET,
-        networkPassphrase: STELLAR_CONFIG.TESTNET_PASSPHRASE,
-        testingSource: new Account(keypair.publicKey(), "0")
-      };
+      const { data, errors } = await fetchLatestQuotes([trimmedAsset]);
 
-      const priceData = await getOraclePrice(
-        CONFIG.oracleAddress,
-        asset,
-        networkConfig
-      );
+      const quote = data[trimmedAsset];
+      if (!quote) {
+        const errorMessage =
+          errors[trimmedAsset] ||
+          `CoinMarketCap did not return a price for ${normalizedAsset}`;
+        throw new Error(errorMessage);
+      }
+
+      const priceData = createPriceDataFromQuote(quote, CONFIG.priceDecimals);
 
       await updateRateLimit();
 
