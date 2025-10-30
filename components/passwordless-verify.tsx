@@ -1,8 +1,8 @@
 import React, { useState } from "react";
 import { Alert } from "react-native";
-import { useSignIn } from "@clerk/clerk-expo";
 import { useRouter } from "expo-router";
 import { Button, Text, Input, YStack, H4, H6 } from "tamagui";
+import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
 
 interface PasswordlessVerifyProps {
   email?: string;
@@ -15,7 +15,7 @@ export default function PasswordlessVerify({
   onSuccess,
   onBack
 }: PasswordlessVerifyProps) {
-  const { signIn, setActive, isLoaded } = useSignIn();
+  const { supabase } = useSupabaseAuth();
   const router = useRouter();
   const [code, setCode] = useState("");
   const [isVerifying, setIsVerifying] = useState(false);
@@ -24,7 +24,17 @@ export default function PasswordlessVerify({
   >("idle");
 
   const verifyCode = async () => {
-    if (!signIn || !isLoaded || !code.trim() || code.length !== 6) {
+    const normalizedEmail = email?.trim().toLowerCase();
+
+    if (!normalizedEmail) {
+      Alert.alert(
+        "Missing Email",
+        "We need your email address to verify the code."
+      );
+      return;
+    }
+
+    if (!code.trim() || code.length !== 6) {
       Alert.alert("Invalid Code", "Please enter a 6-digit code.");
       return;
     }
@@ -33,39 +43,43 @@ export default function PasswordlessVerify({
     setVerificationStatus("idle");
 
     try {
-      const signInAttempt = await signIn.attemptFirstFactor({
-        strategy: "email_code",
-        code: code.trim()
+      const { data, error } = await supabase.auth.verifyOtp({
+        email: normalizedEmail,
+        token: code.trim(),
+        type: "email"
       });
 
-      if (signInAttempt.status === "complete") {
-        await setActive({ session: signInAttempt.createdSessionId });
+      if (error) {
+        throw error;
+      }
+
+      if (data.session) {
         setVerificationStatus("success");
 
-        // Call success callback if provided, otherwise redirect
         if (onSuccess) {
           onSuccess();
         } else {
           setTimeout(() => {
-            router.replace("/");
+            router.replace("/(tabs)");
           }, 1500);
         }
       } else {
-        console.error("Sign-in not complete:", signInAttempt);
+        console.error("Verification returned without session", data);
         setVerificationStatus("error");
         Alert.alert(
           "Verification Failed",
-          "The verification process is not complete. Please try again."
+          "The verification process is not complete. Please request a new code."
         );
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error("Code verification error:", error);
       setVerificationStatus("error");
 
       Alert.alert(
         "Invalid Code",
-        error.errors?.[0]?.message ||
-          "The code you entered is invalid or has expired. Please check your email and try again.",
+        error instanceof Error
+          ? error.message
+          : "The code you entered is invalid or has expired. Please check your email and try again.",
         [
           {
             text: "Try Again",

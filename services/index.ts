@@ -60,7 +60,8 @@ export {
   authQueryKeys,
   useAuthCredentials,
   useAuthStatus,
-  useRequireAuth
+  useRequireAuth,
+  signInWithGoogle
 } from "./auth.service";
 
 // Type exports

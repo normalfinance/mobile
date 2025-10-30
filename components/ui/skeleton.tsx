@@ -1,6 +1,5 @@
 import React from 'react';
 import { Skeleton } from 'moti/skeleton';
-import { useColorScheme } from '@/hooks/use-color-scheme';
 
 interface BaseSkeletonProps {
   show?: boolean;
@@ -17,13 +16,11 @@ export function SkeletonBox({
   radius = 8,
   children 
 }: BaseSkeletonProps) {
-  const colorScheme = useColorScheme();
-  
   return (
     <Skeleton
       show={show}
       radius={radius}
-      colorMode={colorScheme}
+      colorMode="light"
       width={width}
       height={height}
     >
@@ -38,14 +35,13 @@ export function SkeletonCircle({
   height,
   children 
 }: BaseSkeletonProps) {
-  const colorScheme = useColorScheme();
   const size = height || width;
   
   return (
     <Skeleton
       show={show}
       radius="round"
-      colorMode={colorScheme}
+      colorMode="light"
       width={size}
       height={size}
     >
@@ -65,8 +61,6 @@ export function SkeletonText({
   lineWidths,
   children 
 }: SkeletonTextProps) {
-  const colorScheme = useColorScheme();
-  
   if (lines === 1) {
     return (
       <SkeletonBox 
@@ -103,8 +97,6 @@ export function SkeletonCard({
   hasSubtext = true,
   children 
 }: SkeletonCardProps) {
-  const colorScheme = useColorScheme();
-  
   return (
     <Skeleton.Group show={show}>
       <div style={{ 

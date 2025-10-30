@@ -1,85 +1,51 @@
-import { useOAuth } from "@clerk/clerk-expo";
-import { Link, useRouter } from "expo-router";
-import * as WebBrowser from "expo-web-browser";
-import React, { useEffect } from "react";
+import { useRouter } from "expo-router";
+import React from "react";
 import { Alert } from "react-native";
 import { Image } from "expo-image";
 import PasswordlessSignIn from "@/components/passwordless-signin";
 import { secureStorage } from "@/lib/utils";
 import { STORAGE_KEYS } from "@/lib/constants";
 import { Button, Paragraph, Text, XStack, YStack, Separator } from "tamagui";
-import { useClerk, useSignIn } from "@clerk/clerk-expo";
-
-const useWarmUpBrowser = () => {
-  useEffect(() => {
-    void WebBrowser.warmUpAsync();
-    return () => {
-      void WebBrowser.coolDownAsync();
-    };
-  }, []);
-};
+import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
+import { signInWithGoogle } from "@/services";
 
 export default function SignInScreen() {
-  const { loaded } = useClerk();
-  const { signIn, isLoaded } = useSignIn();
-
-  const { startOAuthFlow: startGoogleOAuthFlow } = useOAuth({
-    strategy: "oauth_google"
-  });
-  const { startOAuthFlow: startAppleOAuthFlow } = useOAuth({
-    strategy: "oauth_apple",
-    redirectUrl: "normalapp://oauth-callback"
-  });
-
   const router = useRouter();
+  const { isLoading: authLoading } = useSupabaseAuth();
+  const [isGoogleLoading, setIsGoogleLoading] = React.useState(false);
 
-  useWarmUpBrowser();
-
-  const onGoogleSignInPress = React.useCallback(async () => {
-    try {
-      const { createdSessionId, setActive } = await startGoogleOAuthFlow({});
-
-      if (!createdSessionId) {
-        return;
-      }
-
-      setActive?.({ session: createdSessionId });
-      await secureStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETE, "true");
-      router.replace("/");
-    } catch (err) {
-      console.error("Google OAuth error", err);
-      Alert.alert("Error", "Failed to sign in with Google");
-    }
-  }, [startGoogleOAuthFlow, router]);
-
-  const onAppleSignInPress = React.useCallback(async () => {
-    console.log("onAppleSignInPress", loaded, isLoaded);
-    if (!loaded || !isLoaded) return;
+  const handleGoogleSignIn = React.useCallback(async () => {
+    setIsGoogleLoading(true);
 
     try {
-      const { createdSessionId, setActive } = await startAppleOAuthFlow({});
+      // signInWithGoogle will open OAuth browser and redirect to wallet-setup
+      // The wallet-setup page will handle the code exchange
+      const completed = await signInWithGoogle();
 
-      if (!createdSessionId) {
-        return;
+      if (completed) {
+        // Mark onboarding as complete
+        await secureStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETE, "true");
+        // Note: The OAuth redirect will automatically open wallet-setup
+        // so we don't need to navigate manually
       }
-
-      setActive?.({ session: createdSessionId });
-      await secureStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETE, "true");
-      router.replace("/");
-    } catch (err) {
-      console.error("Apple OAuth error", err);
-      Alert.alert("Error", "Failed to sign in with Apple");
+    } catch (error) {
+      console.error("Google sign-in error:", error);
+      const message =
+        error instanceof Error
+          ? error.message
+          : "We couldn't complete Google sign-in. Please try again.";
+      Alert.alert("Google Sign-In Failed", message);
+    } finally {
+      setIsGoogleLoading(false);
     }
-  }, [startAppleOAuthFlow, router]);
+  }, []);
 
-  useEffect(() => {
-    if (!isLoaded || !signIn) return;
-    const strategies =
-      signIn.supportedSecondFactors?.map((factor) => factor.strategy) ??
-      signIn.supportedFirstFactors?.map((factor) => factor.strategy) ??
-      [];
-    console.log("Supported OAuth strategies:", strategies);
-  }, [isLoaded, signIn]);
+  const handleAppleSignIn = React.useCallback(() => {
+    Alert.alert(
+      "Coming Soon",
+      "Apple sign-in is not yet available. Please use email sign-in for now."
+    );
+  }, []);
 
   return (
     <YStack
@@ -113,7 +79,7 @@ export default function SignInScreen() {
 
         <YStack space='$2' alignItems='center'>
           <Text fontSize={24} fontWeight='500' color='#0D0D12'>
-            Sign in to your account
+            Sign in to Normal
           </Text>
           <Paragraph
             color='#666D80'
@@ -121,15 +87,20 @@ export default function SignInScreen() {
             fontWeight='400'
             fontSize={16}
           >
-            Welcome back! Please enter your details
+            Welcome back!
           </Paragraph>
+          {authLoading && (
+            <Text color='#666D80' fontSize={14}>
+              Checking your session...
+            </Text>
+          )}
         </YStack>
       </YStack>
 
       <PasswordlessSignIn
         onSuccess={async () => {
           await secureStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETE, "true");
-          router.replace("/");
+          router.replace("/wallet-setup");
         }}
       />
       <XStack
@@ -151,7 +122,9 @@ export default function SignInScreen() {
           borderWidth={1}
           borderRadius={6}
           fontWeight='600'
-          onPress={onGoogleSignInPress}
+          onPress={handleGoogleSignIn}
+          disabled={isGoogleLoading}
+          opacity={isGoogleLoading ? 0.6 : 1}
         >
           <XStack alignItems='center' justifyContent='center' space='$3'>
             <Image
@@ -159,7 +132,7 @@ export default function SignInScreen() {
               style={{ width: 24, height: 24 }}
             />
             <Text color='#101828' fontWeight='600'>
-              Sign in with Google
+              {isGoogleLoading ? "Signing in..." : "Sign in with Google"}
             </Text>
           </XStack>
         </Button>
@@ -170,7 +143,7 @@ export default function SignInScreen() {
           borderColor='$borderColor'
           borderWidth={1}
           borderRadius={6}
-          onPress={onAppleSignInPress}
+          onPress={handleAppleSignIn}
         >
           <XStack alignItems='center' justifyContent='center' space='$3'>
             <Image
