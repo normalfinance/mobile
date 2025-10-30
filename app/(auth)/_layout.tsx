@@ -1,12 +1,10 @@
 import { Redirect, Stack } from "expo-router";
-import { useAuth } from "@clerk/clerk-expo";
 import { useEffect, useState } from "react";
 
 import { secureStorage } from "@/lib/utils";
 import { STORAGE_KEYS } from "@/lib/constants";
 
 export default function UnAuthenticatedLayout() {
-  const { isSignedIn } = useAuth();
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState<
     boolean | null
   >(null);
@@ -22,10 +20,6 @@ export default function UnAuthenticatedLayout() {
 
     void checkOnboarding();
   }, []);
-
-  if (isSignedIn) {
-    return <Redirect href={"/"} />;
-  }
 
   if (hasCompletedOnboarding === null) {
     return null;

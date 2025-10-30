@@ -1,201 +1,252 @@
-import { Keypair, type Account } from "@stellar/stellar-sdk";
-import {
-  Client as PoolRouterClient,
-  type SwapDirection as ContractSwapDirection
-} from "../contracts/pool_router";
-
+import { Buffer } from "buffer";
+import { type Account } from "@stellar/stellar-sdk";
 import { type AssembledTransaction } from "@stellar/stellar-sdk/contract";
-import { formatNormalToken } from "./format.utils";
+
+import { Client as PoolRouterClient } from "../contracts/pool_router";
+
+export interface PoolContext {
+  tokens: string[];
+  poolIndex: Buffer;
+  poolAddress: string;
+}
 
 export interface EstimateSwapArgs {
-  asset_in: string;
-  asset_out: string;
-  amount_in: bigint;
+  tokenIn: string;
+  tokenOut: string;
+  amountIn: bigint;
+  riskReducing?: boolean;
+  poolContext?: PoolContext;
 }
 
 export interface SwapEstimateResult {
-  amount_out: bigint;
-  spread_amount: bigint;
+  amountOut: bigint;
+  poolContext: PoolContext;
 }
 
-export type SwapDirection = ContractSwapDirection;
+export interface SwapTransactionArgs {
+  user: string;
+  tokenIn: string;
+  tokenOut: string;
+  amountIn: bigint;
+  amountOutMin: bigint;
+  poolContext?: PoolContext;
+}
 
-export function getSwapDirection(
-  asset_in: string,
-  asset_out: string
-): {
-  direction: SwapDirection;
-} {
-  if (asset_in === "XLM") {
-    return {
-      direction: { tag: "Buy", values: undefined }
-    };
-  } else {
-    return {
-      direction: { tag: "Sell", values: undefined }
-    };
+interface EstimateNetworkConfig {
+  rpcUrl: string;
+  networkPassphrase: string;
+  testingSource: Account;
+}
+
+interface SwapNetworkConfig {
+  networkPassphrase: string;
+  rpcUrl: string;
+}
+
+type PoolsResultEntry = [Buffer | Uint8Array | string, string];
+
+function normalizeTokenAddress(token: string): string {
+  if (token === "XLM") {
+    return "native";
   }
+
+  return token;
+}
+
+function sortTokens(tokens: string[]): string[] {
+  return [...tokens].sort((a, b) => a.localeCompare(b));
+}
+
+function tokensMatch(
+  context: PoolContext | undefined,
+  tokens: string[]
+): boolean {
+  if (!context) return false;
+  if (context.tokens.length !== tokens.length) return false;
+  return context.tokens.every((token, index) => token === tokens[index]);
+}
+
+function toBuffer(value: Buffer | Uint8Array | string): Buffer {
+  if (Buffer.isBuffer(value)) {
+    return value;
+  }
+
+  if (value instanceof Uint8Array) {
+    return Buffer.from(value);
+  }
+
+  if (typeof value === "string") {
+    return Buffer.from(value, "base64");
+  }
+
+  throw new Error(`Unsupported pool index format: ${typeof value}`);
+}
+
+async function fetchPoolContext(
+  client: PoolRouterClient,
+  tokens: string[]
+): Promise<PoolContext> {
+  const poolsTx = await client.get_pools(
+    { tokens },
+    { simulate: true, fee: 1000 }
+  );
+
+  if (!poolsTx.result) {
+    throw new Error("Pool Router get_pools returned an empty result");
+  }
+
+  const poolsResult = poolsTx.result as unknown;
+  let entries: PoolsResultEntry[] = [];
+
+  if (poolsResult instanceof Map) {
+    entries = Array.from(poolsResult.entries()) as PoolsResultEntry[];
+  } else if (Array.isArray(poolsResult)) {
+    entries = poolsResult as PoolsResultEntry[];
+  }
+
+  if (entries.length === 0) {
+    throw new Error(`No pools found for tokens: ${tokens.join(", ")}`);
+  }
+
+  const [poolIndexRaw, poolAddress] = entries[0];
+  const poolIndex = toBuffer(poolIndexRaw);
+
+  return {
+    tokens,
+    poolIndex,
+    poolAddress
+  };
+}
+
+async function ensurePoolContext(
+  client: PoolRouterClient,
+  tokenIn: string,
+  tokenOut: string,
+  existing?: PoolContext
+): Promise<PoolContext> {
+  const normalizedIn = normalizeTokenAddress(tokenIn);
+  const normalizedOut = normalizeTokenAddress(tokenOut);
+  const tokens = sortTokens([normalizedIn, normalizedOut]);
+
+  if (tokensMatch(existing, tokens)) {
+    return existing!;
+  }
+
+  return fetchPoolContext(client, tokens);
+}
+
+function safeBigInt(value: unknown, field: string): bigint {
+  if (typeof value === "bigint") {
+    return value;
+  }
+
+  if (typeof value === "string" || typeof value === "number") {
+    try {
+      return BigInt(value);
+    } catch (error) {
+      throw new Error(
+        `Failed to convert ${field}="${value}" to BigInt: ${error}`
+      );
+    }
+  }
+
+  if (
+    value &&
+    typeof (value as { toString: () => string }).toString === "function"
+  ) {
+    try {
+      return BigInt((value as { toString: () => string }).toString());
+    } catch (error) {
+      throw new Error(`Failed to convert ${field} to BigInt: ${error}`);
+    }
+  }
+
+  throw new Error(`${field} has unsupported type: ${typeof value}`);
 }
 
 export async function estimateSwap(
   poolRouterAddress: string,
   args: EstimateSwapArgs,
-  networkConfig: {
-    rpcUrl: string;
-    networkPassphrase: string;
-    testingSource: Account;
-  }
+  networkConfig: EstimateNetworkConfig
 ): Promise<SwapEstimateResult> {
-  console.log(`🏊 Calling Pool Router estimate_swap...`);
-  console.log("Pool Router Address:", poolRouterAddress);
-  console.log("Estimate Args:", {
-    asset_in: args.asset_in,
-    asset_out: args.asset_out,
-    amount_in: args.amount_in.toString()
-  });
-
-  const poolRouterClient = new PoolRouterClient({
+  const client = new PoolRouterClient({
     contractId: poolRouterAddress,
     networkPassphrase: networkConfig.networkPassphrase,
     publicKey: networkConfig.testingSource.accountId(),
     rpcUrl: networkConfig.rpcUrl
   });
 
-  const { direction } = getSwapDirection(args.asset_in, args.asset_out);
+  const poolContext = await ensurePoolContext(
+    client,
+    args.tokenIn,
+    args.tokenOut,
+    args.poolContext
+  );
 
-  console.log("🔧 Pool Router parameters:", {
-    asset: args.asset_in,
-    direction,
-    in_amount: args.amount_in.toString()
-  });
+  const tokenInAddress = normalizeTokenAddress(args.tokenIn);
+  const tokenOutAddress = normalizeTokenAddress(args.tokenOut);
 
-  const formattedAssetIn = formatNormalToken(args.asset_out, "without-n");
-  const formattedAssetOut = formatNormalToken(args.asset_in, "without-n");
-
-  console.log("🔧 Formatted Asset Out:", formattedAssetOut);
-  console.log("🔧 Formatted Asset In:", formattedAssetIn);
-
-  const simulation = await poolRouterClient.estimate_swap(
+  const simulation = await client.estimate_swap(
     {
-      asset: formattedAssetIn,
-      direction: direction as ContractSwapDirection,
-      in_amount: args.amount_in
+      tokens: poolContext.tokens,
+      token_in: tokenInAddress,
+      token_out: tokenOutAddress,
+      pool_index: poolContext.poolIndex,
+      in_amount: args.amountIn,
+      risk_reducing: args.riskReducing ?? false
     },
     { simulate: true, fee: 1000 }
   );
 
-  if (!simulation.result) {
-    throw new Error("Pool Router estimate failed: empty result");
+  if (simulation.result === undefined || simulation.result === null) {
+    throw new Error("Pool Router estimate_swap failed: empty result");
   }
 
-  const result = simulation.result;
-  console.log("✅ Pool Router estimate result:", result);
-  console.log("🔍 Result type:", typeof result);
-
-  if (typeof result === "object" && result !== null && "error" in result) {
-    const errorMessage = result.error || "Unknown contract error";
-    console.error("❌ Pool Router contract error:", errorMessage);
-    throw new Error(
-      `Pool Router contract error: ${
-        errorMessage || "Contract execution failed"
-      }`
-    );
-  }
-
-  if (!Array.isArray(result)) {
-    console.error(
-      "❌ Unexpected result format - expected array, got:",
-      typeof result
-    );
-    throw new Error(
-      `Pool Router returned unexpected format: ${typeof result}. Expected array with [amount_out, spread_amount]`
-    );
-  }
-
-  console.log("🔍 Result[0]:", result[0], "type:", typeof result[0]);
-  console.log("🔍 Result[1]:", result[1], "type:", typeof result[1]);
-  console.log("🔍 Result length:", result.length);
-
-  const safeToBigInt = (value: any, name: string): bigint => {
-    console.log(`🔧 Converting ${name}:`, value, "type:", typeof value);
-
-    if (value === null || value === undefined) {
-      throw new Error(`${name} is null or undefined`);
-    }
-
-    if (typeof value === "bigint") {
-      return value;
-    }
-
-    if (typeof value === "string" || typeof value === "number") {
-      try {
-        return BigInt(value);
-      } catch (error) {
-        throw new Error(
-          `Failed to convert ${name} "${value}" to BigInt: ${error}`
-        );
-      }
-    }
-
-    if (typeof value === "object" && value.toString) {
-      try {
-        return BigInt(value.toString());
-      } catch (error) {
-        throw new Error(
-          `Failed to convert ${name} object "${value}" to BigInt: ${error}`
-        );
-      }
-    }
-
-    throw new Error(`${name} has unsupported type: ${typeof value}`);
-  };
+  const amountOut = safeBigInt(simulation.result, "estimate_swap.result");
 
   return {
-    amount_out: safeToBigInt(result[0], "amount_out"),
-    spread_amount: safeToBigInt(result[1], "spread_amount")
+    amountOut,
+    poolContext
   };
+}
+
+export interface BuildSwapResult {
+  transaction: AssembledTransaction<bigint>;
+  poolContext: PoolContext;
 }
 
 export async function buildSwapTransaction(
   poolRouterAddress: string,
-  swapArgs: {
-    user: string;
-    asset_in: string;
-    asset_out: string;
-    amount_in: bigint;
-    amount_out_min: bigint;
-  },
+  swapArgs: SwapTransactionArgs,
   sourceAccount: Account,
-  networkConfig: {
-    networkPassphrase: string;
-    rpcUrl: string;
-  }
-): Promise<AssembledTransaction<bigint>> {
-  console.log(`🔨 Building Pool Router swap transaction...`);
-
-  const poolRouterClient = new PoolRouterClient({
+  networkConfig: SwapNetworkConfig
+): Promise<BuildSwapResult> {
+  const client = new PoolRouterClient({
     contractId: poolRouterAddress,
     networkPassphrase: networkConfig.networkPassphrase,
     publicKey: sourceAccount.accountId(),
     rpcUrl: networkConfig.rpcUrl
   });
 
-  const { direction } = getSwapDirection(swapArgs.asset_in, swapArgs.asset_out);
-
-  console.log(
-    "🔄 Building swap transaction - Direction:",
-    direction.tag,
-    "for asset:",
-    swapArgs.asset_in
+  const poolContext = await ensurePoolContext(
+    client,
+    swapArgs.tokenIn,
+    swapArgs.tokenOut,
+    swapArgs.poolContext
   );
 
-  const transaction = await poolRouterClient.swap(
+  const tokenInAddress = normalizeTokenAddress(swapArgs.tokenIn);
+  const tokenOutAddress = normalizeTokenAddress(swapArgs.tokenOut);
+
+  const transaction = await client.swap(
     {
       user: swapArgs.user,
-      asset: swapArgs.asset_out,
-      direction: direction as ContractSwapDirection,
-      in_amount: swapArgs.amount_in,
-      out_min: swapArgs.amount_out_min
+      tokens: poolContext.tokens,
+      token_in: tokenInAddress,
+      token_out: tokenOutAddress,
+      pool_index: poolContext.poolIndex,
+      in_amount: swapArgs.amountIn,
+      out_min: swapArgs.amountOutMin
     },
     { fee: 1000 }
   );
@@ -204,12 +255,10 @@ export async function buildSwapTransaction(
     await transaction.simulate();
   }
 
-  return transaction;
-}
-
-export function getAssetAddress(symbol: string, issuer?: string): string {
-  if (symbol === "XLM") return "native";
-  return issuer || "";
+  return {
+    transaction,
+    poolContext
+  };
 }
 
 export function toContractAmount(amount: string, decimals: number): bigint {

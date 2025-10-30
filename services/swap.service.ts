@@ -103,9 +103,9 @@ const createSwapQuoteCalculator = (swapOps: ReturnType<typeof useSwap>) => {
       );
 
       const estimateArgs = {
-        asset_in: formatNormalToken(tokenInInfo.symbol, "without-n"),
-        asset_out: formatNormalToken(tokenOutInfo.symbol, "without-n"),
-        amount_in: amountInContract
+        tokenIn: tokenInInfo.address,
+        tokenOut: tokenOutInfo.address,
+        amountIn: amountInContract
       };
 
       const swapEstimate = await swapOps.estimateSwap(
@@ -115,13 +115,13 @@ const createSwapQuoteCalculator = (swapOps: ReturnType<typeof useSwap>) => {
       );
 
       console.log("✅ Pool Router estimate success:", {
-        amount_out: swapEstimate.amount_out.toString(),
-        spread_amount: swapEstimate.spread_amount.toString()
+        amountOut: swapEstimate.amountOut.toString(),
+        poolIndex: swapEstimate.poolContext.poolIndex.toString("base64")
       });
 
       // Convert back to display amounts using swap operations utilities
       const amountOut = swapOps.fromContractAmount(
-        swapEstimate.amount_out,
+        swapEstimate.amountOut,
         tokenOutInfo.decimals
       );
       const amountOutMin = (
@@ -151,13 +151,16 @@ const createSwapQuoteCalculator = (swapOps: ReturnType<typeof useSwap>) => {
       const userAddress = keypair?.publicKey() || "USER_WALLET_ADDRESS";
 
       const swapParams: SwapParams = {
-        amount_in: request.amountIn,
-        amount_out_min: amountOutMin,
+        amountIn: request.amountIn,
+        amountOutMin,
         deadline,
         distribution: [distribution],
         to: userAddress,
-        token_in: request.tokenIn,
-        token_out: request.tokenOut
+        tokenInSymbol: tokenInInfo.symbol,
+        tokenOutSymbol: tokenOutInfo.symbol,
+        tokenInAddress: tokenInInfo.address,
+        tokenOutAddress: tokenOutInfo.address,
+        poolContext: swapEstimate.poolContext
       };
 
       return {

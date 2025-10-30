@@ -4,9 +4,7 @@ import {
   Horizon,
   Account,
   TransactionBuilder,
-  Operation,
-  Keypair,
-  rpc
+  Operation
 } from "@stellar/stellar-sdk";
 import { getKeypair, getWallet } from "@/services/wallet.service";
 import {
@@ -22,10 +20,7 @@ import {
   signTransactionWithKeypair
 } from "@/lib/utils/stellar.utils";
 import { STELLAR_ERRORS } from "@/lib/constants/stellar.constants";
-import {
-  buildSwapTransaction,
-  getSwapDirection
-} from "@/lib/utils/pool-router.utils";
+import { buildSwapTransaction } from "@/lib/utils/pool-router.utils";
 
 const getNetworkConfig = (): NetworkConfig => {
   const network = process.env.EXPO_PUBLIC_NETWORK || "TESTNET";
@@ -223,14 +218,15 @@ export const useTransactionOperations = () => {
       const config = params.networkConfig || getNetworkConfig();
       const sourceAccount = await getSourceAccount(params.account);
 
-      const assembledTransaction = await buildSwapTransaction(
+      const { transaction: assembledTransaction } = await buildSwapTransaction(
         params.poolRouterAddress,
         {
           user: params.user,
-          asset_in: params.asset_in,
-          asset_out: params.asset_out,
-          amount_in: params.amount_in,
-          amount_out_min: params.amount_out_min
+          tokenIn: params.tokenInAddress,
+          tokenOut: params.tokenOutAddress,
+          amountIn: params.amountIn,
+          amountOutMin: params.amountOutMin,
+          poolContext: params.poolContext
         },
         sourceAccount,
         {

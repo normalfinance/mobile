@@ -101,5 +101,5 @@ export {
 export type {
   EstimateSwapArgs,
   SwapEstimateResult,
-  SwapDirection
+  PoolContext
 } from "../hooks/use-swap";
