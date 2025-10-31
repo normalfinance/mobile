@@ -16,6 +16,7 @@ import { STALE_TIMES } from "../lib/utils/query.utils";
 import { Networks, Account, Horizon } from "@stellar/stellar-sdk";
 import { formatNormalToken } from "../lib/utils/format.utils";
 import { useSwap } from "../hooks/use-swap";
+import { ensureSwapTrustlines } from "../lib/utils/trustline.utils";
 
 // Network configuration helper
 const getNetworkConfig = () => {
@@ -82,6 +83,14 @@ const createSwapQuoteCalculator = (swapOps: ReturnType<typeof useSwap>) => {
 
     const config = getNetworkConfig();
 
+    console.log("Network Configuration Check:");
+    console.log(
+      "  EXPO_PUBLIC_NETWORK:",
+      process.env.EXPO_PUBLIC_NETWORK || "TESTNET (default)"
+    );
+    console.log("  Network Passphrase:", config.networkPassphrase);
+    console.log("  Horizon URL:", config.horizonUrl);
+    console.log("  RPC URL:", config.rpcUrl);
     console.log("config for swap", config);
 
     try {
@@ -91,18 +100,15 @@ const createSwapQuoteCalculator = (swapOps: ReturnType<typeof useSwap>) => {
         throw new Error("No wallet found");
       }
 
-      // Load the actual account from Horizon to get the correct sequence number
+      const accountAddress = testingKeypair.publicKey();
+
+      // Load the account first to ensure it exists and get sequence number
       const horizonServer = new Horizon.Server(config.horizonUrl);
       let testingSource: Account;
 
       try {
-        console.log(
-          "🔍 Loading account from Horizon:",
-          testingKeypair.publicKey()
-        );
-        const accountResponse = await horizonServer.loadAccount(
-          testingKeypair.publicKey()
-        );
+        console.log("🔍 Loading account from Horizon:", accountAddress);
+        const accountResponse = await horizonServer.loadAccount(accountAddress);
         testingSource = new Account(
           accountResponse.accountId(),
           accountResponse.sequence
@@ -111,9 +117,56 @@ const createSwapQuoteCalculator = (swapOps: ReturnType<typeof useSwap>) => {
         console.log("   Account ID:", accountResponse.accountId());
         console.log("   Sequence:", accountResponse.sequence);
         console.log("   Balances:", accountResponse.balances);
-      } catch (error) {
-        console.error("❌ Could not load account from Horizon:", error);
-        throw error; // Don't use mock account, throw the error
+      } catch (error: any) {
+        const errorMessage = error?.message || "Unknown error";
+        console.error("❌ Could not load account from Horizon:", errorMessage);
+        // If account doesn't exist, provide a helpful error message
+        if (
+          errorMessage.includes("not found") ||
+          error?.response?.status === 404
+        ) {
+          throw new Error(
+            `Account not found on Stellar network. Please ensure the account is funded and try again.`
+          );
+        }
+        throw new Error(`Failed to load account: ${errorMessage}`);
+      }
+
+      // Ensure trustlines exist for both tokens BEFORE attempting swap
+      // This ensures trustlines are added programmatically so swaps don't fail
+      // Note: For Soroban tokens, authorization is created automatically during transaction simulation
+      console.log("🔧 Ensuring trustlines for swap tokens...");
+      console.log(
+        `   Token In: ${tokenInInfo.symbol} (${tokenInInfo.address})`
+      );
+      console.log(
+        `   Token Out: ${tokenOutInfo.symbol} (${tokenOutInfo.address})`
+      );
+      try {
+        await ensureSwapTrustlines(
+          accountAddress,
+          tokenInInfo.address,
+          tokenInInfo.symbol,
+          tokenOutInfo.address,
+          tokenOutInfo.symbol,
+          testingSource
+        );
+        console.log("✅ Trustlines verified/added");
+      } catch (error: any) {
+        const errorMessage = error?.message || "Unknown error";
+        console.error("❌ Error ensuring trustlines:", errorMessage);
+        // For Soroban tokens, trustline errors are OK - authorization will be created during tx simulation
+        const isSorobanToken =
+          tokenInInfo.address.startsWith("C") ||
+          tokenOutInfo.address.startsWith("C");
+        if (!isSorobanToken) {
+          throw new Error(
+            `Failed to ensure trustlines before swap: ${errorMessage}`
+          );
+        }
+        console.log(
+          "⚠️ Trustline check failed for Soroban token, but authorization will be created during transaction simulation"
+        );
       }
 
       const networkConfig = {
@@ -136,11 +189,38 @@ const createSwapQuoteCalculator = (swapOps: ReturnType<typeof useSwap>) => {
         amountIn: amountInContract
       };
 
-      const swapEstimate = await swapOps.estimateSwap(
-        config.poolRouter,
-        estimateArgs,
-        networkConfig
-      );
+      let swapEstimate;
+      try {
+        swapEstimate = await swapOps.estimateSwap(
+          config.poolRouter,
+          estimateArgs,
+          networkConfig
+        );
+      } catch (error: any) {
+        const errorMessage = error?.message || "Unknown error";
+        console.error("❌ Error estimating swap:", errorMessage);
+
+        // Check if this is an "Account not found" error for Soroban tokens
+        // This can happen when the account doesn't have authorization yet
+        const isSorobanToken =
+          tokenInInfo.address.startsWith("C") ||
+          tokenOutInfo.address.startsWith("C");
+
+        if (
+          isSorobanToken &&
+          (errorMessage.includes("Account not found") ||
+            errorMessage.includes("account not found"))
+        ) {
+          throw new Error(
+            `Account authorization for ${tokenInInfo.symbol} or ${tokenOutInfo.symbol} is needed. ` +
+              `Soroban token authorization will be created automatically when you execute the swap transaction. ` +
+              `Please try executing the swap directly.`
+          );
+        }
+
+        // Re-throw other errors
+        throw error;
+      }
 
       console.log("✅ Pool Router estimate success:", {
         amountOut: swapEstimate.amountOut.toString(),

@@ -5,6 +5,7 @@ import { AVAILABLE_SWAP_TOKENS } from "../lib/constants/tokens.constants";
 import { SwapParams, SwapResult } from "../lib/types/swap.types";
 import { SwapTransactionParams } from "../lib/types/transaction.types";
 import { getKeypair } from "../services/wallet.service";
+import { ensureSwapTrustlines } from "../lib/utils/trustline.utils";
 import {
   estimateSwap as routerEstimateSwap,
   toContractAmount,
@@ -108,6 +109,25 @@ export const useSwap = () => {
           throw new Error(
             `Token info not found for swap: ${swapParams.tokenInAddress} -> ${swapParams.tokenOutAddress}`
           );
+        }
+
+        // Ensure trustlines exist before executing swap
+        console.log("🔧 Ensuring trustlines for swap execution...");
+        console.log(`   Token In: ${tokenInInfo.symbol} (${tokenInInfo.address})`);
+        console.log(`   Token Out: ${tokenOutInfo.symbol} (${tokenOutInfo.address})`);
+        try {
+          await ensureSwapTrustlines(
+            keypair.publicKey(),
+            tokenInInfo.address,
+            tokenInInfo.symbol,
+            tokenOutInfo.address,
+            tokenOutInfo.symbol
+          );
+          console.log("✅ Trustlines verified/added for execution");
+        } catch (error: any) {
+          const errorMessage = error?.message || "Unknown error";
+          console.error("❌ Error ensuring trustlines:", errorMessage);
+          throw new Error(`Failed to ensure trustlines before swap execution: ${errorMessage}`);
         }
 
         // Convert amounts to contract format (with proper decimals)
