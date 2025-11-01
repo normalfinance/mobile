@@ -28,7 +28,7 @@ const TESTNET_TOKENS: TokenInfo[] = [
   }
 ];
 
-// Mainnet token definitions (XLM and USDC only for now)
+// Mainnet token definitions
 const MAINNET_TOKENS: TokenInfo[] = [
   {
     address: "CAS3J7GYLGXMF6TDJBBYYSE3HQ6BBSMLNUQ34T6TZMYMW2EVH34XOWMA",
@@ -41,6 +41,27 @@ const MAINNET_TOKENS: TokenInfo[] = [
     symbol: "USDC",
     name: "USD Coin",
     decimals: 7
+  },
+  {
+    address: "CCUE2TFP3NDNECT4WY73QWEUNPHNGI6P77B6BVCL6EEZD26YMHY4WEGW",
+    symbol: "nBTC",
+    name: "Normal Bitcoin",
+    decimals: 7,
+    logoUrl: "https://cdn.normalapi.com/tokens/normal/nBTC.webp"
+  },
+  {
+    address: "CDDY3K5QNZUKO254MADCUMUPEVIK64I2VW4VLZNHND6W467UMBUP2YII",
+    symbol: "nETH",
+    name: "Normal Ethereum",
+    decimals: 7,
+    logoUrl: "https://cdn.normalapi.com/tokens/normal/nETH.webp"
+  },
+  {
+    address: "CC3HDXOCIMP2NMLNHPYYFMEKLJRYSSSX57BLCBQ4XTIDXAO6GZWP36XB",
+    symbol: "nSOL",
+    name: "Normal Solana",
+    decimals: 7,
+    logoUrl: "https://cdn.normalapi.com/tokens/normal/nSOL.webp"
   }
 ];
 

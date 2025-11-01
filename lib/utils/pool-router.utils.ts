@@ -82,24 +82,45 @@ function toBuffer(value: Buffer | Uint8Array | string): Buffer {
   throw new Error(`Unsupported pool index format: ${typeof value}`);
 }
 
+interface ReadOnlyNetworkConfig {
+  rpcUrl: string;
+  networkPassphrase: string;
+}
+
 async function fetchPoolContext(
-  client: PoolRouterClient,
-  tokens: string[]
+  poolRouterAddress: string,
+  tokens: string[],
+  networkConfig: ReadOnlyNetworkConfig
 ): Promise<PoolContext> {
   console.log("fetchPoolContext", tokens);
   if (tokens[1] === "native") {
     tokens[1] = "CAS3J7GYLGXMF6TDJBBYYSE3HQ6BBSMLNUQ34T6TZMYMW2EVH34XOWMA";
   }
-  const poolsTx = await client.get_pools(
-    { tokens },
-    { simulate: true, fee: 1000 }
-  );
+
+  const readOnlyClient = new PoolRouterClient({
+    contractId: poolRouterAddress,
+    networkPassphrase: networkConfig.networkPassphrase,
+    rpcUrl: networkConfig.rpcUrl
+  });
+
+  let poolsTx;
+  try {
+    poolsTx = await readOnlyClient.get_pools(
+      { tokens },
+      { simulate: true, fee: 1000 }
+    );
+    console.log("poolsTx", poolsTx);
+  } catch (error: any) {
+    console.error("❌ Failed to get pools:", error);
+    throw new Error(`Failed to get pools: ${error.message}`);
+  }
 
   if (!poolsTx.result) {
     throw new Error("Pool Router get_pools returned an empty result");
   }
 
   const poolsResult = poolsTx.result as unknown;
+  console.log("poolsResult", poolsResult);
   let entries: PoolsResultEntry[] = [];
 
   if (poolsResult instanceof Map) {
@@ -123,9 +144,10 @@ async function fetchPoolContext(
 }
 
 async function ensurePoolContext(
-  client: PoolRouterClient,
+  poolRouterAddress: string,
   tokenIn: string,
   tokenOut: string,
+  networkConfig: ReadOnlyNetworkConfig,
   existing?: PoolContext
 ): Promise<PoolContext> {
   const normalizedIn = normalizeTokenAddress(tokenIn);
@@ -136,7 +158,7 @@ async function ensurePoolContext(
     return existing!;
   }
 
-  return fetchPoolContext(client, tokens);
+  return fetchPoolContext(poolRouterAddress, tokens, networkConfig);
 }
 
 function safeBigInt(value: unknown, field: string): bigint {
@@ -173,6 +195,25 @@ export async function estimateSwap(
   args: EstimateSwapArgs,
   networkConfig: EstimateNetworkConfig
 ): Promise<SwapEstimateResult> {
+  // Create read-only client for fetching pool context (no publicKey needed)
+  const readOnlyNetworkConfig: ReadOnlyNetworkConfig = {
+    rpcUrl: networkConfig.rpcUrl,
+    networkPassphrase: networkConfig.networkPassphrase
+  };
+
+  console.log("Fetching pool context...");
+
+  const poolContext = await ensurePoolContext(
+    poolRouterAddress,
+    args.tokenIn,
+    args.tokenOut,
+    readOnlyNetworkConfig,
+    args.poolContext
+  );
+
+  console.log("poolContext right before simulation", poolContext);
+
+  // Create client WITH publicKey for estimate_swap (needs account context)
   const client = new PoolRouterClient({
     contractId: poolRouterAddress,
     networkPassphrase: networkConfig.networkPassphrase,
@@ -180,27 +221,65 @@ export async function estimateSwap(
     rpcUrl: networkConfig.rpcUrl
   });
 
-  const poolContext = await ensurePoolContext(
-    client,
-    args.tokenIn,
-    args.tokenOut,
-    args.poolContext
-  );
-
   const tokenInAddress = normalizeTokenAddress(args.tokenIn);
   const tokenOutAddress = normalizeTokenAddress(args.tokenOut);
 
-  const simulation = await client.estimate_swap(
-    {
-      tokens: poolContext.tokens,
-      token_in: tokenInAddress,
-      token_out: tokenOutAddress,
-      pool_index: poolContext.poolIndex,
-      in_amount: args.amountIn,
-      risk_reducing: args.riskReducing ?? false
-    },
-    { simulate: true, fee: 1000 }
-  );
+  let simulation;
+  try {
+    // First attempt: simulate without restore
+    simulation = await client.estimate_swap(
+      {
+        tokens: poolContext.tokens,
+        token_in: tokenInAddress,
+        token_out: tokenOutAddress,
+        pool_index: poolContext.poolIndex,
+        in_amount: args.amountIn,
+        risk_reducing: args.riskReducing ?? false
+      },
+      { simulate: true, fee: 1000 }
+    );
+  } catch (error: any) {
+    const errorMessage = error?.message || "";
+
+    // If simulation fails with "restore some contract state" or "Account not found",
+    // retry with restore: true to create authorization entries
+    if (
+      errorMessage.includes("restore some contract state") ||
+      errorMessage.includes("Account not found") ||
+      errorMessage.includes("account not found")
+    ) {
+      console.log(
+        "⚠️ Simulation failed, retrying with restore: true to create authorization..."
+      );
+      try {
+        // Retry with restore: true - this will create the authorization entries
+        const tx = await client.estimate_swap(
+          {
+            tokens: poolContext.tokens,
+            token_in: tokenInAddress,
+            token_out: tokenOutAddress,
+            pool_index: poolContext.poolIndex,
+            in_amount: args.amountIn,
+            risk_reducing: args.riskReducing ?? false
+          },
+          { simulate: false, fee: 1000 }
+        );
+
+        // Now simulate with restore: true
+        await tx.simulate({ restore: true });
+        simulation = tx;
+      } catch (restoreError: any) {
+        console.error("❌ Failed to restore contract state:", restoreError);
+        throw new Error(
+          `Failed to estimate swap: ${
+            restoreError?.message || "Unknown error"
+          }. ` + `The account may need authorization for Soroban tokens.`
+        );
+      }
+    } else {
+      throw error;
+    }
+  }
 
   if (simulation.result === undefined || simulation.result === null) {
     throw new Error("Pool Router estimate_swap failed: empty result");
@@ -225,19 +304,27 @@ export async function buildSwapTransaction(
   sourceAccount: Account,
   networkConfig: SwapNetworkConfig
 ): Promise<BuildSwapResult> {
+  // Create read-only client for fetching pool context (no publicKey needed)
+  const readOnlyNetworkConfig: ReadOnlyNetworkConfig = {
+    rpcUrl: networkConfig.rpcUrl,
+    networkPassphrase: networkConfig.networkPassphrase
+  };
+
+  const poolContext = await ensurePoolContext(
+    poolRouterAddress,
+    swapArgs.tokenIn,
+    swapArgs.tokenOut,
+    readOnlyNetworkConfig,
+    swapArgs.poolContext
+  );
+
+  // Create client WITH publicKey for swap transaction (needs account context)
   const client = new PoolRouterClient({
     contractId: poolRouterAddress,
     networkPassphrase: networkConfig.networkPassphrase,
     publicKey: sourceAccount.accountId(),
     rpcUrl: networkConfig.rpcUrl
   });
-
-  const poolContext = await ensurePoolContext(
-    client,
-    swapArgs.tokenIn,
-    swapArgs.tokenOut,
-    swapArgs.poolContext
-  );
 
   const tokenInAddress = normalizeTokenAddress(swapArgs.tokenIn);
   const tokenOutAddress = normalizeTokenAddress(swapArgs.tokenOut);

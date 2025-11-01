@@ -24,25 +24,35 @@ import { buildSwapTransaction } from "@/lib/utils/pool-router.utils";
 
 const getNetworkConfig = (): NetworkConfig => {
   const network = process.env.EXPO_PUBLIC_NETWORK || "TESTNET";
+  // Check for RPC API key (supports both EXPO_PUBLIC_ prefix and non-prefixed for compatibility)
+  const rpcApiKey = process.env.EXPO_PUBLIC_RPC_API_KEY || process.env.RPC_API_KEY || "";
 
   if (network === "MAINNET") {
+    // If RPC API key is provided, use validationcloud.io endpoint with API key
+    const rpcUrl = rpcApiKey
+      ? `https://mainnet.stellar.validationcloud.io/v1/${rpcApiKey}`
+      : process.env.EXPO_PUBLIC_MAINNET_RPC_URL || "https://soroban.stellar.org";
+
     return {
       networkPassphrase: Networks.PUBLIC,
       horizonUrl:
         process.env.EXPO_PUBLIC_MAINNET_HORIZON_URL ||
         "https://horizon.stellar.org",
-      rpcUrl:
-        process.env.EXPO_PUBLIC_MAINNET_RPC_URL || "https://soroban.stellar.org"
+      rpcUrl
     };
   } else {
+    // If RPC API key is provided, use validationcloud.io endpoint with API key
+    const rpcUrl = rpcApiKey
+      ? `https://testnet.stellar.validationcloud.io/v1/${rpcApiKey}`
+      : process.env.EXPO_PUBLIC_TESTNET_RPC_URL ||
+        "https://soroban-testnet.stellar.org";
+
     return {
       networkPassphrase: Networks.TESTNET,
       horizonUrl:
         process.env.EXPO_PUBLIC_TESTNET_HORIZON_URL ||
         "https://horizon-testnet.stellar.org",
-      rpcUrl:
-        process.env.EXPO_PUBLIC_TESTNET_RPC_URL ||
-        "https://soroban-testnet.stellar.org"
+      rpcUrl
     };
   }
 };

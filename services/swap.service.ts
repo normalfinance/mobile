@@ -21,16 +21,23 @@ import { ensureSwapTrustlines } from "../lib/utils/trustline.utils";
 // Network configuration helper
 const getNetworkConfig = () => {
   const network = process.env.EXPO_PUBLIC_NETWORK || "TESTNET";
+  // Check for RPC API key (supports both EXPO_PUBLIC_ prefix and non-prefixed for compatibility)
+  const rpcApiKey =
+    process.env.EXPO_PUBLIC_RPC_API_KEY || process.env.RPC_API_KEY || "";
 
   if (network === "MAINNET") {
+    // If RPC API key is provided, use validationcloud.io endpoint with API key
+    const rpcUrl = rpcApiKey
+      ? `https://mainnet.stellar.validationcloud.io/v1/${rpcApiKey}`
+      : process.env.EXPO_PUBLIC_MAINNET_RPC_URL ||
+        "https://soroban.stellar.org";
+
     return {
       networkPassphrase: Networks.PUBLIC,
       horizonUrl:
         process.env.EXPO_PUBLIC_MAINNET_HORIZON_URL ||
         "https://horizon.stellar.org",
-      rpcUrl:
-        process.env.EXPO_PUBLIC_MAINNET_RPC_URL ||
-        "https://soroban.stellar.org",
+      rpcUrl,
       poolRouter:
         process.env.EXPO_PUBLIC_MAINNET_POOL_ROUTER ||
         "CCPHUHQYFOJJ6WQUGUYHHPJYQGFLRQHJJTRJNWQG54MHCHPRFLWQI7SE",
@@ -39,14 +46,18 @@ const getNetworkConfig = () => {
         "CALI2BYU2JE6WVRUFYTS6MSBNEHGJ35P4AVCZYF3B6QOE3QKOB2PLE6M"
     };
   } else {
+    // If RPC API key is provided, use validationcloud.io endpoint with API key
+    const rpcUrl = rpcApiKey
+      ? `https://testnet.stellar.validationcloud.io/v1/${rpcApiKey}`
+      : process.env.EXPO_PUBLIC_TESTNET_RPC_URL ||
+        "https://soroban-testnet.stellar.org";
+
     return {
       networkPassphrase: Networks.TESTNET,
       horizonUrl:
         process.env.EXPO_PUBLIC_TESTNET_HORIZON_URL ||
         "https://horizon-testnet.stellar.org",
-      rpcUrl:
-        process.env.EXPO_PUBLIC_TESTNET_RPC_URL ||
-        "https://soroban-testnet.stellar.org",
+      rpcUrl,
       poolRouter:
         process.env.EXPO_PUBLIC_TESTNET_POOL_ROUTER ||
         "CCYQV4LBUROO7IPWMQHGPRSNYM3BXEAHJYU5RAO52TJRG7KP23TY2C63",
@@ -132,42 +143,12 @@ const createSwapQuoteCalculator = (swapOps: ReturnType<typeof useSwap>) => {
         throw new Error(`Failed to load account: ${errorMessage}`);
       }
 
-      // Ensure trustlines exist for both tokens BEFORE attempting swap
-      // This ensures trustlines are added programmatically so swaps don't fail
-      // Note: For Soroban tokens, authorization is created automatically during transaction simulation
-      console.log("🔧 Ensuring trustlines for swap tokens...");
+      // For Soroban tokens, authorization is created automatically during transaction simulation
+      // The SDK handles this via simulate: true, so we don't need to pre-establish authorization
+      // This matches the pattern used in normal-v1-interface
       console.log(
-        `   Token In: ${tokenInInfo.symbol} (${tokenInInfo.address})`
+        "ℹ️ Skipping trustline checks - SDK will handle Soroban authorization automatically during simulation"
       );
-      console.log(
-        `   Token Out: ${tokenOutInfo.symbol} (${tokenOutInfo.address})`
-      );
-      try {
-        await ensureSwapTrustlines(
-          accountAddress,
-          tokenInInfo.address,
-          tokenInInfo.symbol,
-          tokenOutInfo.address,
-          tokenOutInfo.symbol,
-          testingSource
-        );
-        console.log("✅ Trustlines verified/added");
-      } catch (error: any) {
-        const errorMessage = error?.message || "Unknown error";
-        console.error("❌ Error ensuring trustlines:", errorMessage);
-        // For Soroban tokens, trustline errors are OK - authorization will be created during tx simulation
-        const isSorobanToken =
-          tokenInInfo.address.startsWith("C") ||
-          tokenOutInfo.address.startsWith("C");
-        if (!isSorobanToken) {
-          throw new Error(
-            `Failed to ensure trustlines before swap: ${errorMessage}`
-          );
-        }
-        console.log(
-          "⚠️ Trustline check failed for Soroban token, but authorization will be created during transaction simulation"
-        );
-      }
 
       const networkConfig = {
         rpcUrl: config.rpcUrl,
@@ -205,18 +186,6 @@ const createSwapQuoteCalculator = (swapOps: ReturnType<typeof useSwap>) => {
         const isSorobanToken =
           tokenInInfo.address.startsWith("C") ||
           tokenOutInfo.address.startsWith("C");
-
-        if (
-          isSorobanToken &&
-          (errorMessage.includes("Account not found") ||
-            errorMessage.includes("account not found"))
-        ) {
-          throw new Error(
-            `Account authorization for ${tokenInInfo.symbol} or ${tokenOutInfo.symbol} is needed. ` +
-              `Soroban token authorization will be created automatically when you execute the swap transaction. ` +
-              `Please try executing the swap directly.`
-          );
-        }
 
         // Re-throw other errors
         throw error;
