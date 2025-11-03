@@ -4,7 +4,7 @@ import {
   Horizon,
   Account,
   TransactionBuilder,
-  Operation
+  Operation,
 } from "@stellar/stellar-sdk";
 import { getKeypair, getWallet } from "@/services/wallet.service";
 import {
@@ -13,11 +13,11 @@ import {
   SignedTransactionResult,
   SubmitTransactionParams,
   BackendSubmissionResult,
-  GenerateSwapXDRParams
+  GenerateSwapXDRParams,
 } from "@/lib/types/transaction.types";
 import {
   parseTransaction,
-  signTransactionWithKeypair
+  signTransactionWithKeypair,
 } from "@/lib/utils/stellar.utils";
 import { STELLAR_ERRORS } from "@/lib/constants/stellar.constants";
 import { buildSwapTransaction } from "@/lib/utils/pool-router.utils";
@@ -25,20 +25,22 @@ import { buildSwapTransaction } from "@/lib/utils/pool-router.utils";
 const getNetworkConfig = (): NetworkConfig => {
   const network = process.env.EXPO_PUBLIC_NETWORK || "TESTNET";
   // Check for RPC API key (supports both EXPO_PUBLIC_ prefix and non-prefixed for compatibility)
-  const rpcApiKey = process.env.EXPO_PUBLIC_RPC_API_KEY || process.env.RPC_API_KEY || "";
+  const rpcApiKey =
+    process.env.EXPO_PUBLIC_RPC_API_KEY || process.env.RPC_API_KEY || "";
 
   if (network === "MAINNET") {
     // If RPC API key is provided, use validationcloud.io endpoint with API key
     const rpcUrl = rpcApiKey
       ? `https://mainnet.stellar.validationcloud.io/v1/${rpcApiKey}`
-      : process.env.EXPO_PUBLIC_MAINNET_RPC_URL || "https://soroban.stellar.org";
+      : process.env.EXPO_PUBLIC_MAINNET_RPC_URL ||
+        "https://soroban.stellar.org";
 
     return {
       networkPassphrase: Networks.PUBLIC,
       horizonUrl:
         process.env.EXPO_PUBLIC_MAINNET_HORIZON_URL ||
         "https://horizon.stellar.org",
-      rpcUrl
+      rpcUrl,
     };
   } else {
     // If RPC API key is provided, use validationcloud.io endpoint with API key
@@ -52,7 +54,7 @@ const getNetworkConfig = (): NetworkConfig => {
       horizonUrl:
         process.env.EXPO_PUBLIC_TESTNET_HORIZON_URL ||
         "https://horizon-testnet.stellar.org",
-      rpcUrl
+      rpcUrl,
     };
   }
 };
@@ -125,7 +127,7 @@ export const useTransactionOperations = () => {
         return {
           signedXDR,
           transactionHash,
-          walletAddress: walletInfo.publicKey
+          walletAddress: walletInfo.publicKey,
         };
       } catch (error) {
         console.error("❌ Error signing transaction:", error);
@@ -143,12 +145,12 @@ export const useTransactionOperations = () => {
       console.log("📄 Signed XDR length:", params.signedXDR.length);
 
       try {
-        const backendUrl = "http://localhost:8090/api/transaction";
+        const backendUrl = "http://localhost:8095/api/transaction";
 
         const payload = {
           walletAddress: params.walletAddress,
           signedTransactionXDR: params.signedXDR,
-          transactionType: params.transactionType
+          transactionType: params.transactionType,
         };
 
         console.log("📦 Backend payload:", JSON.stringify(payload, null, 2));
@@ -157,9 +159,9 @@ export const useTransactionOperations = () => {
         const response = await fetch(backendUrl, {
           method: "POST",
           headers: {
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
           },
-          body: JSON.stringify(payload)
+          body: JSON.stringify(payload),
         });
 
         if (!response.ok) {
@@ -177,13 +179,13 @@ export const useTransactionOperations = () => {
             responseData.hash ||
             responseData.transactionHash ||
             `tx_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-          backendResponse: responseData
+          backendResponse: responseData,
         };
       } catch (error) {
         console.error("❌ Backend submission failed:", error);
         return {
           success: false,
-          error: error instanceof Error ? error.message : String(error)
+          error: error instanceof Error ? error.message : String(error),
         };
       }
     },
@@ -204,13 +206,13 @@ export const useTransactionOperations = () => {
 
       const transaction = new TransactionBuilder(sourceAccount, {
         fee: "100000", // 0.01 XLM
-        networkPassphrase: config.networkPassphrase
+        networkPassphrase: config.networkPassphrase,
       })
         .addOperation(
           Operation.invokeContractFunction({
             contract: params.contractAddress,
             function: params.method,
-            args: params.args
+            args: params.args,
           })
         )
         .setTimeout(300)
@@ -236,12 +238,12 @@ export const useTransactionOperations = () => {
           tokenOut: params.tokenOutAddress,
           amountIn: params.amountIn,
           amountOutMin: params.amountOutMin,
-          poolContext: params.poolContext
+          poolContext: params.poolContext,
         },
         sourceAccount,
         {
           networkPassphrase: config.networkPassphrase,
-          rpcUrl: config.rpcUrl
+          rpcUrl: config.rpcUrl,
         }
       );
 
@@ -263,6 +265,6 @@ export const useTransactionOperations = () => {
     signTransaction,
     submitTransactionToBackend,
     getNetworkConfig,
-    getSourceAccount // Utility for specialized hooks to get account
+    getSourceAccount, // Utility for specialized hooks to get account
   };
 };

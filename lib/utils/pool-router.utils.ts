@@ -100,7 +100,7 @@ async function fetchPoolContext(
   const readOnlyClient = new PoolRouterClient({
     contractId: poolRouterAddress,
     networkPassphrase: networkConfig.networkPassphrase,
-    rpcUrl: networkConfig.rpcUrl
+    rpcUrl: networkConfig.rpcUrl,
   });
 
   let poolsTx;
@@ -139,7 +139,7 @@ async function fetchPoolContext(
   return {
     tokens,
     poolIndex,
-    poolAddress
+    poolAddress,
   };
 }
 
@@ -198,7 +198,7 @@ export async function estimateSwap(
   // Create read-only client for fetching pool context (no publicKey needed)
   const readOnlyNetworkConfig: ReadOnlyNetworkConfig = {
     rpcUrl: networkConfig.rpcUrl,
-    networkPassphrase: networkConfig.networkPassphrase
+    networkPassphrase: networkConfig.networkPassphrase,
   };
 
   console.log("Fetching pool context...");
@@ -218,26 +218,27 @@ export async function estimateSwap(
     contractId: poolRouterAddress,
     networkPassphrase: networkConfig.networkPassphrase,
     publicKey: networkConfig.testingSource.accountId(),
-    rpcUrl: networkConfig.rpcUrl
+    rpcUrl: networkConfig.rpcUrl,
   });
 
   const tokenInAddress = normalizeTokenAddress(args.tokenIn);
   const tokenOutAddress = normalizeTokenAddress(args.tokenOut);
 
+  const baseArgs = {
+    tokens: poolContext.tokens, // Already sorted in ensurePoolContext
+    token_in: tokenInAddress,
+    token_out: tokenOutAddress,
+    pool_index: poolContext.poolIndex,
+    in_amount: args.amountIn,
+  };
+
   let simulation;
   try {
     // First attempt: simulate without restore
-    simulation = await client.estimate_swap(
-      {
-        tokens: poolContext.tokens,
-        token_in: tokenInAddress,
-        token_out: tokenOutAddress,
-        pool_index: poolContext.poolIndex,
-        in_amount: args.amountIn,
-        risk_reducing: args.riskReducing ?? false
-      },
-      { simulate: true, fee: 1000 }
-    );
+    simulation = await client.estimate_swap(baseArgs, {
+      simulate: true,
+      fee: 1000,
+    });
   } catch (error: any) {
     const errorMessage = error?.message || "";
 
@@ -252,18 +253,11 @@ export async function estimateSwap(
         "⚠️ Simulation failed, retrying with restore: true to create authorization..."
       );
       try {
-        // Retry with restore: true - this will create the authorization entries
-        const tx = await client.estimate_swap(
-          {
-            tokens: poolContext.tokens,
-            token_in: tokenInAddress,
-            token_out: tokenOutAddress,
-            pool_index: poolContext.poolIndex,
-            in_amount: args.amountIn,
-            risk_reducing: args.riskReducing ?? false
-          },
-          { simulate: false, fee: 1000 }
-        );
+        // Retry with restore: true
+        const tx = await client.estimate_swap(baseArgs, {
+          simulate: false,
+          fee: 1000,
+        });
 
         // Now simulate with restore: true
         await tx.simulate({ restore: true });
@@ -289,7 +283,7 @@ export async function estimateSwap(
 
   return {
     amountOut,
-    poolContext
+    poolContext,
   };
 }
 
@@ -307,7 +301,7 @@ export async function buildSwapTransaction(
   // Create read-only client for fetching pool context (no publicKey needed)
   const readOnlyNetworkConfig: ReadOnlyNetworkConfig = {
     rpcUrl: networkConfig.rpcUrl,
-    networkPassphrase: networkConfig.networkPassphrase
+    networkPassphrase: networkConfig.networkPassphrase,
   };
 
   const poolContext = await ensurePoolContext(
@@ -323,7 +317,7 @@ export async function buildSwapTransaction(
     contractId: poolRouterAddress,
     networkPassphrase: networkConfig.networkPassphrase,
     publicKey: sourceAccount.accountId(),
-    rpcUrl: networkConfig.rpcUrl
+    rpcUrl: networkConfig.rpcUrl,
   });
 
   const tokenInAddress = normalizeTokenAddress(swapArgs.tokenIn);
@@ -337,7 +331,7 @@ export async function buildSwapTransaction(
       token_out: tokenOutAddress,
       pool_index: poolContext.poolIndex,
       in_amount: swapArgs.amountIn,
-      out_min: swapArgs.amountOutMin
+      out_min: swapArgs.amountOutMin,
     },
     { fee: 1000 }
   );
@@ -348,7 +342,7 @@ export async function buildSwapTransaction(
 
   return {
     transaction,
-    poolContext
+    poolContext,
   };
 }
 
