@@ -14,6 +14,7 @@ import { ArrowDown, ChevronsUpDown } from "lucide-react-native";
 import { SwapSection } from "@/components/swap/SwapSection";
 import { SwapButton } from "@/components/swap/SwapButton";
 import { SwapSectionSkeleton, SwapButtonSkeleton } from "@/components/ui/skeleton/swap-skeletons";
+import { SwapProgressBottomSheet, SwapLoadingStep, SwapLoadingStatus } from "@/components/swap/SwapProgressBottomSheet";
 import { useWalletBalances } from "@/services/balance.service";
 import {
   useSwapQuote,
@@ -42,6 +43,12 @@ const SwapCard = () => {
   });
   const [showTransactionDetails, setShowTransactionDetails] = useState(true);
   const [isCreatingTrustline, setIsCreatingTrustline] = useState(false);
+  
+  // Loading overlay state
+  const [loadingOverlayVisible, setLoadingOverlayVisible] = useState(false);
+  const [loadingStep, setLoadingStep] = useState<SwapLoadingStep>("checking");
+  const [loadingStatus, setLoadingStatus] = useState<SwapLoadingStatus>("loading");
+  const [transactionHash, setTransactionHash] = useState<string | undefined>(undefined);
 
   const { data: walletBalances = [], isLoading: isLoadingBalances } =
     useWalletBalances();
@@ -206,28 +213,35 @@ const SwapCard = () => {
   const handleExecuteSwap = async () => {
     if (!quote) return;
 
+    // Show loading overlay and set initial state
+    setLoadingOverlayVisible(true);
+    setLoadingStatus("loading");
+    setLoadingStep("swap-building");
+
     try {
+      // Building swap transaction
+      setLoadingStep("swap-building");
+      await new Promise(resolve => setTimeout(resolve, 500)); // Brief pause for UX
+      
+      // Submitting to network
+      setLoadingStep("swap-submitting");
       const result = await executeSwapMutation.mutateAsync(quote.swapParams);
+      
+      await new Promise(resolve => setTimeout(resolve, 500));
 
       console.log("🔢 Result from executeSwapMutation:", result);
+
+      // Success!
+      setLoadingStep("success");
+      setLoadingStatus("success");
 
       // Check if the swap was successful and has a pending status with hash
       if (
         result.backendResponse?.result?.status === "PENDING" &&
         result.backendResponse?.result?.hash
       ) {
-        console.log("now show toast");
-        const network = getCurrentNetwork();
-
-        showToast({
-          message: "Swap transaction submitted successfully!",
-          type: "success",
-          actionText: "View Transaction",
-          onActionPress: () => {
-            openStellarExpert(result.backendResponse!.hash!, network);
-          },
-          duration: 7000
-        });
+        console.log("Swap successful, setting transaction hash");
+        setTransactionHash(result.backendResponse.result.hash);
       }
 
       setFormData({
@@ -247,8 +261,12 @@ const SwapCard = () => {
         try {
           setIsCreatingTrustline(true);
           
-          // Automatically create trustline
+          // Show trustline creation steps
+          setLoadingStep("trustline-building");
           console.log(`📝 Creating trustline for ${error.assetCode}...`);
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          setLoadingStep("trustline-submitting");
           await createTrustline({
             assetCode: error.assetCode,
             assetIssuer: error.assetIssuer,
@@ -257,39 +275,34 @@ const SwapCard = () => {
           console.log("✅ Trustline created successfully!");
           
           // Wait a moment for ledger confirmation
+          setLoadingStep("trustline-confirming");
           await new Promise(resolve => setTimeout(resolve, 2000));
           
           setIsCreatingTrustline(false);
           
-          // Show success toast
-          showToast({
-            message: "Trustline created! Executing swap...",
-            type: "success",
-            duration: 3000
-          });
-          
           // Retry the swap
+          setLoadingStep("swap-building");
           console.log("🔄 Retrying swap...");
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          setLoadingStep("swap-submitting");
           const retryResult = await executeSwapMutation.mutateAsync(quote.swapParams);
+          
+          await new Promise(resolve => setTimeout(resolve, 500));
           
           console.log("🔢 Retry result:", retryResult);
           
+          // Success!
+          setLoadingStep("success");
+          setLoadingStatus("success");
+
           // Check if the retry was successful
           if (
             retryResult.backendResponse?.result?.status === "PENDING" &&
             retryResult.backendResponse?.result?.hash
           ) {
-            const network = getCurrentNetwork();
-
-            showToast({
-              message: "Swap transaction submitted successfully!",
-              type: "success",
-              actionText: "View Transaction",
-              onActionPress: () => {
-                openStellarExpert(retryResult.backendResponse!.hash!, network);
-              },
-              duration: 7000
-            });
+            console.log("Swap successful after trustline, setting transaction hash");
+            setTransactionHash(retryResult.backendResponse.result.hash);
           }
 
           setFormData({
@@ -302,6 +315,9 @@ const SwapCard = () => {
           
         } catch (trustlineError: any) {
           setIsCreatingTrustline(false);
+          setLoadingStatus("error");
+          setLoadingOverlayVisible(false);
+          
           console.error("Failed to create trustline or retry swap:", trustlineError);
           showToast({
             message: `Failed to create trustline: ${trustlineError.message || "Unknown error"}`,
@@ -311,6 +327,9 @@ const SwapCard = () => {
         }
       } else {
         // Handle other errors
+        setLoadingStatus("error");
+        setLoadingOverlayVisible(false);
+        
         showToast({
           message: "Swap transaction failed. Please try again.",
           type: "error",
@@ -542,6 +561,27 @@ const SwapCard = () => {
             "An error occurred"}
         </Text>
       )}
+
+      {/* Swap Progress Bottom Sheet */}
+      <SwapProgressBottomSheet
+        visible={loadingOverlayVisible}
+        step={loadingStep}
+        status={loadingStatus}
+        tokenSymbol={formData.buyAsset?.asset_code}
+        sellAmount={formData.sellAmount}
+        buyAmount={formData.buyAmount}
+        sellToken={formData.sellAsset?.asset_code}
+        buyToken={formData.buyAsset?.asset_code}
+        transactionHash={transactionHash}
+        onClose={() => {
+          setLoadingOverlayVisible(false);
+          setTransactionHash(undefined);
+        }}
+        onViewTransaction={transactionHash ? () => {
+          const network = getCurrentNetwork();
+          openStellarExpert(transactionHash, network);
+        } : undefined}
+      />
     </YStack>
   );
 };
