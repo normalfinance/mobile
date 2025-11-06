@@ -3,6 +3,7 @@ import { type Account } from "@stellar/stellar-sdk";
 import { type AssembledTransaction } from "@stellar/stellar-sdk/contract";
 
 import { Client as PoolRouterClient } from "../contracts/pool_router";
+import { checkTrustlineNeeded } from "./trustline.utils";
 
 export interface PoolContext {
   tokens: string[];
@@ -41,6 +42,7 @@ interface EstimateNetworkConfig {
 interface SwapNetworkConfig {
   networkPassphrase: string;
   rpcUrl: string;
+  horizonUrl: string;
 }
 
 type PoolsResultEntry = [Buffer | Uint8Array | string, string];
@@ -290,6 +292,11 @@ export async function estimateSwap(
 export interface BuildSwapResult {
   transaction: AssembledTransaction<bigint>;
   poolContext: PoolContext;
+  trustlineRequired?: {
+    assetCode: string;
+    assetIssuer: string;
+    message: string;
+  };
 }
 
 export async function buildSwapTransaction(
@@ -312,6 +319,39 @@ export async function buildSwapTransaction(
     swapArgs.poolContext
   );
 
+  const tokenInAddress = normalizeTokenAddress(swapArgs.tokenIn);
+  const tokenOutAddress = normalizeTokenAddress(swapArgs.tokenOut);
+
+  // Check if we need to create a trustline for the output token
+  console.log(
+    "🔍 Checking if trustline is needed for output token:",
+    tokenOutAddress
+  );
+  const trustlineNeeded = await checkTrustlineNeeded(
+    sourceAccount.accountId(),
+    tokenOutAddress,
+    networkConfig.horizonUrl
+  );
+
+  if (trustlineNeeded) {
+    console.log(
+      `❌ Trustline required for ${trustlineNeeded.code} issued by ${trustlineNeeded.issuer}`
+    );
+
+    // Create a custom error with asset info that the frontend can use
+    const error: any = new Error(
+      `TRUSTLINE_REQUIRED: You need to establish a trustline for ${trustlineNeeded.code} before swapping.`
+    );
+    error.code = "TRUSTLINE_REQUIRED";
+    error.assetCode = trustlineNeeded.code;
+    error.assetIssuer = trustlineNeeded.issuer;
+    error.tokenAddress = tokenOutAddress;
+
+    throw error;
+  }
+
+  console.log("✅ No trustline needed, proceeding with swap transaction...");
+
   // Create client WITH publicKey for swap transaction (needs account context)
   const client = new PoolRouterClient({
     contractId: poolRouterAddress,
@@ -319,9 +359,6 @@ export async function buildSwapTransaction(
     publicKey: sourceAccount.accountId(),
     rpcUrl: networkConfig.rpcUrl,
   });
-
-  const tokenInAddress = normalizeTokenAddress(swapArgs.tokenIn);
-  const tokenOutAddress = normalizeTokenAddress(swapArgs.tokenOut);
 
   const transaction = await client.swap(
     {
@@ -333,11 +370,14 @@ export async function buildSwapTransaction(
       in_amount: swapArgs.amountIn,
       out_min: swapArgs.amountOutMin,
     },
-    { fee: 1000 }
+    { fee: 1000, simulate: true }
   );
 
+  // Validate that simulation completed successfully
   if (!transaction.built) {
-    await transaction.simulate();
+    throw new Error(
+      "Transaction simulation failed to build transaction. The swap transaction could not be properly prepared."
+    );
   }
 
   return {

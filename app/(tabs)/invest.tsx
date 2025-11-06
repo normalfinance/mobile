@@ -20,6 +20,7 @@ import {
   useExecuteSwap,
   useAvailableTokens
 } from "@/services/swap.service";
+import { useTrustline } from "@/hooks/use-trustline";
 import { SwapFormData, SwapQuoteRequest } from "@/lib/types/swap.types";
 import { DisplayAsset } from "@/lib/types/balance.types";
 import { formatNormalToken } from "@/lib/utils/format.utils";
@@ -40,6 +41,7 @@ const SwapCard = () => {
     slippageTolerance: 0.5
   });
   const [showTransactionDetails, setShowTransactionDetails] = useState(true);
+  const [isCreatingTrustline, setIsCreatingTrustline] = useState(false);
 
   const { data: walletBalances = [], isLoading: isLoadingBalances } =
     useWalletBalances();
@@ -48,6 +50,7 @@ const SwapCard = () => {
   
   const isInitialLoading = isLoadingBalances || isLoadingTokens;
   const executeSwapMutation = useExecuteSwap();
+  const { createTrustline } = useTrustline();
   const { showToast } = useToast();
 
   useEffect(() => {
@@ -234,17 +237,91 @@ const SwapCard = () => {
         buyAmount: "",
         slippageTolerance: 0.5
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Swap failed:", error);
-      showToast({
-        message: "Swap transaction failed. Please try again.",
-        type: "error",
-        duration: 5000
-      });
+      
+      // Check for trustline requirement
+      if (error?.code === "TRUSTLINE_REQUIRED") {
+        console.log("🔗 Trustline required, creating automatically...");
+        
+        try {
+          setIsCreatingTrustline(true);
+          
+          // Automatically create trustline
+          console.log(`📝 Creating trustline for ${error.assetCode}...`);
+          await createTrustline({
+            assetCode: error.assetCode,
+            assetIssuer: error.assetIssuer,
+          });
+          
+          console.log("✅ Trustline created successfully!");
+          
+          // Wait a moment for ledger confirmation
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          
+          setIsCreatingTrustline(false);
+          
+          // Show success toast
+          showToast({
+            message: "Trustline created! Executing swap...",
+            type: "success",
+            duration: 3000
+          });
+          
+          // Retry the swap
+          console.log("🔄 Retrying swap...");
+          const retryResult = await executeSwapMutation.mutateAsync(quote.swapParams);
+          
+          console.log("🔢 Retry result:", retryResult);
+          
+          // Check if the retry was successful
+          if (
+            retryResult.backendResponse?.result?.status === "PENDING" &&
+            retryResult.backendResponse?.result?.hash
+          ) {
+            const network = getCurrentNetwork();
+
+            showToast({
+              message: "Swap transaction submitted successfully!",
+              type: "success",
+              actionText: "View Transaction",
+              onActionPress: () => {
+                openStellarExpert(retryResult.backendResponse!.hash!, network);
+              },
+              duration: 7000
+            });
+          }
+
+          setFormData({
+            sellAsset: null,
+            buyAsset: null,
+            sellAmount: "",
+            buyAmount: "",
+            slippageTolerance: 0.5
+          });
+          
+        } catch (trustlineError: any) {
+          setIsCreatingTrustline(false);
+          console.error("Failed to create trustline or retry swap:", trustlineError);
+          showToast({
+            message: `Failed to create trustline: ${trustlineError.message || "Unknown error"}`,
+            type: "error",
+            duration: 5000
+          });
+        }
+      } else {
+        // Handle other errors
+        showToast({
+          message: "Swap transaction failed. Please try again.",
+          type: "error",
+          duration: 5000
+        });
+      }
     }
   };
 
   const isSwapDisabled = useMemo(() => {
+    if (isCreatingTrustline) return true;
     if (!formData.sellAsset || !formData.buyAsset || !formData.sellAmount)
       return true;
     if (parseFloat(formData.sellAmount) <= 0) return true;
@@ -255,9 +332,10 @@ const SwapCard = () => {
       return true;
     if (isLoadingQuote || !quote) return true;
     return false;
-  }, [formData, selectedAssetBalance, isLoadingQuote, quote]);
+  }, [formData, selectedAssetBalance, isLoadingQuote, quote, isCreatingTrustline]);
 
   const getSwapButtonText = () => {
+    if (isCreatingTrustline) return "Creating trustline...";
     if (!formData.sellAsset) return "Select a token to sell";
     if (!formData.buyAsset) return "Select a token to buy";
     if (!formData.sellAmount || parseFloat(formData.sellAmount) <= 0)

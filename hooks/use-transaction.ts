@@ -100,6 +100,11 @@ export const useTransactionOperations = () => {
       networkPassphrase?: string
     ): Promise<SignedTransactionResult> => {
       console.log("✍️ Signing transaction...");
+      console.log("📄 Unsigned XDR length:", unsignedXDR.length);
+      console.log(
+        "📄 Unsigned XDR first 100 chars:",
+        unsignedXDR.substring(0, 100)
+      );
 
       try {
         const keypair = await getKeypair();
@@ -115,7 +120,21 @@ export const useTransactionOperations = () => {
         const config = getNetworkConfig();
         const passphrase = networkPassphrase || config.networkPassphrase;
 
+        console.log("🔑 Network passphrase:", passphrase);
+        console.log("🔑 Wallet address:", walletInfo.publicKey);
+
         const transaction = parseTransaction(unsignedXDR, passphrase);
+
+        console.log(
+          "📦 Parsed transaction hash (before signing):",
+          transaction.hash().toString("hex")
+        );
+        console.log(
+          "📦 Parsed transaction operations count:",
+          transaction.operations.length
+        );
+        console.log("📦 Parsed transaction fee:", transaction.fee);
+        console.log("📦 Parsed transaction source:", transaction.source);
 
         signTransactionWithKeypair(transaction, keypair);
 
@@ -123,6 +142,12 @@ export const useTransactionOperations = () => {
         const transactionHash = transaction.hash().toString("hex");
 
         console.log("✅ Transaction signed successfully!");
+        console.log("📄 Signed XDR length:", signedXDR.length);
+        console.log(
+          "📄 Signed XDR first 100 chars:",
+          signedXDR.substring(0, 100)
+        );
+        console.log("📄 Transaction hash:", transactionHash);
 
         return {
           signedXDR,
@@ -244,15 +269,33 @@ export const useTransactionOperations = () => {
         {
           networkPassphrase: config.networkPassphrase,
           rpcUrl: config.rpcUrl,
+          horizonUrl: config.horizonUrl,
         }
       );
 
       console.log("🔨 Assembled transaction:", assembledTransaction);
+      console.log(
+        "🔨 Assembled transaction.built:",
+        assembledTransaction.built
+      );
+      console.log(
+        "🔨 Assembled transaction.simulation:",
+        assembledTransaction.simulation
+      );
 
-      const unsignedXDR = assembledTransaction.toXDR();
+      // Extract XDR from the built transaction object (matches web implementation)
+      const unsignedXDR = assembledTransaction.built?.toXDR();
       if (!unsignedXDR) {
-        throw new Error("Failed to generate swap transaction XDR");
+        throw new Error(
+          "Failed to extract built transaction XDR. The transaction may not have been properly simulated."
+        );
       }
+
+      console.log("📄 Unsigned XDR length:", unsignedXDR.length);
+      console.log(
+        "📄 Unsigned XDR first 100 chars:",
+        unsignedXDR.substring(0, 100)
+      );
 
       return unsignedXDR;
     },

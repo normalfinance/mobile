@@ -110,11 +110,8 @@ export const useSwap = () => {
           );
         }
 
-        // For Soroban tokens, authorization is created automatically during transaction simulation
-        // The SDK handles this automatically, matching the pattern used in normal-v1-interface
-        console.log(
-          "ℹ️ Skipping trustline checks - SDK will handle Soroban authorization automatically during transaction build"
-        );
+        // Note: Trustline checks are now handled automatically during transaction build
+        // If a trustline is required, the buildSwapTransaction will throw a TRUSTLINE_REQUIRED error
 
         // Convert amounts to contract format (with proper decimals)
         const amountInContract = toContractAmount(
@@ -180,8 +177,18 @@ export const useSwap = () => {
 
         console.log("🎉 Swap completed successfully:", result);
         return result;
-      } catch (error) {
+      } catch (error: any) {
         console.error("💥 Swap execution failed:", error);
+        
+        // If it's a trustline error, preserve the error details for the frontend
+        if (error?.code === "TRUSTLINE_REQUIRED") {
+          console.log("🔗 Trustline required for swap:", {
+            assetCode: error.assetCode,
+            assetIssuer: error.assetIssuer,
+            tokenAddress: error.tokenAddress
+          });
+        }
+        
         throw error;
       }
     },
