@@ -10,6 +10,8 @@ import tamaguiConfig from "../tamagui.config";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ToastProvider } from "@/hooks/useToast";
 import { SupabaseAuthProvider } from "@/providers/supabase-auth-provider";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 
 import { loadFonts } from "@/lib/fonts";
 import * as SplashScreen from "expo-splash-screen";
@@ -41,48 +43,52 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <TamaguiProvider config={tamaguiConfig} defaultTheme='light'>
-        <PortalProvider>
-          <ToastProvider>
-            <SupabaseAuthProvider>
-              <ThemeProvider value={DefaultTheme}>
-                <Stack>
-                  <Stack.Screen
-                    name='(tabs)'
-                    options={{ headerShown: false, animation: "none" }}
-                  />
-                  <Stack.Screen
-                    name='onboarding'
-                    options={{ headerShown: false }}
-                  />
-                  <Stack.Screen
-                    name='(auth)'
-                    options={{ headerShown: false }}
-                  />
-                  <Stack.Screen
-                    name='auth/callback'
-                    options={{ headerShown: false }}
-                  />
-                  <Stack.Screen
-                    name='wallet-setup'
-                    options={{ headerShown: false }}
-                  />
-                  <Stack.Screen
-                    name='verify-magic-link'
-                    options={{ headerShown: false, presentation: "modal" }}
-                  />
-                  <Stack.Screen
-                    name='modal'
-                    options={{ presentation: "modal", title: "Modal" }}
-                  />
-                </Stack>
-                <StatusBar style='auto' />
-              </ThemeProvider>
-            </SupabaseAuthProvider>
-          </ToastProvider>
-        </PortalProvider>
-      </TamaguiProvider>
-    </QueryClientProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <QueryClientProvider client={queryClient}>
+        <TamaguiProvider config={tamaguiConfig} defaultTheme='light'>
+          <PortalProvider>
+            <BottomSheetModalProvider>
+              <ToastProvider>
+                <SupabaseAuthProvider>
+                  <ThemeProvider value={DefaultTheme}>
+                    <Stack>
+                      <Stack.Screen
+                        name='(tabs)'
+                        options={{ headerShown: false, animation: "none" }}
+                      />
+                      <Stack.Screen
+                        name='onboarding'
+                        options={{ headerShown: false }}
+                      />
+                      <Stack.Screen
+                        name='(auth)'
+                        options={{ headerShown: false }}
+                      />
+                      <Stack.Screen
+                        name='auth/callback'
+                        options={{ headerShown: false }}
+                      />
+                      <Stack.Screen
+                        name='wallet-setup'
+                        options={{ headerShown: false }}
+                      />
+                      <Stack.Screen
+                        name='verify-magic-link'
+                        options={{ headerShown: false, presentation: "modal" }}
+                      />
+                      <Stack.Screen
+                        name='modal'
+                        options={{ presentation: "modal", title: "Modal" }}
+                      />
+                    </Stack>
+                    <StatusBar style='auto' />
+                  </ThemeProvider>
+                </SupabaseAuthProvider>
+              </ToastProvider>
+            </BottomSheetModalProvider>
+          </PortalProvider>
+        </TamaguiProvider>
+      </QueryClientProvider>
+    </GestureHandlerRootView>
   );
 }

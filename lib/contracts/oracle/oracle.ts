@@ -6,7 +6,10 @@ import {
   TransactionBuilder,
   Account
 } from "@stellar/stellar-sdk";
-import { STELLAR_CONFIG } from "@/lib/constants/stellar.constants";
+import {
+  NETWORK_PASSPHRASE,
+  ACTIVE_SOROBAN_RPC_URL
+} from "@/lib/constants/stellar.constants";
 import { getKeypair } from "@/services/wallet.service";
 
 export interface PriceData {
@@ -20,17 +23,17 @@ export async function getOraclePrice(
 ): Promise<PriceData> {
   console.log("🔍 Getting oracle price for:", _asset);
   console.log("🔍 Oracle address:", oracle_address);
-  
+
   const keypair = await getKeypair();
   if (!keypair) {
     throw new Error("No wallet found in secure storage");
   }
-  
+
   const sourceAccount = new Account(keypair.publicKey(), "0");
   const tx_builder = new TransactionBuilder(sourceAccount, {
     fee: "1000",
     timebounds: { minTime: 0, maxTime: 0 },
-    networkPassphrase: STELLAR_CONFIG.TESTNET_PASSPHRASE
+    networkPassphrase: NETWORK_PASSPHRASE
   });
 
   const asset = xdr.ScVal.scvVec([
@@ -42,7 +45,7 @@ export async function getOraclePrice(
     new Contract(oracle_address).call("get_last_price", asset)
   );
 
-  const stellar_rpc = new rpc.Server(STELLAR_CONFIG.SOROBAN_RPC_URLS.TESTNET);
+  const stellar_rpc = new rpc.Server(ACTIVE_SOROBAN_RPC_URL);
   const result = await stellar_rpc.simulateTransaction(tx_builder.build());
 
   if (rpc.Api.isSimulationSuccess(result)) {
@@ -71,16 +74,16 @@ export async function getOracleDecimals(
   if (!keypair) {
     throw new Error("No wallet found in secure storage");
   }
-  
+
   const sourceAccount = new Account(keypair.publicKey(), "0");
   const tx_builder = new TransactionBuilder(sourceAccount, {
     fee: "1000",
     timebounds: { minTime: 0, maxTime: 0 },
-    networkPassphrase: STELLAR_CONFIG.TESTNET_PASSPHRASE
+    networkPassphrase: NETWORK_PASSPHRASE
   });
   tx_builder.addOperation(new Contract(oracle_id).call("get_oracle"));
 
-  const stellar_rpc = new rpc.Server(STELLAR_CONFIG.SOROBAN_RPC_URLS.TESTNET);
+  const stellar_rpc = new rpc.Server(ACTIVE_SOROBAN_RPC_URL);
   const result = await stellar_rpc.simulateTransaction(tx_builder.build());
 
   if (rpc.Api.isSimulationSuccess(result)) {

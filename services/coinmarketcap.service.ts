@@ -108,6 +108,52 @@ interface CoinMarketCapHistoricalResponse {
   };
 }
 
+interface CoinMarketCapLatestQuote {
+  price?: number;
+  last_updated?: string;
+  market_cap?: number;
+  volume_24h?: number;
+  percent_change_1h?: number;
+  percent_change_24h?: number;
+  percent_change_7d?: number;
+  percent_change_30d?: number;
+}
+
+interface CoinMarketCapLatestDataItem {
+  id?: number;
+  name?: string;
+  symbol?: string;
+  slug?: string;
+  quote?: {
+    [convert: string]: CoinMarketCapLatestQuote;
+  };
+}
+
+interface CoinMarketCapLatestResponse {
+  status: {
+    error_code: number;
+    error_message: string | null;
+  };
+  data?: {
+    [symbol: string]:
+      | CoinMarketCapLatestDataItem
+      | CoinMarketCapLatestDataItem[];
+  };
+}
+
+export interface LatestPricePoint {
+  price: number;
+  timestamp: number;
+  marketCap?: number;
+  volume24h?: number;
+  percentChange1h?: number;
+  percentChange24h?: number;
+  percentChange7d?: number;
+  percentChange30d?: number;
+}
+
+export type LatestPriceMap = Record<string, LatestPricePoint>;
+
 export const coinMarketCapQueryKeys = {
   all: ["coinmarketcap"] as const,
   historical: (period: PortfolioPeriod, symbols: readonly string[]) =>
@@ -163,6 +209,18 @@ const buildHistoricalUrl = ({
   });
 
   return `${COINMARKETCAP_BASE_URL}/v2/cryptocurrency/quotes/historical?${params.toString()}`;
+};
+
+const buildLatestQuotesUrl = (
+  symbols: readonly string[],
+  convert: string
+): string => {
+  const params = new URLSearchParams({
+    symbol: symbols.join(","),
+    convert
+  });
+
+  return `${COINMARKETCAP_BASE_URL}/v2/cryptocurrency/quotes/latest?${params.toString()}`;
 };
 
 const parseHistoricalResponse = (
@@ -250,6 +308,77 @@ const parseHistoricalResponse = (
     .filter(Boolean) as HistoricalPricePoint[];
 };
 
+const parseLatestResponse = (
+  json: CoinMarketCapLatestResponse,
+  convert: string,
+  symbolMap: Map<string, string[]>
+): { data: LatestPriceMap; errors: Record<string, string> } => {
+  if (json.status?.error_code && json.status.error_code !== 0) {
+    const message =
+      json.status.error_message ||
+      `CoinMarketCap request failed with code ${json.status.error_code}`;
+    throw new Error(message);
+  }
+
+  const data: LatestPriceMap = {};
+  const errors: Record<string, string> = {};
+
+  symbolMap.forEach((originalSymbols, normalizedSymbol) => {
+    const item = json.data?.[normalizedSymbol];
+
+    const resolvedItem = Array.isArray(item) ? item[0] : item;
+
+    if (!resolvedItem) {
+      originalSymbols.forEach((original) => {
+        errors[original] = "No price data returned by CoinMarketCap";
+      });
+      return;
+    }
+
+    const quote = resolvedItem.quote?.[convert];
+
+    if (
+      !quote ||
+      typeof quote.price !== "number" ||
+      !Number.isFinite(quote.price)
+    ) {
+      originalSymbols.forEach((original) => {
+        errors[original] = "CoinMarketCap price data unavailable";
+      });
+      return;
+    }
+
+    const timestampSource = quote.last_updated;
+    const timestamp = timestampSource
+      ? new Date(timestampSource).getTime()
+      : Date.now();
+
+    if (!Number.isFinite(timestamp)) {
+      originalSymbols.forEach((original) => {
+        errors[original] = "Invalid timestamp received from CoinMarketCap";
+      });
+      return;
+    }
+
+    const latestPoint: LatestPricePoint = {
+      price: quote.price,
+      timestamp,
+      marketCap: quote.market_cap,
+      volume24h: quote.volume_24h,
+      percentChange1h: quote.percent_change_1h,
+      percentChange24h: quote.percent_change_24h,
+      percentChange7d: quote.percent_change_7d,
+      percentChange30d: quote.percent_change_30d
+    };
+
+    originalSymbols.forEach((original) => {
+      data[original] = { ...latestPoint };
+    });
+  });
+
+  return { data, errors };
+};
+
 const fetchHistoricalQuotes = async ({
   symbol,
   period,
@@ -283,6 +412,72 @@ const fetchHistoricalQuotes = async ({
     return parseHistoricalResponse(json, symbol, convert);
   } catch (error) {
     throw handleHttpError(error);
+  }
+};
+
+const fetchLatestQuotesInternal = async (
+  symbols: readonly string[],
+  convert: string = DEFAULT_CONVERT
+): Promise<{ data: LatestPriceMap; errors: Record<string, string> }> => {
+  if (!symbols.length) {
+    return { data: {}, errors: {} };
+  }
+
+  const apiKey = ensureApiKey();
+
+  const symbolMap = symbols.reduce<Map<string, string[]>>(
+    (map, originalSymbol) => {
+      const trimmedSymbol = originalSymbol.trim();
+      if (!trimmedSymbol) {
+        return map;
+      }
+
+      const normalized = normalizeSymbol(trimmedSymbol);
+      const existing = map.get(normalized);
+
+      if (existing) {
+        existing.push(trimmedSymbol);
+      } else {
+        map.set(normalized, [trimmedSymbol]);
+      }
+
+      return map;
+    },
+    new Map()
+  );
+
+  if (symbolMap.size === 0) {
+    return { data: {}, errors: {} };
+  }
+
+  const uniqueNormalizedSymbols = Array.from(symbolMap.keys());
+  const url = buildLatestQuotesUrl(uniqueNormalizedSymbols, convert);
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        Accept: "application/json",
+        "X-CMC_PRO_API_KEY": apiKey
+      },
+      signal: createTimeoutSignal(DEFAULT_TIMEOUT)
+    });
+
+    if (!response.ok) {
+      throw handleHttpError(new Error(response.statusText));
+    }
+
+    const json = (await response.json()) as CoinMarketCapLatestResponse;
+    return parseLatestResponse(json, convert, symbolMap);
+  } catch (error) {
+    const errors: Record<string, string> = {};
+    symbols.forEach((symbol) => {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Unknown error fetching price data";
+      errors[symbol] = message;
+    });
+    return { data: {}, errors };
   }
 };
 
@@ -332,13 +527,15 @@ export const useHistoricalPrices = ({
   period,
   enabled = true
 }: UseHistoricalPricesOptions) => {
-  const query = useQuery({
+  const query = useQuery<{
+    data: HistoricalPriceMap;
+    errors: Record<string, string>;
+  }>({
     queryKey: coinMarketCapQueryKeys.historical(period, symbols),
     queryFn: () => fetchHistoricalPricesForSymbols(symbols, period),
     enabled: enabled && symbols.length > 0,
     staleTime: STALE_TIMES.SHORT,
     gcTime: STALE_TIMES.LONG,
-    keepPreviousData: true,
     placeholderData: (previousData) => previousData
   });
 
@@ -354,5 +551,8 @@ export const useHistoricalPrices = ({
 
 export const coinMarketCapService = {
   fetchHistoricalQuotes,
-  fetchHistoricalPricesForSymbols
+  fetchHistoricalPricesForSymbols,
+  fetchLatestQuotes: fetchLatestQuotesInternal
 };
+
+export const fetchLatestQuotes = fetchLatestQuotesInternal;

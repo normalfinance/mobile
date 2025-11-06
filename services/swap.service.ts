@@ -13,39 +13,51 @@ import {
 import { AVAILABLE_SWAP_TOKENS } from "../lib/constants/tokens.constants";
 import { getKeypair } from "./wallet.service";
 import { STALE_TIMES } from "../lib/utils/query.utils";
-import { Networks, Account } from "@stellar/stellar-sdk";
+import { Networks, Account, Horizon } from "@stellar/stellar-sdk";
 import { formatNormalToken } from "../lib/utils/format.utils";
 import { useSwap } from "../hooks/use-swap";
+import { ensureSwapTrustlines } from "../lib/utils/trustline.utils";
 
 // Network configuration helper
 const getNetworkConfig = () => {
   const network = process.env.EXPO_PUBLIC_NETWORK || "TESTNET";
+  // Check for RPC API key (supports both EXPO_PUBLIC_ prefix and non-prefixed for compatibility)
+  const rpcApiKey =
+    process.env.EXPO_PUBLIC_RPC_API_KEY || process.env.RPC_API_KEY || "";
 
   if (network === "MAINNET") {
+    // If RPC API key is provided, use validationcloud.io endpoint with API key
+    const rpcUrl = rpcApiKey
+      ? `https://mainnet.stellar.validationcloud.io/v1/${rpcApiKey}`
+      : process.env.EXPO_PUBLIC_MAINNET_RPC_URL ||
+        "https://soroban.stellar.org";
+
     return {
       networkPassphrase: Networks.PUBLIC,
       horizonUrl:
         process.env.EXPO_PUBLIC_MAINNET_HORIZON_URL ||
         "https://horizon.stellar.org",
-      rpcUrl:
-        process.env.EXPO_PUBLIC_MAINNET_RPC_URL ||
-        "https://soroban.stellar.org",
+      rpcUrl,
       poolRouter:
         process.env.EXPO_PUBLIC_MAINNET_POOL_ROUTER ||
-        "CC3V24ALNMCANOEP2GFSSH4RGOGQXCECDBQISDJQEG23NULP4B4SKKQN",
+        "CCPHUHQYFOJJ6WQUGUYHHPJYQGFLRQHJJTRJNWQG54MHCHPRFLWQI7SE",
       reflectorOracle:
         process.env.EXPO_PUBLIC_MAINNET_REFLECTOR_ORACLE ||
-        "CAFJZQWSED6YAWZU3GWRTOCNPPCGBN32L7QV43XX5LZLFTK6JLN34DLN"
+        "CALI2BYU2JE6WVRUFYTS6MSBNEHGJ35P4AVCZYF3B6QOE3QKOB2PLE6M"
     };
   } else {
+    // If RPC API key is provided, use validationcloud.io endpoint with API key
+    const rpcUrl = rpcApiKey
+      ? `https://testnet.stellar.validationcloud.io/v1/${rpcApiKey}`
+      : process.env.EXPO_PUBLIC_TESTNET_RPC_URL ||
+        "https://soroban-testnet.stellar.org";
+
     return {
       networkPassphrase: Networks.TESTNET,
       horizonUrl:
         process.env.EXPO_PUBLIC_TESTNET_HORIZON_URL ||
         "https://horizon-testnet.stellar.org",
-      rpcUrl:
-        process.env.EXPO_PUBLIC_TESTNET_RPC_URL ||
-        "https://soroban-testnet.stellar.org",
+      rpcUrl,
       poolRouter:
         process.env.EXPO_PUBLIC_TESTNET_POOL_ROUTER ||
         "CCYQV4LBUROO7IPWMQHGPRSNYM3BXEAHJYU5RAO52TJRG7KP23TY2C63",
@@ -73,11 +85,24 @@ const createSwapQuoteCalculator = (swapOps: ReturnType<typeof useSwap>) => {
       (t) => t.symbol === formatNormalToken(request.tokenOut, "with-n")
     );
 
+    console.log("tokenInInfo", tokenInInfo);
+    console.log("tokenOutInfo", tokenOutInfo);
+
     if (!tokenInInfo || !tokenOutInfo) {
       throw new Error("Token not found");
     }
 
     const config = getNetworkConfig();
+
+    console.log("Network Configuration Check:");
+    console.log(
+      "  EXPO_PUBLIC_NETWORK:",
+      process.env.EXPO_PUBLIC_NETWORK || "TESTNET (default)"
+    );
+    console.log("  Network Passphrase:", config.networkPassphrase);
+    console.log("  Horizon URL:", config.horizonUrl);
+    console.log("  RPC URL:", config.rpcUrl);
+    console.log("config for swap", config);
 
     try {
       const testingKeypair = await getKeypair();
@@ -86,7 +111,44 @@ const createSwapQuoteCalculator = (swapOps: ReturnType<typeof useSwap>) => {
         throw new Error("No wallet found");
       }
 
-      const testingSource = new Account(testingKeypair.publicKey(), "0");
+      const accountAddress = testingKeypair.publicKey();
+
+      // Load the account first to ensure it exists and get sequence number
+      const horizonServer = new Horizon.Server(config.horizonUrl);
+      let testingSource: Account;
+
+      try {
+        console.log("🔍 Loading account from Horizon:", accountAddress);
+        const accountResponse = await horizonServer.loadAccount(accountAddress);
+        testingSource = new Account(
+          accountResponse.accountId(),
+          accountResponse.sequence
+        );
+        console.log("✅ Account loaded from Horizon for simulation");
+        console.log("   Account ID:", accountResponse.accountId());
+        console.log("   Sequence:", accountResponse.sequence);
+        console.log("   Balances:", accountResponse.balances);
+      } catch (error: any) {
+        const errorMessage = error?.message || "Unknown error";
+        console.error("❌ Could not load account from Horizon:", errorMessage);
+        // If account doesn't exist, provide a helpful error message
+        if (
+          errorMessage.includes("not found") ||
+          error?.response?.status === 404
+        ) {
+          throw new Error(
+            `Account not found on Stellar network. Please ensure the account is funded and try again.`
+          );
+        }
+        throw new Error(`Failed to load account: ${errorMessage}`);
+      }
+
+      // For Soroban tokens, authorization is created automatically during transaction simulation
+      // The SDK handles this via simulate: true, so we don't need to pre-establish authorization
+      // This matches the pattern used in normal-v1-interface
+      console.log(
+        "ℹ️ Skipping trustline checks - SDK will handle Soroban authorization automatically during simulation"
+      );
 
       const networkConfig = {
         rpcUrl: config.rpcUrl,
@@ -103,25 +165,40 @@ const createSwapQuoteCalculator = (swapOps: ReturnType<typeof useSwap>) => {
       );
 
       const estimateArgs = {
-        asset_in: formatNormalToken(tokenInInfo.symbol, "without-n"),
-        asset_out: formatNormalToken(tokenOutInfo.symbol, "without-n"),
-        amount_in: amountInContract
+        tokenIn: tokenInInfo.address,
+        tokenOut: tokenOutInfo.address,
+        amountIn: amountInContract
       };
 
-      const swapEstimate = await swapOps.estimateSwap(
-        config.poolRouter,
-        estimateArgs,
-        networkConfig
-      );
+      let swapEstimate;
+      try {
+        swapEstimate = await swapOps.estimateSwap(
+          config.poolRouter,
+          estimateArgs,
+          networkConfig
+        );
+      } catch (error: any) {
+        const errorMessage = error?.message || "Unknown error";
+        console.error("❌ Error estimating swap:", errorMessage);
+
+        // Check if this is an "Account not found" error for Soroban tokens
+        // This can happen when the account doesn't have authorization yet
+        const isSorobanToken =
+          tokenInInfo.address.startsWith("C") ||
+          tokenOutInfo.address.startsWith("C");
+
+        // Re-throw other errors
+        throw error;
+      }
 
       console.log("✅ Pool Router estimate success:", {
-        amount_out: swapEstimate.amount_out.toString(),
-        spread_amount: swapEstimate.spread_amount.toString()
+        amountOut: swapEstimate.amountOut.toString(),
+        poolIndex: swapEstimate.poolContext.poolIndex.toString("base64")
       });
 
       // Convert back to display amounts using swap operations utilities
       const amountOut = swapOps.fromContractAmount(
-        swapEstimate.amount_out,
+        swapEstimate.amountOut,
         tokenOutInfo.decimals
       );
       const amountOutMin = (
@@ -151,13 +228,16 @@ const createSwapQuoteCalculator = (swapOps: ReturnType<typeof useSwap>) => {
       const userAddress = keypair?.publicKey() || "USER_WALLET_ADDRESS";
 
       const swapParams: SwapParams = {
-        amount_in: request.amountIn,
-        amount_out_min: amountOutMin,
+        amountIn: request.amountIn,
+        amountOutMin,
         deadline,
         distribution: [distribution],
         to: userAddress,
-        token_in: request.tokenIn,
-        token_out: request.tokenOut
+        tokenInSymbol: tokenInInfo.symbol,
+        tokenOutSymbol: tokenOutInfo.symbol,
+        tokenInAddress: tokenInInfo.address,
+        tokenOutAddress: tokenOutInfo.address,
+        poolContext: swapEstimate.poolContext
       };
 
       return {

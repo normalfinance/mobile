@@ -1,7 +1,5 @@
 import { Networks } from "@stellar/stellar-sdk";
 
-export const NETWORK_PASSPHRASE = Networks.TESTNET;
-
 export const STELLAR_CONFIG = {
   TESTNET_PASSPHRASE: Networks.TESTNET,
   PUBLIC_PASSPHRASE: Networks.PUBLIC,
@@ -14,6 +12,28 @@ export const STELLAR_CONFIG = {
     PUBLIC: "https://soroban.stellar.org"
   }
 } as const;
+
+type StellarNetworkKey = keyof typeof STELLAR_CONFIG.HORIZON_URLS;
+
+const RAW_NETWORK = (
+  process.env.EXPO_PUBLIC_NETWORK || "TESTNET"
+).toUpperCase();
+
+const ACTIVE_NETWORK: StellarNetworkKey =
+  RAW_NETWORK === "MAINNET" || RAW_NETWORK === "PUBLIC" ? "PUBLIC" : "TESTNET";
+
+export const STELLAR_NETWORK: StellarNetworkKey = ACTIVE_NETWORK;
+
+export const IS_MAINNET = STELLAR_NETWORK === "PUBLIC";
+
+export const NETWORK_PASSPHRASE = IS_MAINNET
+  ? STELLAR_CONFIG.PUBLIC_PASSPHRASE
+  : STELLAR_CONFIG.TESTNET_PASSPHRASE;
+
+export const ACTIVE_HORIZON_URL = STELLAR_CONFIG.HORIZON_URLS[STELLAR_NETWORK];
+
+export const ACTIVE_SOROBAN_RPC_URL =
+  STELLAR_CONFIG.SOROBAN_RPC_URLS[STELLAR_NETWORK];
 
 export const STELLAR_ERRORS = {
   NO_WALLET: "No wallet found. Please create or import a wallet first.",

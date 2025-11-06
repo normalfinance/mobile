@@ -1,7 +1,8 @@
 import { Transaction, Keypair } from "@stellar/stellar-sdk";
 import {
   NETWORK_PASSPHRASE,
-  STELLAR_ERRORS
+  STELLAR_ERRORS,
+  IS_MAINNET
 } from "../constants/stellar.constants";
 import * as WebBrowser from "expo-web-browser";
 
@@ -89,8 +90,7 @@ export const openStellarExpert = async (
  * Gets the current network type based on environment configuration
  */
 export const getCurrentNetwork = (): NetworkType => {
-  const network = process.env.EXPO_PUBLIC_NETWORK || "TESTNET";
-  return network === "MAINNET" ? "mainnet" : "testnet";
+  return IS_MAINNET ? "mainnet" : "testnet";
 };
 
 /**

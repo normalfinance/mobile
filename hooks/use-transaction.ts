@@ -5,8 +5,6 @@ import {
   Account,
   TransactionBuilder,
   Operation,
-  Keypair,
-  rpc
 } from "@stellar/stellar-sdk";
 import { getKeypair, getWallet } from "@/services/wallet.service";
 import {
@@ -15,39 +13,48 @@ import {
   SignedTransactionResult,
   SubmitTransactionParams,
   BackendSubmissionResult,
-  GenerateSwapXDRParams
+  GenerateSwapXDRParams,
 } from "@/lib/types/transaction.types";
 import {
   parseTransaction,
-  signTransactionWithKeypair
+  signTransactionWithKeypair,
 } from "@/lib/utils/stellar.utils";
 import { STELLAR_ERRORS } from "@/lib/constants/stellar.constants";
-import {
-  buildSwapTransaction,
-  getSwapDirection
-} from "@/lib/utils/pool-router.utils";
+import { buildSwapTransaction } from "@/lib/utils/pool-router.utils";
 
 const getNetworkConfig = (): NetworkConfig => {
   const network = process.env.EXPO_PUBLIC_NETWORK || "TESTNET";
+  // Check for RPC API key (supports both EXPO_PUBLIC_ prefix and non-prefixed for compatibility)
+  const rpcApiKey =
+    process.env.EXPO_PUBLIC_RPC_API_KEY || process.env.RPC_API_KEY || "";
 
   if (network === "MAINNET") {
+    // If RPC API key is provided, use validationcloud.io endpoint with API key
+    const rpcUrl = rpcApiKey
+      ? `https://mainnet.stellar.validationcloud.io/v1/${rpcApiKey}`
+      : process.env.EXPO_PUBLIC_MAINNET_RPC_URL ||
+        "https://soroban.stellar.org";
+
     return {
       networkPassphrase: Networks.PUBLIC,
       horizonUrl:
         process.env.EXPO_PUBLIC_MAINNET_HORIZON_URL ||
         "https://horizon.stellar.org",
-      rpcUrl:
-        process.env.EXPO_PUBLIC_MAINNET_RPC_URL || "https://soroban.stellar.org"
+      rpcUrl,
     };
   } else {
+    // If RPC API key is provided, use validationcloud.io endpoint with API key
+    const rpcUrl = rpcApiKey
+      ? `https://testnet.stellar.validationcloud.io/v1/${rpcApiKey}`
+      : process.env.EXPO_PUBLIC_TESTNET_RPC_URL ||
+        "https://soroban-testnet.stellar.org";
+
     return {
       networkPassphrase: Networks.TESTNET,
       horizonUrl:
         process.env.EXPO_PUBLIC_TESTNET_HORIZON_URL ||
         "https://horizon-testnet.stellar.org",
-      rpcUrl:
-        process.env.EXPO_PUBLIC_TESTNET_RPC_URL ||
-        "https://soroban-testnet.stellar.org"
+      rpcUrl,
     };
   }
 };
@@ -93,6 +100,11 @@ export const useTransactionOperations = () => {
       networkPassphrase?: string
     ): Promise<SignedTransactionResult> => {
       console.log("✍️ Signing transaction...");
+      console.log("📄 Unsigned XDR length:", unsignedXDR.length);
+      console.log(
+        "📄 Unsigned XDR first 100 chars:",
+        unsignedXDR.substring(0, 100)
+      );
 
       try {
         const keypair = await getKeypair();
@@ -108,7 +120,21 @@ export const useTransactionOperations = () => {
         const config = getNetworkConfig();
         const passphrase = networkPassphrase || config.networkPassphrase;
 
+        console.log("🔑 Network passphrase:", passphrase);
+        console.log("🔑 Wallet address:", walletInfo.publicKey);
+
         const transaction = parseTransaction(unsignedXDR, passphrase);
+
+        console.log(
+          "📦 Parsed transaction hash (before signing):",
+          transaction.hash().toString("hex")
+        );
+        console.log(
+          "📦 Parsed transaction operations count:",
+          transaction.operations.length
+        );
+        console.log("📦 Parsed transaction fee:", transaction.fee);
+        console.log("📦 Parsed transaction source:", transaction.source);
 
         signTransactionWithKeypair(transaction, keypair);
 
@@ -116,11 +142,17 @@ export const useTransactionOperations = () => {
         const transactionHash = transaction.hash().toString("hex");
 
         console.log("✅ Transaction signed successfully!");
+        console.log("📄 Signed XDR length:", signedXDR.length);
+        console.log(
+          "📄 Signed XDR first 100 chars:",
+          signedXDR.substring(0, 100)
+        );
+        console.log("📄 Transaction hash:", transactionHash);
 
         return {
           signedXDR,
           transactionHash,
-          walletAddress: walletInfo.publicKey
+          walletAddress: walletInfo.publicKey,
         };
       } catch (error) {
         console.error("❌ Error signing transaction:", error);
@@ -138,12 +170,12 @@ export const useTransactionOperations = () => {
       console.log("📄 Signed XDR length:", params.signedXDR.length);
 
       try {
-        const backendUrl = "http://localhost:8090/api/transaction";
+        const backendUrl = "http://localhost:8095/api/transaction";
 
         const payload = {
           walletAddress: params.walletAddress,
           signedTransactionXDR: params.signedXDR,
-          transactionType: params.transactionType
+          transactionType: params.transactionType,
         };
 
         console.log("📦 Backend payload:", JSON.stringify(payload, null, 2));
@@ -152,9 +184,9 @@ export const useTransactionOperations = () => {
         const response = await fetch(backendUrl, {
           method: "POST",
           headers: {
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
           },
-          body: JSON.stringify(payload)
+          body: JSON.stringify(payload),
         });
 
         if (!response.ok) {
@@ -172,13 +204,13 @@ export const useTransactionOperations = () => {
             responseData.hash ||
             responseData.transactionHash ||
             `tx_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-          backendResponse: responseData
+          backendResponse: responseData,
         };
       } catch (error) {
         console.error("❌ Backend submission failed:", error);
         return {
           success: false,
-          error: error instanceof Error ? error.message : String(error)
+          error: error instanceof Error ? error.message : String(error),
         };
       }
     },
@@ -199,13 +231,13 @@ export const useTransactionOperations = () => {
 
       const transaction = new TransactionBuilder(sourceAccount, {
         fee: "100000", // 0.01 XLM
-        networkPassphrase: config.networkPassphrase
+        networkPassphrase: config.networkPassphrase,
       })
         .addOperation(
           Operation.invokeContractFunction({
             contract: params.contractAddress,
             function: params.method,
-            args: params.args
+            args: params.args,
           })
         )
         .setTimeout(300)
@@ -223,28 +255,47 @@ export const useTransactionOperations = () => {
       const config = params.networkConfig || getNetworkConfig();
       const sourceAccount = await getSourceAccount(params.account);
 
-      const assembledTransaction = await buildSwapTransaction(
+      const { transaction: assembledTransaction } = await buildSwapTransaction(
         params.poolRouterAddress,
         {
           user: params.user,
-          asset_in: params.asset_in,
-          asset_out: params.asset_out,
-          amount_in: params.amount_in,
-          amount_out_min: params.amount_out_min
+          tokenIn: params.tokenInAddress,
+          tokenOut: params.tokenOutAddress,
+          amountIn: params.amountIn,
+          amountOutMin: params.amountOutMin,
+          poolContext: params.poolContext,
         },
         sourceAccount,
         {
           networkPassphrase: config.networkPassphrase,
-          rpcUrl: config.rpcUrl
+          rpcUrl: config.rpcUrl,
+          horizonUrl: config.horizonUrl,
         }
       );
 
       console.log("🔨 Assembled transaction:", assembledTransaction);
+      console.log(
+        "🔨 Assembled transaction.built:",
+        assembledTransaction.built
+      );
+      console.log(
+        "🔨 Assembled transaction.simulation:",
+        assembledTransaction.simulation
+      );
 
-      const unsignedXDR = assembledTransaction.toXDR();
+      // Extract XDR from the built transaction object (matches web implementation)
+      const unsignedXDR = assembledTransaction.built?.toXDR();
       if (!unsignedXDR) {
-        throw new Error("Failed to generate swap transaction XDR");
+        throw new Error(
+          "Failed to extract built transaction XDR. The transaction may not have been properly simulated."
+        );
       }
+
+      console.log("📄 Unsigned XDR length:", unsignedXDR.length);
+      console.log(
+        "📄 Unsigned XDR first 100 chars:",
+        unsignedXDR.substring(0, 100)
+      );
 
       return unsignedXDR;
     },
@@ -257,6 +308,6 @@ export const useTransactionOperations = () => {
     signTransaction,
     submitTransactionToBackend,
     getNetworkConfig,
-    getSourceAccount // Utility for specialized hooks to get account
+    getSourceAccount, // Utility for specialized hooks to get account
   };
 };

@@ -1,5 +1,7 @@
 import { Account } from "@stellar/stellar-sdk";
 
+import type { PoolContext } from "../utils/pool-router.utils";
+
 export interface NetworkConfig {
   networkPassphrase: string;
   rpcUrl: string;
@@ -43,19 +45,21 @@ export interface TransactionOperationResult<T = any> {
 export interface SwapTransactionParams {
   poolRouterAddress: string;
   user: string;
-  asset_in: string;
-  asset_out: string;
-  amount_in: bigint;
-  amount_out_min: bigint;
+  tokenInAddress: string;
+  tokenOutAddress: string;
+  amountIn: bigint;
+  amountOutMin: bigint;
+  poolContext?: PoolContext;
 }
 
 export interface GenerateSwapXDRParams {
   poolRouterAddress: string;
   user: string;
-  asset_in: string;
-  asset_out: string;
-  amount_in: bigint;
-  amount_out_min: bigint;
+  tokenInAddress: string;
+  tokenOutAddress: string;
+  amountIn: bigint;
+  amountOutMin: bigint;
+  poolContext?: PoolContext;
   account?: Account;
   networkConfig?: NetworkConfig;
 }
