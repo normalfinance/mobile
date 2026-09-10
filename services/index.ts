@@ -35,21 +35,6 @@ export {
   useTransactionDetails
 } from "./transaction.service";
 
-// API Service - Core functions and hooks
-export {
-  submitTransaction,
-  submitTransactionWithRetry,
-  healthCheck,
-  getApiStatus,
-  checkWallet,
-  apiQueryKeys,
-  useSubmitTransaction,
-  useSubmitTransactionWithRetry,
-  useHealthCheck,
-  useApiStatus,
-  useCheckWallet
-} from "./api.service";
-
 // Auth Service - Core functions and hooks
 export {
   getAuthCredentials,
@@ -67,12 +52,6 @@ export {
 // Type exports
 export type { WalletInfo } from "./wallet.service";
 export type { SignedTransaction } from "./transaction.service";
-export type {
-  TransactionRequest,
-  TransactionResponse,
-  CheckWalletRequest,
-  CheckWalletResponse
-} from "./api.service";
 export type { AuthCredentials, AuthStatus } from "./auth.service";
 
 export {

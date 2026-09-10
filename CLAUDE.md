@@ -1,292 +1,370 @@
 # Normal Mobile — CLAUDE.md
 
 Context for Claude Code working in `normalfinance/mobile`.
-Last verified against the tree at commit `3bc0217` (`develop`) on 2026-09-10.
+Last verified 2026-09-10 against `develop@3bc0217` plus the local deletions in §7, and the
+web repo at `../normal-v1-interface` (`master@6a403a8d`). Written by Niko's mobile session
+from Niko's hand-off doc and `docs/web-agent-answers.md` (fifty code-verified answers from
+the web repo's agent). Answer numbers below (`Q7`, `Q33`, …) point into that file.
 
 ---
 
 ## 0. Read this first
 
-This repo started as a **Stellar-only prototype** with its own wallet model. We are
-**pivoting it** into the full Normal mobile client described below — multi-chain, Turnkey
-passkey wallets, backed by the existing Next.js API. Both realities are documented here:
-§1–§6 are the **target**, §7 is **what is actually on disk today**. When they disagree, the
-target wins as direction, but never assume target code exists — verify in the tree first (§9
-rule 3).
+**This repo is being pivoted.** It began as a Stellar-only prototype with a BIP-39 seed-phrase
+wallet, its own AMM contracts and a separate backend. The target is the full Normal client:
+four chains, Turnkey passkey sub-orgs, backed by the existing Next.js API. §1–§6 describe the
+**target**; §7 describes **what is on disk**. Never assume target code exists — check the tree.
 
-**Discontinued products — code touching these is dead, not a foundation** (confirmed by Niko,
-2026-09-10): Normal no longer runs **liquidity pools** and no longer does **synthetic assets**.
-The prototype's `normal_pool_router` AMM and the Indexes/Invest screens are both leftovers from
-that old infrastructure. Do not extend them, do not port them, do not treat their patterns as
-precedent. See §7 for the exact file list.
+**Discontinued products — code touching these is dead, not a foundation** (Niko, 2026-09-10):
+Normal no longer runs **liquidity pools**, **synthetic assets** (nBTC/nETH/nSOL, Q16) or
+**indexes**, and **testnet is gone** everywhere. Do not extend or port any of it.
 
-The reference implementation for nearly everything is the web repo
-**`normalfinance/normal-v1-interface`** (`packages/web`). Port logic from there; do not
-reinvent it.
+**The web app source is at `../normal-v1-interface`. Read it before asking.** Paths written as
+`web:src/...` mean `../normal-v1-interface/packages/web/src/...`; `web:../utils/...` means the
+sibling package. Open questions and their answers live in `docs/web-agent-questions.md` and
+`docs/web-agent-answers.md`; check the answers before inferring web behaviour, and ask Niko
+rather than guess when something is unanswered.
+
+Niko is the sole mobile developer and the decision maker. Justin (CEO) grants account access.
 
 ---
 
 ## 1. What Normal is
 
-Normal is a consumer savings + wallet app. Users sign up with email (Supabase Auth), get a
-self-custodial Turnkey wallet secured by a passkey, and can:
+A consumer savings + wallet app. Users sign up with email (Supabase Auth), get a self-custodial
+Turnkey wallet secured by a passkey, and can:
 
 - **Save**: deposit USDC into Normal Savings (DeFindex vault over Blend lending pools on
-  Stellar, ~7% APY). This is the core product and the brand.
+  Stellar, ~7% APY). The core product and the brand.
 - **Hold** BTC, ETH, SOL, XLM, USDC across four chains (Bitcoin, Ethereum, Solana, Stellar).
 - **Swap**: Stellar-native via Soroswap; BTC/ETH/SOL cross-chain via LI.FI; Stellar↔BTC/ETH/SOL
   via a composite Soroswap → Circle CCTP → LI.FI route (our own state machine).
 - **Send / receive** on all four chains.
-- **On/off-ramp**: MoneyGram (SEP-10/SEP-24), Coinbase offramp.
+- **On/off-ramp**: MoneyGram (SEP-10/SEP-24), Coinbase. Onramper is dead (Q43).
 - **Referrals**, activity feed, portfolio.
 
-Web app: Next.js (App Router) on Vercel, MUI + Emotion, zustand, Prisma/Postgres, Supabase
-Auth, PostHog. Production `normalfinance.io`; staging on a `*.normalfinance.io` Vercel
-preview. Yarn monorepo: `packages/web` (the app), `packages/state|utils|types|contracts|goldsky`.
+Web: Next.js App Router on Vercel, MUI + Emotion, zustand, Prisma/Postgres, Supabase Auth.
+**PostHog is not wired** — dead env vars only (Q45). Yarn monorepo: `packages/web` (the app),
+`packages/state|utils|types|contracts|goldsky`.
 
-## 2. What we are building here
+## 2. What we are building
 
-A **React Native app on Expo (EAS)** for iOS and Android, **mainnet-only in v1**, that is a
-second client of the **existing Next.js backend**. We do not build a new backend and we do
-not change the identity provider.
+A **React Native app on Expo (EAS)** for iOS and Android, **mainnet-only**, as a second client of
+the **existing Next.js API**. No new backend, no change of identity provider.
 
-v1 scope (web parity minus web-only bits): sign up / sign in, passkey wallet, portfolio,
-savings deposit/withdraw, swap (Soroswap, LI.FI, CCTP composite), send/receive, activity,
-MoneyGram ramp, referrals.
+v1 scope: sign up / sign in, passkey wallet, portfolio, savings deposit/withdraw, swap
+(Soroswap, LI.FI, CCTP composite), send/receive, activity, MoneyGram ramp, referrals.
 
 ### Decisions already made — do not re-open without asking Niko
 
-| Decision | Why |
+| Decision | Status / why |
 |---|---|
-| **Auth = Supabase, NOT Clerk** | Every API route verifies a Supabase JWT; every DB row is keyed by the Supabase user id. Clerk tokens would 401 everywhere. ✅ **Migration complete in this repo** (PR #32, commits `715aa8c`…`fe290fb`). |
-| **Backend = the existing Next.js API routes** | 73 routes, 58 behind `withAuth`. Auth is `Authorization: Bearer <supabase access_token>` (header, not cookie), so native clients work today. |
-| **Turnkey passkeys, rpId `normalfinance.io`** | Wallets are passkey-only. The same passkey must work on web and in the app, so the app is associated with `normalfinance.io` (AASA + assetlinks) and uses Turnkey's React Native SDK / native passkey stamper. ❌ **Not yet started here** — see §7. |
-| **Mainnet only** | Testnet toggle, dev pages and `normal-network` cookie logic stay web-only. Send `?network=mainnet` (or the cookie header); the server falls back to its deployment default. |
-| **API backward compatibility from app launch** | Installed apps cannot be force-updated. No breaking API changes without versioning once the app ships. |
+| **Auth = Supabase, not Clerk** | ✅ Done in this repo (PR #32). Every API route verifies a Supabase JWT; every DB row is keyed by the Supabase uid. |
+| **Backend = the existing Next.js API routes** | 73 routes, 58 behind `withAuth`; auth is the `Authorization: Bearer` header only, no cookie session anywhere (Q7). |
+| **Turnkey passkeys, rpId `normalfinance.io`** | Wallets are passkey-only. Mobile stack: `@turnkey/http` + `@turnkey/crypto` + `@turnkey/react-native-passkey-stamper` + `react-native-passkey`. **Not** `@turnkey/react-native-wallet-kit` (hosted auth-proxy model; our server creates sub-orgs itself). ❌ Not started here. |
+| **Mainnet only, testnet discontinued** | No network switch in the app. Still send `Cookie: normal-network=mainnet` on every request and `?network=mainnet` on the five routes that honour it (Q1) so we never depend on a deployment default. |
+| **API backward compatibility from launch** | Installed apps cannot be force-updated. No breaking API change without versioning once shipped. |
+| **Bundle identifiers** | iOS `io.normalfinance.app` (prod) / `io.normalfinance.app.dev` (dev+staging); Android package `io.normalfinance.app`. Apple Team `FA938A596N` (Normal Finance, Inc.). Live in the AASA already. `app.json` still says `io.normalfinance.normalfi` — must change (§11). |
 
-## 3. Backend contract
+## 3. Talking to the backend
 
-Base URL = the web deployment (`https://normalfinance.io` prod, the staging URL for dev).
-All JSON. Authed routes need `Authorization: Bearer <token>`; on 401, refresh the Supabase
-session **once** and retry (web helper: `packages/web/src/utils/authed-fetch.ts`).
+**Base URL** = `EXPO_PUBLIC_API_BASE_URL` (var name chosen; code does not read it yet):
+`https://staging.normalfinance.io` (Vercel, `develop`) during development,
+`https://www.normalfinance.io` (`master`) in production builds. Localhost web runs on `:8082`
+with rpId `localhost` — **never point the app at it**; passkeys made there are unusable.
+The bare `normalfinance.io` redirects to www for everything except `/.well-known/*`.
 
-Routes under `/api/`:
+**Staging is mainnet with real money** and shares the production Supabase project (Q4). There
+are no mocks or dry-run flags anywhere. Test with $10–$50 and never with a wallet that matters.
 
-- **Wallet / Turnkey**: `turnkey/wallet` (create sub-org + wallet at signup; also adds
-  per-chain addresses lazily), `turnkey/wallets`, `turnkey/credentials` (passkey credential
-  ids for `allowCredentials`), `turnkey/btc-pubkey`, `turnkey/build-btc-tx`,
-  `turnkey/broadcast-btc`, `turnkey/import`, `turnkey/import-init`, `wallets/check-limit`,
-  `wallets/link`, `wallets/linked`.
-- **Portfolio / activity**: `wallet/portfolio`, `wallet/activity`, `portfolio/activity`,
-  `activity/{bitcoin|ethereum|solana|stellar}`, `prices/history`.
+**Every request:** `Authorization: Bearer <supabase access_token>`, `Content-Type: application/json`,
+`Cookie: normal-network=mainnet`, and `x-mobile-app: true` (middleware early-exits on it, Q7).
+`?network=mainnet` additionally on `savings/vault-info`, `savings/user-position`,
+`savings/earnings-history`, `wallet/portfolio` (and the dead `portfolio/activity`).
+
+**Status handling** (Q8) — port `web:src/utils/authed-fetch.ts` (42 lines) as an event emitter:
+- **401** → `refreshSession()` once, retry once; still 401 → emit `session-expired` (debounce 5s)
+  and show a banner with a sign-in button. Never throw, never redirect.
+- **403** = not your wallet/resource. Never retry.
+- **409** = three families: `{ embedded_unavailable: true }` from `swap/*` → use the two-signature
+  path; CCTP autopilot refusal with `reason` → interactive fallback; in-flight duplicate → wait.
+- **429** = our limiter, DeFindex busy (`savings/deposit`, retry after a pause), or wallet-link
+  quota `{ error, reset }`. **503** = maintenance / disabled endpoint. 423 does not exist.
+
+**Error shape is inconsistent** (Q13): 32 routes return `{ success:false, error }`, the CCTP /
+Coinbase / MGI cluster returns bare `{ error, ...extra }` with machine codes such as
+`below_minimum` + `minAmountWire`. **`error` is the only reliable key.** Never rely on `success`.
+
+**Public routes** (no auth, IP-limited): `activity/{bitcoin,ethereum,solana,stellar}`,
+`prices/history`, `mgi/info`, `savings/vault-info`, `savings/user-position`,
+`savings/earnings-history`, `lifi/quote`, `swap/quote`.
+
+**Rate limits** (Q11): user limiter 30/10s; IP limiter 50/10s; **`swap/quote` and `lifi/quote`
+are 30 per 10s per IP** — mobile users behind carrier NAT share an IP, so quote-heavy screens
+must debounce hard. Raise this with the web side before the swap screen ships.
+
+**Routes are pure JSON** (Q14): no redirects, no `Set-Cookie`, no HTML, no streaming.
+**There is no pagination anywhere** (Q21); infinite scroll needs a new endpoint.
+
+**Copy these web files verbatim — do not redefine them** (Q12, Q22, Q39):
+`web:src/types/portfolio.ts`, `web:src/types/wallet-activity.ts`, `web:src/lib/chains/registry.ts`
+(the CHAINS registry — every chain-varying value lives here), `web:src/sections/swap/cctp-phase.ts`
+(the "needs a signature" table), `web:src/components/_common/send-adapters/*`,
+`web:src/utils/normal-fees.ts`. They import nothing from Next or the DOM.
+
+### Route inventory (under `/api/`)
+
+- **Wallet / Turnkey**: `turnkey/wallet` (POST create sub-org+wallet, idempotent; GET read),
+  `turnkey/wallets`, `turnkey/credentials`, `turnkey/import`, `turnkey/import-init`,
+  `turnkey/btc-pubkey`, `turnkey/build-btc-tx`, `turnkey/broadcast-btc`,
+  `wallets/check-limit` (= 3 external links / 24h), `wallets/link`, `wallets/linked`.
+- **Portfolio / activity**: `wallet/portfolio`, `wallet/activity`, `activity/{chain}`,
+  `prices/history`. `portfolio/activity` is **dead** (zero callers).
 - **Savings**: `savings/vault-info`, `savings/user-position`, `savings/deposit`,
-  `savings/withdraw`, `savings/log-transaction`, `savings/earnings-history`.
-- **Swap**: `swap/quote` (Soroswap), `swap/submit-single`, `swap/log-transaction`,
-  `lifi/quote`, `lifi/status`, `lifi/statuses`, `lifi/record`, `cctp/quote`,
-  `cctp/transfers` (POST create / GET list, `?history=1`), `cctp/transfers/[id]`
-  (GET advances the state machine, `?noAdvance=1` for a fast read; PATCH attaches tx hashes),
-  `cctp/gas-topup`, `cctp/autopilot/burn`, `cctp/autopilot/pivot`, `autopilot/status`.
-- **Send**: `send`, `send/execute`, `stellar/memo-required`, `fees/build-payment`,
-  `fees/execute-pair`.
-- **Ramps**: `mgi/*` (SEP-10 challenge/complete, SEP-24 deposit/withdraw, transactions),
-  `ramp/transfers`, `coinbase/session`, `coinbase/offramp-status`, `offramp/fills`.
-- **Other**: `referral/*`, `marketing/opt-in`, `crisp`, `transaction`.
-- Server-only, never called by a client: `cron/*`.
+  `savings/withdraw`, `savings/earnings-history`. `savings/log-transaction` is **deprecated**.
+- **Fees**: `fees/build-payment`, `fees/execute-pair` (the server-side submit funnel).
+- **Swap**: `swap/quote`, `swap/submit-single`, `swap/log-transaction`; `lifi/quote`,
+  `lifi/status`, `lifi/statuses`, `lifi/record`; `cctp/quote`, `cctp/transfers` (+`/[id]`),
+  `cctp/gas-topup`, `cctp/autopilot/{burn,pivot}`, `autopilot/status`.
+- **Send**: `send/execute` (native ETH/SOL only), `stellar/memo-required`. `send` is **dead**.
+- **Ramps**: `mgi/*`, `ramp/transfers`, `coinbase/session`, `coinbase/offramp-status`, `offramp/fills`.
+- **Other**: `referral/*`, `marketing/opt-in`, `crisp`, `transaction`. `cron/*` is server-only.
 
-## 4. Wallet model (Turnkey) — the part that must be exactly right
+## 4. Auth (Supabase)
 
-- One Turnkey **sub-organization per user**, stored in Postgres `turnkey_wallets`
-  (`supabaseUid` unique → `subOrgId` unique, plus nullable `bitcoinAddress`,
-  `ethereumAddress`, `solanaAddress`, `stellarAddress`).
-- **Passkey-only.** The passkey is the root authenticator of the sub-org. There is no
-  password, no email-OTP signer and no recovery-passkey flow in code today.
-- **rpId is `normalfinance.io`** on staging and prod (`NEXT_PUBLIC_TURNKEY_RP_ID`). Localhost
-  web dev uses rpId `localhost`. A passkey only ever works under the rpId it was created with.
-- **Signing is client-side.** Web stamps with `@turnkey/webauthn-stamper`; the app must use
-  Turnkey's React Native SDK + native passkey stamper. The parent-org API key on the server
-  can create sub-orgs and read metadata — it **cannot move funds**.
-- **Passkey prompt restriction**: fetch credential ids from `turnkey/credentials` and pass
-  them as `allowCredentials` so the OS prompt does not offer other accounts' passkeys
-  (web: `lib/turnkey/passkey-stamper.ts`).
-- **Lazy asset creation (HARD RULE)**: never create addresses for all chains at signup. A
-  chain address is created on first use of that asset — Turnkey bills per address.
-- **Autopilot** (optional, per user): a delegated "Normal Autopilot" API user + policy inside
-  the user's sub-org lets the server sign the Base-chain legs of CCTP swaps. Server-side only;
-  the app just calls `autopilot/status` and the consent ceremony route.
-- Wallet **export** on web uses `@turnkey/iframe-stamper` (browser only). Use the Turnkey RN
-  SDK export flow instead.
+- Web uses (Q5): `signUp`, `signInWithPassword`, `signInWithOtp` (OTP + magic link,
+  `shouldCreateUser: true`), `verifyOtp` type `email`, `resend`, `resetPasswordForEmail`,
+  `signInWithOAuth` **Google only**, PKCE with `detectSessionInUrl: false`. No Apple. **App Store
+  review requires Sign in with Apple if Google is offered** — dashboard config + a provider row.
+- **Redirect allowlist is dashboard config** (Q6). `normalapp://auth/callback` must be added
+  under Supabase Auth → URL Configuration before OAuth or magic links can return to the app.
+- **Captcha** (Q9): web sends a Turnstile token as `captchaToken`; **Supabase verifies it, not
+  our API**. If captcha protection is enabled on the project, every auth call from this app fails
+  because `services/auth.service.ts` sends no token. Check the dashboard; either disable captcha
+  for mobile or render Turnstile in a WebView.
+- `withAuth` checks nothing but the Bearer token (Q7). No CSRF, no Origin, no user status.
+- Mobile env names: `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY` = the web's
+  `NEXT_PUBLIC_MAINNET_SUPABASE_URL` / `_ANON_KEY` values (code names, Q2 — the web
+  `.env.example` misnames them). One mainnet project serves staging and production.
 
-## 5. Feature engines to port (logic, not UI)
+## 5. Wallet model (Turnkey) — the part that must be exactly right
 
-Source of truth in `packages/web/src/`:
+- One Turnkey **sub-organization per user**, row in Postgres `turnkey_wallets` (`supabaseUid`
+  unique → `subOrgId` unique, plus nullable `bitcoinAddress`, `ethereumAddress`,
+  `solanaAddress`, `stellarAddress`).
+- **Passkey-only.** The passkey is the root authenticator (quorum 1). No password, no OTP signer.
+- **rpId `normalfinance.io`** on staging and prod (`NEXT_PUBLIC_TURNKEY_RP_ID`; mobile
+  `EXPO_PUBLIC_TURNKEY_RP_ID`). Byte-identical at registration and signing. Read with `||` not
+  `??` (blank env must fall back, Q50-12). Always pass `allowCredentials` from
+  `turnkey/credentials` so the OS prompt shows only this account's passkeys.
+- **Signing is client-side, straight to `https://api.turnkey.com`** (hardcoded, not env; Q26).
+  No Next route proxies signing. Activities: Stellar `SIGN_RAW_PAYLOAD_V2` over hex `tx.hash()`
+  with `HASH_FUNCTION_NOT_APPLICABLE`, then a `DecoratedSignature` appended (port
+  `web:src/lib/turnkey/stellar-signer.ts`, 60 lines; always pass the passphrase explicitly;
+  Soroban auth entries are **not** handled). EVM `SIGN_TRANSACTION_V2`. Solana raw payload over
+  `serializeMessage()` with no pre-hash. BTC send = server-built PSBT + `TRANSACTION_TYPE_BITCOIN`;
+  BTC LI.FI = local sighashes + one `SIGN_RAW_PAYLOADS` with `HASH_FUNCTION_NO_OP`.
+- **A passkey prompt on every signing request; no session** (Q27). CCTP swaps cost 1–4 prompts
+  (table in Q27). Autopilot is a one-time ceremony (`CREATE_API_ONLY_USERS` + `CREATE_POLICY_V3`,
+  Base-chain legs only; needs `EXPO_PUBLIC_AUTOPILOT_PUBLIC_KEY`, absent = feature dark, Q40).
+- **Sign-up order** (Q25): Supabase account → RN `createPasskey()` (returns
+  `{ challenge, attestation: { credentialId, clientDataJson, attestationObject, transports } }`)
+  → `POST /api/turnkey/wallet { challenge, attestation, chain: 'stellar' }` → 201
+  `{ wallet }` (idempotent: 200 if a row exists). Park a failed attestation and reuse it so a
+  retry never mints a second passkey. Mark the new seed for backup and await the mark.
+- **Lazy asset creation (HARD RULE)**: one chain address at signup, others on first use. Web:
+  `ensureChainAccount` (Q29) — passkey-stamped `CREATE_WALLET_ACCOUNTS`, then
+  `POST /api/turnkey/import { walletId, chain }` so the **server** re-reads addresses. Idempotent.
+- **Export** (Q32) reveals one BIP-39 phrase via `EXPORT_WALLET`; web decrypts in Turnkey's
+  iframe, mobile must use `@turnkey/crypto` with a local ephemeral key. **Import** (Q31) is a
+  mnemonic via `import-init` → `INIT_IMPORT_WALLET` → HPKE bundle → `IMPORT_WALLET` → `import`.
+- **There is NO recovery if the passkey is lost** (Q33). One authenticator, no add-authenticator
+  flow on either side. **Consequence: an existing web user can sign in on mobile only if their
+  passkey is synced (iCloud Keychain / Google Password Manager).** Chrome-on-Windows users have
+  no path in. Fixing it means `CREATE_AUTHENTICATORS_V2` on web too — a product decision (§11).
+- **Free Apple ID builds cannot do passkeys**: WebAuthn under `normalfinance.io` needs the
+  associated-domains entitlement, which needs Team `FA938A596N`. Personal-team builds are for UI.
 
-- `sections/swap/engines/` — `use-soroswap-engine.tsx`, `use-lifi-engine.tsx`,
-  `use-cctp-engine.tsx`, `types.ts` (`canPair`, routing groups), `gas-reserve.ts`,
-  `autopilot-gate.ts`, `lifi-tracker.ts`.
-- `lib/cctp/` — `burn-stellar.ts`, `burn-evm.ts`, `pivot-swap.ts`, `hookdata.ts`,
-  `decimals.ts`, `addresses.ts`, `config.ts`.
-- `lib/lifi/execute.ts` — executes a LI.FI quote per chain (BTC PSBT via Turnkey raw sighash
-  signing; EVM via viem; Solana via web3.js).
-- `lib/turnkey/` — `evm-signer.ts`, `stellar-signer.ts`, `passkey.ts`, `passkey-stamper.ts`,
-  `add-account.ts`, `autopilot-consent.ts`.
-- `lib/savings/`, `lib/send/`,
-  `components/_common/send-adapters/{bitcoin,ethereum,solana,stellar}.ts`.
-- `lib/chains/registry.ts` — **the CHAINS registry (HARD RULE: every chain-varying value
-  lives here, never hard-coded)**.
+## 6. Money flows (port the logic, rebuild the UI)
 
-Client crypto: `@stellar/stellar-sdk`, `viem`, `@solana/web3.js`, `bitcoinjs-lib` (v7, no Node
-Buffer), `bignumber.js`. In RN these need polyfills (`react-native-get-random-values`, Buffer,
-TextEncoder, URL) — this repo already has a `shim.js` doing some of that. Expect friction.
-
-### CCTP composite flow
-
-Outbound USDC(Stellar) → BTC/ETH/SOL: user signs approve + `deposit_for_burn` on Stellar →
-Circle attests (~7s) → our relayer mints USDC to the user's own Base address → LI.FI swap
-Base USDC → target (user signs, or Autopilot signs) → done. Inbound reverses it: LI.FI to USDC
-on Base → user burns on Base → relayer mints on Stellar (delivers **USDC on Stellar**, never
-XLM). Minimum $10. Progress must survive the app being killed: rows live in `cctp_transfers`,
-the server cron finishes them, and the client shows a recovery surface for any row needing a
-signature.
-
-## 6. Not portable — plan replacements
-
-- **UI**: 276 MUI/Emotion files. Full native rebuild in Tamagui. Reuse hooks + logic only.
-- **External Stellar wallets** (Freighter, Lobstr, Ledger via `stellar-wallets-kit`): browser
-  extensions. Only WalletConnect is possible on mobile. `packages/state` imports extension
-  APIs directly and must be split into portable vs web-only.
-- **Turnstile captcha** → mobile-appropriate bot protection.
-- **MoneyGram SEP-24** opens a browser flow → in-app browser + deep-link return.
-- **Window events** (`nf:cctp-resume`, `nf:session-expired`, …) and `localStorage` caches in
-  ~12 engine/lib files → event emitter + AsyncStorage/SecureStore.
-- PostHog web SDK → PostHog RN.
+- **Portfolio** (Q18): `GET wallet/portfolio` returns balances **and** USD values for all five
+  assets (BTC, ETH, SOL, XLM, USDC, fixed order) in one call; server cache 15s; `?refresh=1`
+  floored to one per 5s. Chains without an address come back `balance:"0", status:"ok"`.
+  **No current-prices endpoint exists** (Q19); `GET prices/history?symbol=&range=` (public) is the
+  only price route — take the last point for an unheld asset. Icons: `${EXPO_PUBLIC_CDN_URL}/tokens/{bitcoin,ethereum,solana,XLM,USDC}.webp`.
+- **Activity** (Q21): web merges eight sources client-side (`wallet/activity`, four chain
+  routes, `cctp/transfers?history=1`, `ramp/transfers?active=1` + MGI, `coinbase/offramp-status`,
+  `POST lifi/statuses`). No pagination.
+- **New Stellar accounts: nobody sponsors them** (Q36). The user funds their own address with
+  XLM (default 4, min 2) then signs a `changeTrust` for USDC. Gate every USDC action behind
+  "fund first, then trustline", exactly like web.
+- **Savings** (Q34/35): `POST savings/deposit { amount: net, caller }` → unsigned XDR; `POST
+  fees/build-payment` → fee XDR at sequence+1; client signs **both** (two prompts); `POST
+  fees/execute-pair` submits server-side. Fees: 50 bps deposit, 50 bps swap, yield commission
+  tiers ≥50k → 5%, ≥2.5k → 10%, ≥500 → 15%, else 20% (`web:src/utils/normal-fees.ts`).
+- **Soroswap** (Q37): `POST swap/quote` with `sender` returns an unsigned XDR. Embedded fee =
+  1 signature; `embedded_unavailable` 409 → fee-pair path = 2 signatures. `POST
+  swap/submit-single { signedXdr, record }` submits server-side.
+- **LI.FI** (Q38): quote via `POST lifi/quote`; execution runs **on the client** against
+  `EXPO_PUBLIC_ETH_RPC_URL` / `_SOLANA_RPC_URL` / `_BASE_RPC_URL` (shippable — already public on
+  web); BTC broadcasts through `turnkey/broadcast-btc`. `POST lifi/record` is the swap's only
+  activity row — skip it and the feed shows nothing.
+- **CCTP** (Q39): the client drives every signature-bearing leg; the cron owns the bridge middle
+  and abandoned rows; `GET cctp/transfers/[id]` advances the machine unless `?noAdvance=1`.
+  Poll 5–15s while bridging, 10s for arrival/pivot, 30s for the recovery banner. Min $10.
+  Recovery surface = `cctp-phase.ts` verbatim; resume = `gas-topup` then burn or pivot.
+- **Send** (Q41): ETH/SOL through `POST send/execute` (server decodes and cross-checks the
+  signed tx; 409 while a prior send is unsettled). Stellar is client-side to Horizon; BTC via
+  `build-btc-tx` + `broadcast-btc`. Check `stellar/memo-required` before enabling Send.
+- **MoneyGram** (Q42): web relies on `postMessage`, which mobile cannot; use an in-app browser
+  and poll `mgi/transactions/[id]` (SEP-10 token in header `x-mgi-token`). Never open the
+  browser and a passkey prompt in the same tick.
+- **Coinbase** (Q43): `POST coinbase/session` → token; build the URL client-side with a
+  `redirectUrl` that must be on Coinbase's CDP allowlist (add the native scheme). Single-use URL.
+- **Referrals** (Q44): capture `ref`/`referral`/`referrer` from the deep link; apply **after
+  wallet creation** via `referral/user` → `referral/codes` → `referral/activate`.
+- **Analytics**: none exists on web. Design the event taxonomy fresh (Q45).
 
 ---
 
 ## 7. What is actually in this repo today
 
-Verified at `3bc0217`. Treat this as the starting point to pivot, not as the target.
+Verified at `develop@3bc0217` plus the deletions below. Treat as the starting point, not the target.
 
-| Area | Target (§1–§6) | On disk now |
+| Area | Target | On disk |
 |---|---|---|
-| Auth | Supabase | ✅ Supabase — `lib/supabase.ts`, `providers/supabase-auth-provider.tsx`, `services/auth.service.ts`, `app/auth/callback.tsx`. Google + Apple OAuth via `expo-auth-session`. Clerk fully removed. |
-| Wallet | Turnkey sub-org, passkey-only | ❌ **BIP-39 seed phrase** — `lib/utils/mnemonic.utils.ts` + `crypto.utils.ts`, secret stored in SecureStore under `stellar_private_key` / `stellar_mnemonic`. Must be replaced wholesale. |
-| Chains | BTC, ETH, SOL, XLM | ❌ Stellar only. No chain registry. |
-| Swap | Soroswap (Stellar leg) / LI.FI / CCTP | ☠️ **Dead infra — delete.** The prototype swaps through `normal_pool_router`, a Normal-deployed AMM (`swap` by `pool_index`, plus `deposit`/`withdraw`/`share_id`/`rebase`/reward-gauge admin). Normal no longer runs liquidity pools. The Stellar leg must be rebuilt on Soroswap via the backend's `swap/quote`. |
-| Prices | backend `prices/history`, `wallet/portfolio` | ❌ Two client-side sources: **Reflector oracle** on-chain (`lib/utils/oracle.utils.ts`, `services/oracle.service.ts`) and **CoinMarketCap** direct from the device (`services/coinmarketcap.service.ts`). |
-| Indexes / Invest | not in v1 scope per §2 | ☠️ **Dead infra — delete.** Leftovers from the discontinued synthetic-asset product. `services/indexes.service.ts` is 100% hardcoded mock data; the three screens render nothing real. |
+| Auth | Supabase | ✅ `lib/supabase.ts` (AsyncStorage adapter, `detectSessionInUrl:false`), `providers/supabase-auth-provider.tsx`, `services/auth.service.ts` (OTP, magic link, Google + Apple OAuth via `expo-auth-session`), `app/auth/callback.tsx`. **Sends no `captchaToken`.** |
+| Wallet | Turnkey sub-org, passkey-only | ❌ **BIP-39 seed phrase**: `lib/utils/mnemonic.utils.ts`, `crypto.utils.ts`, `services/wallet.service.ts`, keys in SecureStore. A replacement, not a refactor. `hasWalletWithBackendCheck` is a stub that always returns `exists:false` (its backend call is commented out). |
+| Chains | BTC, ETH, SOL, XLM | ❌ Stellar only. No registry. |
+| Swap | Soroswap / LI.FI / CCTP | ☠️ deleted (was `normal_pool_router` AMM). UI shells in `components/swap/*` kept, unreferenced. |
+| Backend | Next.js API, Bearer | ☠️ `services/api.service.ts` deleted (`api.normalfinance.io`, `check-wallet` — none of it exists, Q15). `hooks/use-transaction.ts` still posts to a hardcoded `http://localhost:8095` — dead, replace. |
+| Prices | backend `wallet/portfolio` + `prices/history` | ❌ Reflector oracle on-chain (`lib/utils/oracle.utils.ts`, `services/oracle.service.ts`) + **CoinMarketCap from the device** (`services/coinmarketcap.service.ts`, feeds portfolio + all charts). Re-source, then delete CMC. |
+| Indexes / Invest | not a product | ☠️ deleted. |
+| Onboarding | savings + multi-chain | ⚠️ `app/onboarding.tsx` slides still advertise synthetics ("Normal Ethereum", "Normal Tesla") and indexes; images `assets/images/splash-screens/splash1-3.png`. Needs new copy + art. |
 
-Zero occurrences of `turnkey`, `lifi`, `cctp`, `defindex`, `blend` or `passkey` anywhere in
-the tree.
+**Deleted 2026-09-10** (~7,200 lines, all confirmed dead): `lib/contracts/pool_router/`,
+`lib/utils/pool-router.utils.ts`, `services/swap.service.ts`, `hooks/use-swap.ts`,
+`app/(tabs)/{indexes,invest}.tsx`, `app/indexes/`, `services/indexes.service.ts`,
+`services/api.service.ts`, `lib/constants/tokens.constants.ts` (n-tokens; had zero importers).
 
-### Delete list (old infra)
+**Do NOT delete — adjacent but live:** `lib/utils/trustline.utils.ts` + `hooks/use-trustline.ts`
+(trustlines are required to hold USDC); the Reflector oracle files (generic price feed —
+re-source, don't delete); `components/swap/*` (presentational, reusable for Soroswap).
 
-Roughly **6,500 of ~21,900 hand-written lines** are dead product code:
-
-| Delete | Lines |
-|---|---|
-| `lib/contracts/pool_router/` (generated bindings) | 4,285 |
-| `lib/utils/pool-router.utils.ts` | 400 |
-| `services/swap.service.ts` (AMM path) | 328 |
-| `hooks/use-swap.ts` | 205 |
-| `app/(tabs)/indexes.tsx`, `app/(tabs)/invest.tsx`, `app/indexes/create.tsx` | 1,499 |
-| `services/indexes.service.ts` (mock data) | 137 |
-
-`lib/contracts/oracle_registry/` is already empty (bindings removed in `6adcd9a`).
-
-**Do NOT delete these — they look adjacent but are not old infra:**
-
-- `lib/utils/trustline.utils.ts`, `hooks/use-trustline.ts` — Stellar trustlines are a protocol
-  primitive required to hold USDC at all. Still needed.
-- `lib/utils/oracle.utils.ts`, `services/oracle.service.ts` — Reflector is a generic price
-  oracle, not synthetic-asset infra. Not dead, but **re-source**: prices should come from the
-  backend (`prices/history`, `wallet/portfolio`), not from on-chain or from CoinMarketCap on
-  the device.
-
-Import sites to clean up when the above goes: `app/(tabs)/invest.tsx`, `hooks/use-transaction.ts`,
-`hooks/use-token-price.ts`, `lib/types/swap.types.ts`, `lib/utils/storage.utils.ts`,
-`services/index.ts`.
+**Still to remove**: the `|| "TESTNET"` fallbacks in `hooks/use-transaction.ts`,
+`lib/constants/stellar.constants.ts`, `lib/utils/transactions.utils.ts`,
+`lib/utils/trustline.utils.ts`; `lib/constants/api.constants.ts` if nothing else reads it;
+`@stellar/typescript-wallet-sdk-km` from `package.json` (unused; its Trezor peer deps are what
+rewrite the lockfile on every `npm install`).
 
 ### Stack as configured
 
-- **Expo SDK 54**, React Native 0.81.4, React 19.1.0, New Architecture on, React Compiler
-  experiment on.
-- **expo-router** with `typedRoutes`; screens in `app/`, tabs under `app/(tabs)/`.
-- **Tamagui** for UI (`tamagui.config.ts`, `jsxImportSource: "tamagui"`).
-- **TanStack Query** for all server state (`lib/utils/query.utils.ts` holds `STALE_TIMES`).
-- Path aliases: `@/*` → repo root, `@svgs/*` → `assets/svgs/*`.
-- No `ios/` or `android/` dirs — Continuous Native Generation. **Do not commit them.**
+Expo SDK 54, React Native 0.81.4, React 19.1.0, New Architecture on, React Compiler experiment
+on. `expo-router` with typed routes (`app/`, tabs under `app/(tabs)/` = Home / Prices / Settings).
+Tamagui UI. TanStack Query for server state. Aliases `@/*` → root, `@svgs/*` → `assets/svgs/*`.
+`expo-dev-client` is **not** installed. No `ios/`/`android/` committed (CNG; both gitignored).
 
-### Local setup
-
-- **Node is pinned to 20.19.4** (`package.json` `engines`, and the EAS production profile).
-  Using another major rewrites `package-lock.json` with thousands of spurious lines. Always
-  `nvm use 20.19.4` before `npm install`.
-- **Expo Go does not work.** `react-native-randombytes` ships native code and `expo-updates`
-  is configured, so a **development build** is required:
-  `npx expo prebuild --platform ios && npx expo run:ios --device`, or
-  `eas build --profile development --platform ios`.
-- EAS project `normalfi/normal`, id `3526d985-d1a6-4a57-ba43-4f585c763244`.
-  iOS bundle id `io.normalfinance.normalfi`.
-
-### Environment variables
-
-`.env` is gitignored; real values live in EAS environment variables. Required:
+### Environment variables the code reads today
 
 | Variable | Behaviour if missing |
 |---|---|
-| `EXPO_PUBLIC_SUPABASE_URL` | throws at startup (`lib/supabase.ts`) |
-| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | throws at startup |
-| `EXPO_PUBLIC_CMC_API_KEY` | throws in `services/coinmarketcap.service.ts` — all prices dead |
-| `EXPO_PUBLIC_RPC_API_KEY` | Stellar RPC access |
-| `EXPO_PUBLIC_NETWORK` | defaults to `TESTNET`; v1 target is `MAINNET` |
-| `EXPO_PUBLIC_{MAINNET,TESTNET}_{HORIZON_URL,RPC_URL,POOL_ROUTER,REFLECTOR_ORACLE}` | fall back to hardcoded values in `services/swap.service.ts` |
+| `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY` | throws at startup (`lib/supabase.ts`) |
+| `EXPO_PUBLIC_CMC_API_KEY` | throws in `coinmarketcap.service.ts` → portfolio value + charts dead. Stopgap only; the key ships inside the bundle. |
+| `EXPO_PUBLIC_NETWORK` | **must be `MAINNET`**; several files still default to `TESTNET` |
+| `EXPO_PUBLIC_RPC_API_KEY` | optional; switches Stellar RPC to validationcloud |
+| `EXPO_PUBLIC_MAINNET_{HORIZON_URL,RPC_URL}` | fall back to public SDF endpoints |
+
+### Target `EXPO_PUBLIC_*` set (Q3 — everything web already ships in its public bundle)
+
+`EXPO_PUBLIC_API_BASE_URL`, `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`,
+`EXPO_PUBLIC_TURNKEY_RP_ID=normalfinance.io`, `EXPO_PUBLIC_ETH_RPC_URL`,
+`EXPO_PUBLIC_SOLANA_RPC_URL`, `EXPO_PUBLIC_BASE_RPC_URL`, `EXPO_PUBLIC_CDN_URL`,
+`EXPO_PUBLIC_AUTOPILOT_PUBLIC_KEY` (optional), and the web's `NEXT_PUBLIC_MAINNET_*` Stellar
+constants (Horizon, Soroban RPC, USDC issuer/address, XLM address, DeFindex vault, oracles).
+**Never ship** `TURNKEY_*`, `LIFI_API_KEY`, `SOROSWAP_*`, `DEFINDEX_API_KEY`, `COINGECKO_API_KEY`,
+`DATABASE_*` or any of the 58 server-only vars. Every `EXPO_PUBLIC_*` is extractable from an IPA.
 
 ## 8. Environments
 
-| Env | Backend | rpId | Whose passkeys work |
+| Env | API base | rpId | Whose passkeys work |
 |---|---|---|---|
-| localhost web | `http://localhost:3000` | `localhost` | browser on localhost only — **never the app** |
-| staging | staging Vercel URL | `normalfinance.io` | any account from staging/prod web or the app |
-| production | `https://normalfinance.io` | `normalfinance.io` | same as staging |
+| localhost web | `http://localhost:8082` | `localhost` | browser only — **never the app** |
+| staging (`develop`) | `https://staging.normalfinance.io` | `normalfinance.io` | any account from staging/prod web or the app, if the passkey is synced to the phone |
+| production (`master`) | `https://www.normalfinance.io` | `normalfinance.io` | same |
 
-One Supabase Auth project is shared by localhost/staging/prod (one identity per email).
-Mobile development targets **staging** with a staging account. Passkeys must live in a
-keychain the phone can reach (iCloud Keychain on iOS, Google Password Manager on Android), or
-just create a fresh account from the app.
+One mainnet Supabase project across staging and production. Association files are live at
+`https://normalfinance.io/.well-known/apple-app-site-association` (Team `FA938A596N`, both bundle
+ids) and `assetlinks.json` (Android SHA-256 still the all-zero placeholder until
+`eas credentials -p android` produces a keystore). Validator: `web:scripts/check-passkey-association.mjs --live`.
 
-## 9. Hard rules
+## 9. Local setup (verified working 2026-09-10 on Xcode 26.0.1)
 
-1. **Never `git commit` or `git push`.** Staging and merging are fine; hand Niko the commit
-   message to run himself.
-2. **Never write to `.env` or any secrets file.** Name the variables and the exact lines
-   instead.
-3. **No guessing.** Verify in code before asserting. Label shortcuts and their trade-offs.
-4. **Explain as cause → effect** ("if you do X you will see Y"). Direct answer first. Decode
-   large diffs into categories with counts. Give verifiable test steps.
-5. **Scale-first**: thousands of users. Think rate limits, N+1, blast radius.
-6. **Never use `**` on a BigInt** — it transpiles to `Math.pow` and crashes at runtime.
-7. **Lazy asset creation** (§4) and the **chain registry** (§5) rules are absolute.
-8. **LI.FI Bitcoin PSBTs**: sign exactly what LI.FI builds. Never reorder or add outputs —
-   Chainflip cannot refund a malformed deposit, so the loss is permanent.
-9. Self-completing money state always has a UI surface owned by no modal. Explicit user
-   clicks bypass freshness heuristics. Resume intent goes in route params, not an event.
+- **Node 20.19.4 via nvm** (`package.json` `engines`; EAS production profile). Other majors
+  rewrite `package-lock.json`. `nvm use 20.19.4` before any `npm`.
+- **`export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8`** in the shell — CocoaPods crashes with
+  `Unicode Normalization not appropriate for ASCII-8BIT` without it.
+- `brew install cocoapods watchman`. `npx expo prebuild --platform ios` then `cd ios && pod install`.
+- **Expo Go does not work** (`react-native-randombytes` ships native code, `expo-updates` configured).
+  Start JS with `npx expo start` (**not** `--dev-client`); build and install with Xcode or
+  `npx expo run:ios`.
+- **Keychain needs real signing.** An ad-hoc or unsigned build fails every SecureStore call
+  (`A required entitlement isn't present`) — onboarding completion and wallet storage both die.
+  Sign with a real team (personal Apple ID is enough for UI work).
+- Personal-team device builds: set the bundle id in Xcode's Signing tab (not `app.json`) to
+  something unowned, e.g. `io.normalfinance.normalfi.niko`; expires after 7 days; no passkeys.
+- `expo prebuild` rewrites the `ios`/`android` npm scripts in `package.json` — revert that.
+- Debug console noise that is **not** a bug: `@noble/hashes` "not listed in exports" warnings
+  (from the seed-phrase code), `SafeAreaView` deprecation.
 
-## 10. Open items (2026-09-10)
+## 10. Hard rules
 
-- Publish `/.well-known/apple-app-site-association` and `/.well-known/assetlinks.json` on
-  `normalfinance.io` (needs the Apple Team ID + bundle ids, Android package + cert SHA-256).
-- Decide bundle identifiers for dev/staging vs prod builds.
-- Extract a shared `core` package from `packages/web` (API client, engines, signers) so web
-  and mobile share one implementation.
-- Confirm whether the `normalfinance.io` apex is served by the Next.js app (needed to host the
-  association files) or by a separate marketing site.
-- Decide the fate of the prototype wallet: migration path for any existing seed-phrase users,
-  or confirm there are none and delete `mnemonic.utils.ts` / `crypto.utils.ts` outright.
-- Rip out the old-infra delete list in §7 as one isolated commit, before building anything
-  new on top of it.
-- Move price sourcing off on-chain Reflector + client-side CoinMarketCap onto the backend.
-  `EXPO_PUBLIC_CMC_API_KEY` ships readable inside the app bundle today — every `EXPO_PUBLIC_*`
-  var is extractable from a downloaded IPA/APK, so this is a key-exposure fix as well as an
-  architecture one.
-- Branching: `develop` is the trunk (`origin/HEAD` points at it). `master` holds only the
-  initial commit and is stale — either sync it as the release branch or delete it.
+1. **Never `git commit` or `git push`.** Stage/merge is fine; hand Niko the message.
+2. **Never write to `.env` or any secrets file.** Name the variables and exact lines.
+3. **No guessing.** Verify in code — this repo or `../normal-v1-interface` — before asserting.
+   Label shortcuts and trade-offs.
+4. **Cause → effect** ("if you do X you will see Y"). Direct answer first. Decode big diffs into
+   categories with counts. Give verifiable test steps.
+5. **Scale-first**: thousands of users; rate limits, N+1, blast radius.
+6. **Never `**` on a BigInt** — transpiles to `Math.pow`, crashes at runtime.
+7. **Lazy asset creation** (§5) and **the chain registry** (§3) are absolute.
+8. **LI.FI Bitcoin PSBTs: only ever add signatures.** Never reorder or add outputs — Chainflip
+   cannot refund a malformed deposit; the loss is permanent.
+9. Self-completing money state always has a UI surface owned by no modal; explicit user clicks
+   bypass freshness heuristics; resume intent goes in route params, not events.
+10. **CCTP custody**: `mintRecipient` and `destinationCaller` = the CctpForwarder, the real
+    recipient only in `hookData`; take only what *this* transfer is owed on Base (a whole-balance
+    burn stranded a sibling row on 2026-08-26). Verify the USDC trustline before burning.
+11. **Fee pairs are sequence-chained** (fee = service + 1); retries reuse sequences, so a
+    double charge is impossible — do not "fix" that.
+12. **Memo-less Stellar sends to exchanges silently lose funds**; three layers of memo check.
+13. **BTC MAX = UTXOs minus sweep fee**; BTC broadcast is idempotent by pre-computed txid.
+14. **Never show "Done" against a stale balance** — refetch the destination chain first.
+    "Arrived" means the chain says so, not the provider; abandon after 45 min.
+15. **Check the wallet-link limit before the passkey ceremony**; the ceremony is irreversible.
+16. **Bound every shared in-flight promise** (10s).
+17. Coinbase offramp amounts must be crypto-denominated (Coinbase sometimes returns EUR).
+
+## 11. Open items and decisions for Niko (2026-09-10)
+
+- **Change `app.json` `ios.bundleIdentifier` to `io.normalfinance.app`** (+ an `.app.dev` variant
+  for dev builds) and add `android.package: io.normalfinance.app`. Both must match the live
+  association files. Needs the `FA938A596N` team in Xcode/EAS to sign — i.e. Apple Developer access.
+- **Existing-user sign-in** (Q33): decide whether v1 ships without it (synced-passkey users
+  only) or whether web builds `CREATE_AUTHENTICATORS_V2` first.
+- **Captcha**: confirm whether Supabase captcha protection is on; if so, choose WebView Turnstile
+  or a mobile exemption.
+- **Supabase dashboard**: add `normalapp://auth/callback` to the redirect allowlist; enable Apple
+  as a provider.
+- **Monorepo** (Q49): web recommends moving this repo to `packages/mobile` with a shared
+  `packages/core`. Blocked on the web repo's own Node 20.14 / 22 + yarn 1 / 3 conflict.
+- **Quote rate limit**: per-IP 30/10s on the two public quote routes will collide behind carrier
+  NAT; ask for a per-user variant before the swap screen ships.
+- **Onboarding copy and art** still sell synthetics and indexes (§7).
+- Remove the testnet fallbacks, `api.constants.ts`, the CMC dependency and
+  `@stellar/typescript-wallet-sdk-km` (§7).
+- Decide the fate of `hooks/use-transaction.ts` / `services/transaction.service.ts` (dead
+  `localhost:8095` submit path) — replace with `fees/execute-pair` / `swap/submit-single`.
+- Android: generate the keystore (`eas credentials -p android`) and put its SHA-256 in `assetlinks.json`.
+- Account access still pending: Expo org `normalfi` (possibly orphaned), Apple Developer team
+  `FA938A596N`, Google Play, CoinMarketCap (moot once prices move to the backend).
+- Branching: `develop` is the trunk (`origin/HEAD`); `master` is one stale commit — sync or delete.
