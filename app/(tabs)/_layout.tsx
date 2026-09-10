@@ -8,9 +8,7 @@ import {
 } from "react-native-safe-area-context";
 
 import HomeScreen from "./index";
-import InvestScreen from "./invest";
 import PricesScreen from "./prices";
-import IndexesScreen from "./indexes";
 import SettingsScreen from "./settings";
 import WalletSettingsScreen from "./wallet-settings";
 import {
@@ -22,35 +20,19 @@ import {
 import {
   HomeIcon,
   PricesIcon,
-  InvestIcon,
-  IndexesIcon,
   SettingsIcon,
   type NavbarIconProps
 } from "@/components/icons/navbar";
 import { SkeletonBox } from "@/components/ui/skeleton";
 
-type TabKey =
-  | "home"
-  | "prices"
-  | "invest"
-  | "indexes"
-  | "settings"
-  | "wallet-settings";
+type TabKey = "home" | "prices" | "settings" | "wallet-settings";
 
 const tabRoutes: Record<
   TabKey,
-  `/(${"tabs"})${
-    | ""
-    | "/prices"
-    | "/invest"
-    | "/indexes"
-    | "/settings"
-    | "/wallet-settings"}`
+  `/(${"tabs"})${"" | "/prices" | "/settings" | "/wallet-settings"}`
 > = {
   home: "/(tabs)",
   prices: "/(tabs)/prices",
-  invest: "/(tabs)/invest",
-  indexes: "/(tabs)/indexes",
   settings: "/(tabs)/settings",
   "wallet-settings": "/(tabs)/wallet-settings"
 };
@@ -71,16 +53,6 @@ const TAB_ITEMS: TabItem[] = [
     key: "prices",
     label: "Prices",
     Icon: PricesIcon
-  },
-  {
-    key: "invest",
-    label: "Invest",
-    Icon: InvestIcon
-  },
-  {
-    key: "indexes",
-    label: "Indexes",
-    Icon: IndexesIcon
   },
   {
     key: "settings",
@@ -146,10 +118,6 @@ export default function TabLayout() {
         return <HomeScreen />;
       case "prices":
         return <PricesScreen />;
-      case "invest":
-        return <InvestScreen />;
-      case "indexes":
-        return <IndexesScreen />;
       case "settings":
         return <SettingsScreen />;
       case "wallet-settings":

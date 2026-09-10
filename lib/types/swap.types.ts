@@ -1,6 +1,5 @@
 import { DisplayAsset } from "./balance.types";
 
-import type { PoolContext } from "../utils/pool-router.utils";
 
 export interface DexDistribution {
   parts: string;
@@ -18,7 +17,6 @@ export interface SwapParams {
   tokenOutSymbol: string;
   tokenInAddress: string;
   tokenOutAddress: string;
-  poolContext: PoolContext;
 }
 
 export interface SwapQuoteRequest {

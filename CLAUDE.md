@@ -14,6 +14,12 @@ passkey wallets, backed by the existing Next.js API. Both realities are document
 target wins as direction, but never assume target code exists — verify in the tree first (§9
 rule 3).
 
+**Discontinued products — code touching these is dead, not a foundation** (confirmed by Niko,
+2026-09-10): Normal no longer runs **liquidity pools** and no longer does **synthetic assets**.
+The prototype's `normal_pool_router` AMM and the Indexes/Invest screens are both leftovers from
+that old infrastructure. Do not extend them, do not port them, do not treat their patterns as
+precedent. See §7 for the exact file list.
+
 The reference implementation for nearly everything is the web repo
 **`normalfinance/normal-v1-interface`** (`packages/web`). Port logic from there; do not
 reinvent it.
@@ -165,12 +171,40 @@ Verified at `3bc0217`. Treat this as the starting point to pivot, not as the tar
 | Auth | Supabase | ✅ Supabase — `lib/supabase.ts`, `providers/supabase-auth-provider.tsx`, `services/auth.service.ts`, `app/auth/callback.tsx`. Google + Apple OAuth via `expo-auth-session`. Clerk fully removed. |
 | Wallet | Turnkey sub-org, passkey-only | ❌ **BIP-39 seed phrase** — `lib/utils/mnemonic.utils.ts` + `crypto.utils.ts`, secret stored in SecureStore under `stellar_private_key` / `stellar_mnemonic`. Must be replaced wholesale. |
 | Chains | BTC, ETH, SOL, XLM | ❌ Stellar only. No chain registry. |
-| Swap | Soroswap / LI.FI / CCTP | ❌ Normal's own **pool router** + **Reflector oracle** Soroban contracts (`lib/contracts/`, `services/swap.service.ts`). |
-| Backend | Next.js API, bearer JWT | ❌ `services/api.service.ts` hits `https://api.normalfinance.io` with 4 endpoints and **sends no Authorization header**. Prices come client-side from CoinMarketCap. |
-| Savings | DeFindex/Blend vault | ❌ absent. Tabs exist for `invest` / `indexes` but on the prototype's own model. |
+| Swap | Soroswap (Stellar leg) / LI.FI / CCTP | ☠️ **Dead infra — delete.** The prototype swaps through `normal_pool_router`, a Normal-deployed AMM (`swap` by `pool_index`, plus `deposit`/`withdraw`/`share_id`/`rebase`/reward-gauge admin). Normal no longer runs liquidity pools. The Stellar leg must be rebuilt on Soroswap via the backend's `swap/quote`. |
+| Prices | backend `prices/history`, `wallet/portfolio` | ❌ Two client-side sources: **Reflector oracle** on-chain (`lib/utils/oracle.utils.ts`, `services/oracle.service.ts`) and **CoinMarketCap** direct from the device (`services/coinmarketcap.service.ts`). |
+| Indexes / Invest | not in v1 scope per §2 | ☠️ **Dead infra — delete.** Leftovers from the discontinued synthetic-asset product. `services/indexes.service.ts` is 100% hardcoded mock data; the three screens render nothing real. |
 
 Zero occurrences of `turnkey`, `lifi`, `cctp`, `defindex`, `blend` or `passkey` anywhere in
 the tree.
+
+### Delete list (old infra)
+
+Roughly **6,500 of ~21,900 hand-written lines** are dead product code:
+
+| Delete | Lines |
+|---|---|
+| `lib/contracts/pool_router/` (generated bindings) | 4,285 |
+| `lib/utils/pool-router.utils.ts` | 400 |
+| `services/swap.service.ts` (AMM path) | 328 |
+| `hooks/use-swap.ts` | 205 |
+| `app/(tabs)/indexes.tsx`, `app/(tabs)/invest.tsx`, `app/indexes/create.tsx` | 1,499 |
+| `services/indexes.service.ts` (mock data) | 137 |
+
+`lib/contracts/oracle_registry/` is already empty (bindings removed in `6adcd9a`).
+
+**Do NOT delete these — they look adjacent but are not old infra:**
+
+- `lib/utils/trustline.utils.ts`, `hooks/use-trustline.ts` — Stellar trustlines are a protocol
+  primitive required to hold USDC at all. Still needed.
+- `lib/utils/oracle.utils.ts`, `services/oracle.service.ts` — Reflector is a generic price
+  oracle, not synthetic-asset infra. Not dead, but **re-source**: prices should come from the
+  backend (`prices/history`, `wallet/portfolio`), not from on-chain or from CoinMarketCap on
+  the device.
+
+Import sites to clean up when the above goes: `app/(tabs)/invest.tsx`, `hooks/use-transaction.ts`,
+`hooks/use-token-price.ts`, `lib/types/swap.types.ts`, `lib/utils/storage.utils.ts`,
+`services/index.ts`.
 
 ### Stack as configured
 
@@ -248,5 +282,11 @@ just create a fresh account from the app.
   association files) or by a separate marketing site.
 - Decide the fate of the prototype wallet: migration path for any existing seed-phrase users,
   or confirm there are none and delete `mnemonic.utils.ts` / `crypto.utils.ts` outright.
+- Rip out the old-infra delete list in §7 as one isolated commit, before building anything
+  new on top of it.
+- Move price sourcing off on-chain Reflector + client-side CoinMarketCap onto the backend.
+  `EXPO_PUBLIC_CMC_API_KEY` ships readable inside the app bundle today — every `EXPO_PUBLIC_*`
+  var is extractable from a downloaded IPA/APK, so this is a key-exposure fix as well as an
+  architecture one.
 - Branching: `develop` is the trunk (`origin/HEAD` points at it). `master` holds only the
   initial commit and is stale — either sync it as the release branch or delete it.

@@ -76,17 +76,6 @@ export type {
 export type { AuthCredentials, AuthStatus } from "./auth.service";
 
 export {
-  useSwapQuote,
-  useExecuteSwap,
-  useAvailableTokens,
-  getAvailableTokens,
-  findTokenByAddress,
-  findTokenBySymbol,
-  parseTokenAmount,
-  swapQueryKeys
-} from "./swap.service";
-
-export {
   getFeaturedAssets,
   getCollectionAssets,
   getAssetCategories
@@ -97,10 +86,3 @@ export {
   useHistoricalPrices,
   coinMarketCapQueryKeys
 } from "./coinmarketcap.service";
-
-// Export swap operation types for advanced usage
-export type {
-  EstimateSwapArgs,
-  SwapEstimateResult,
-  PoolContext
-} from "../hooks/use-swap";

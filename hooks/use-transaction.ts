@@ -13,14 +13,12 @@ import {
   SignedTransactionResult,
   SubmitTransactionParams,
   BackendSubmissionResult,
-  GenerateSwapXDRParams,
 } from "@/lib/types/transaction.types";
 import {
   parseTransaction,
   signTransactionWithKeypair,
 } from "@/lib/utils/stellar.utils";
 import { STELLAR_ERRORS } from "@/lib/constants/stellar.constants";
-import { buildSwapTransaction } from "@/lib/utils/pool-router.utils";
 
 const getNetworkConfig = (): NetworkConfig => {
   const network = process.env.EXPO_PUBLIC_NETWORK || "TESTNET";
@@ -248,63 +246,8 @@ export const useTransactionOperations = () => {
     [getSourceAccount]
   );
 
-  const generateSwapTransactionXDR = useCallback(
-    async (params: GenerateSwapXDRParams): Promise<string> => {
-      console.log("🔨 Generating swap transaction XDR...");
-
-      const config = params.networkConfig || getNetworkConfig();
-      const sourceAccount = await getSourceAccount(params.account);
-
-      const { transaction: assembledTransaction } = await buildSwapTransaction(
-        params.poolRouterAddress,
-        {
-          user: params.user,
-          tokenIn: params.tokenInAddress,
-          tokenOut: params.tokenOutAddress,
-          amountIn: params.amountIn,
-          amountOutMin: params.amountOutMin,
-          poolContext: params.poolContext,
-        },
-        sourceAccount,
-        {
-          networkPassphrase: config.networkPassphrase,
-          rpcUrl: config.rpcUrl,
-          horizonUrl: config.horizonUrl,
-        }
-      );
-
-      console.log("🔨 Assembled transaction:", assembledTransaction);
-      console.log(
-        "🔨 Assembled transaction.built:",
-        assembledTransaction.built
-      );
-      console.log(
-        "🔨 Assembled transaction.simulation:",
-        assembledTransaction.simulation
-      );
-
-      // Extract XDR from the built transaction object (matches web implementation)
-      const unsignedXDR = assembledTransaction.built?.toXDR();
-      if (!unsignedXDR) {
-        throw new Error(
-          "Failed to extract built transaction XDR. The transaction may not have been properly simulated."
-        );
-      }
-
-      console.log("📄 Unsigned XDR length:", unsignedXDR.length);
-      console.log(
-        "📄 Unsigned XDR first 100 chars:",
-        unsignedXDR.substring(0, 100)
-      );
-
-      return unsignedXDR;
-    },
-    [getSourceAccount]
-  );
-
   return {
     generateTransactionXDR,
-    generateSwapTransactionXDR,
     signTransaction,
     submitTransactionToBackend,
     getNetworkConfig,

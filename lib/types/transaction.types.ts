@@ -1,6 +1,5 @@
 import { Account } from "@stellar/stellar-sdk";
 
-import type { PoolContext } from "../utils/pool-router.utils";
 
 export interface NetworkConfig {
   networkPassphrase: string;
@@ -39,29 +38,6 @@ export interface TransactionOperationResult<T = any> {
   data?: T;
   error?: string;
   transactionHash?: string;
-}
-
-// Specific operation parameter types (for convenience)
-export interface SwapTransactionParams {
-  poolRouterAddress: string;
-  user: string;
-  tokenInAddress: string;
-  tokenOutAddress: string;
-  amountIn: bigint;
-  amountOutMin: bigint;
-  poolContext?: PoolContext;
-}
-
-export interface GenerateSwapXDRParams {
-  poolRouterAddress: string;
-  user: string;
-  tokenInAddress: string;
-  tokenOutAddress: string;
-  amountIn: bigint;
-  amountOutMin: bigint;
-  poolContext?: PoolContext;
-  account?: Account;
-  networkConfig?: NetworkConfig;
 }
 
 // Generic contract operation parameters
