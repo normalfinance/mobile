@@ -1,23 +1,18 @@
-import * as Font from 'expo-font';
+import * as Font from "expo-font";
 
+// Satoshi (Fontshare, ITF Free Font License) for UI — the same family the web
+// app loads from api.fontshare.com. Web uses weights 400/500/600/700; Satoshi
+// has no static 600, so tamagui.config.ts maps 600 → Bold.
+// Geist Mono (Vercel, SIL OFL — see assets/fonts/geist-mono/LICENSE.txt) for
+// every number, amount and address, matching the drawer's MONO style.
 export const loadFonts = async () => {
   await Font.loadAsync({
-    // Satoshi fonts
-    'Satoshi-Light': require('../assets/fonts/satoshi/Satoshi-Light.otf'),
-    'Satoshi-Regular': require('../assets/fonts/satoshi/Satoshi-Regular.otf'),
-    'Satoshi-Medium': require('../assets/fonts/satoshi/Satoshi-Medium.otf'),
-    'Satoshi-Bold': require('../assets/fonts/satoshi/Satoshi-Bold.otf'),
-    'Satoshi-Black': require('../assets/fonts/satoshi/Satoshi-Black.otf'),
-    
-    // Barlow fonts
-    'Barlow-Thin': require('../assets/fonts/Barlow/Barlow-Thin.ttf'),
-    'Barlow-ExtraLight': require('../assets/fonts/Barlow/Barlow-ExtraLight.ttf'),
-    'Barlow-Light': require('../assets/fonts/Barlow/Barlow-Light.ttf'),
-    'Barlow-Regular': require('../assets/fonts/Barlow/Barlow-Regular.ttf'),
-    'Barlow-Medium': require('../assets/fonts/Barlow/Barlow-Medium.ttf'),
-    'Barlow-SemiBold': require('../assets/fonts/Barlow/Barlow-SemiBold.ttf'),
-    'Barlow-Bold': require('../assets/fonts/Barlow/Barlow-Bold.ttf'),
-    'Barlow-ExtraBold': require('../assets/fonts/Barlow/Barlow-ExtraBold.ttf'),
-    'Barlow-Black': require('../assets/fonts/Barlow/Barlow-Black.ttf'),
+    "Satoshi-Regular": require("../assets/fonts/satoshi/Satoshi-Regular.otf"),
+    "Satoshi-Medium": require("../assets/fonts/satoshi/Satoshi-Medium.otf"),
+    "Satoshi-Bold": require("../assets/fonts/satoshi/Satoshi-Bold.otf"),
+
+    "GeistMono-Regular": require("../assets/fonts/geist-mono/GeistMono-Regular.ttf"),
+    "GeistMono-Medium": require("../assets/fonts/geist-mono/GeistMono-Medium.ttf"),
+    "GeistMono-Bold": require("../assets/fonts/geist-mono/GeistMono-Bold.ttf")
   });
 };

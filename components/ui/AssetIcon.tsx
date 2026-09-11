@@ -1,12 +1,13 @@
 import React from "react";
-import { Image } from "react-native";
+import { Image } from "expo-image";
 import { Circle, Text, View } from "tamagui";
+
 import {
   getAssetIconData,
   AssetIconData,
-  cryptoIcons,
-  isNormalToken
+  cryptoIcons
 } from "@/lib/utils/asset-icon.utils";
+import { getCryptoIconUrl } from "@/lib/utils/cdn.utils";
 
 export interface AssetIconProps {
   symbol: string;
@@ -17,12 +18,10 @@ export interface AssetIconProps {
   textColor?: string;
 }
 
-const getImageSource = (symbol: string) => {
-  return cryptoIcons[symbol] || null;
-};
-
-const normalLogo = require("@/assets/icons/navbar/logo.webp");
-
+// Icon resolution order — identical output to the web app:
+//   1. CDN (cdn.normalapi.com/tokens/…), cached on disk by expo-image
+//   2. bundled local file, if we happen to ship one (XLM, USDC)
+//   3. coloured circle with the ticker's initials
 export const AssetIcon: React.FC<AssetIconProps> = ({
   symbol,
   size = 40,
@@ -32,57 +31,39 @@ export const AssetIcon: React.FC<AssetIconProps> = ({
   textColor = "white"
 }) => {
   const iconData: AssetIconData = getAssetIconData(symbol);
-  const imageSource = getImageSource(symbol);
-  const isNormal = isNormalToken(symbol);
-  const badgeSize = Math.round(size * 0.35);
+  const cdnUri = getCryptoIconUrl(symbol);
+  const localSource = cryptoIcons[symbol] ?? null;
+  const [cdnFailed, setCdnFailed] = React.useState(false);
 
-  const renderNormalBadge = () => {
-    if (!isNormal) return null;
-    
-    return (
-      <Circle
-        size={badgeSize}
-        position="absolute"
-        bottom={-2}
-        right={-2}
-        backgroundColor="white"
-        padding={1}
-        zIndex={10}
-      >
-        <Image
-          source={normalLogo}
-          style={{
-            width: badgeSize - 4,
-            height: badgeSize - 4,
-            borderRadius: (badgeSize - 4) / 2
-          }}
-          resizeMode="cover"
-        />
-      </Circle>
-    );
-  };
+  // A new symbol gets a fresh attempt at the CDN.
+  React.useEffect(() => {
+    setCdnFailed(false);
+  }, [cdnUri]);
 
-  if (imageSource) {
+  const source =
+    cdnUri && !cdnFailed ? { uri: cdnUri } : localSource ?? null;
+
+  if (source) {
     return (
-      <View position="relative">
-        <Circle size={size} overflow='hidden'>
+      <View position='relative'>
+        <Circle size={size} overflow='hidden' backgroundColor='$gray3'>
           <Image
-            source={imageSource}
-            style={{
-              width: size,
-              height: size,
-              borderRadius: size / 2
-            }}
-            resizeMode='cover'
+            source={source}
+            style={{ width: size, height: size, borderRadius: size / 2 }}
+            contentFit='cover'
+            cachePolicy='memory-disk'
+            transition={120}
+            recyclingKey={symbol}
+            onError={() => setCdnFailed(true)}
+            accessibilityLabel={`${symbol} icon`}
           />
         </Circle>
-        {renderNormalBadge()}
       </View>
     );
   }
 
   return (
-    <View position="relative">
+    <View position='relative'>
       <Circle
         size={size}
         backgroundColor={backgroundColor || iconData.fallback.bgColor}
@@ -91,7 +72,6 @@ export const AssetIcon: React.FC<AssetIconProps> = ({
           {iconData.fallback.textIcon}
         </Text>
       </Circle>
-      {renderNormalBadge()}
     </View>
   );
 };

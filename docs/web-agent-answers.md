@@ -561,3 +561,85 @@ derives from non-null fields (`registry.ts:161-164`). Stellar null + Bitcoin set
 passkey-stamped `CREATE_WALLET_ACCOUNTS` with the SEP-0005 spec → `POST /api/turnkey/import { walletId,
 chain:'stellar' }` so the server writes the column) → `linkWallet` → adopt. Drawer gate:
 `availableChains(turnkeyAddresses).length > 0`.
+
+---
+
+## Addendum 2026-09-11 — Design system (D1–D12)
+
+Answered by the web session; spot-checked in the local clone (`connected-wallet.tsx:120-130`,
+`swap-card.tsx:1222-1241`, `activity-row.tsx:286`, `global.css:38`). **Niko's spec is the account
+drawer, not `src/theme/*`** — product surfaces hardcode their own tokens in `sx` and ignore the MUI
+palette. Mirror: `layouts/components/account-drawer.tsx`, `components/_common/drawer-components/
+{connected-wallet,tokens-tab,activity-row,activity-tab}.tsx`, `sections/swap/swap-card.tsx`,
+`components/_common/savings-card.tsx`, `sections/portfolio/portfolio-hero-card.tsx`,
+`components/_common/receive-modal.tsx`. The Minimal-template pieces (`core/components/*`,
+`GROUP_ACCENTS`, `custom-shadows`, `EmptyContent`, soft buttons, Iconify duotone) are scaffolding —
+do not copy.
+
+**Colors (ink system).** ink `#0A0A0F` (text, solid buttons, headings — NOT grey[800]); ink-2
+`#2A2A33`; muted `#6B6B76`; faint `#9A9AA5`; surface `#fff`; icon/chip bg `#F4F4F7`; input/QR bg
+`#FAFAFB`; divider `rgba(10,10,15,0.06)`; border `rgba(10,10,15,0.08)`; press tint
+`rgba(10,10,15,0.03)`; icon-button press `rgba(10,10,15,0.04)`; positive amount `#1AB37D` (the only
+green; negatives stay ink, no red); failed text `#7A1D4A`. Chips: green `#0A6649` on
+`rgba(26,179,125,0.11)`; amber `#8A4A00` on `rgba(255,176,96,0.16)`; blue `#0A5272` on
+`rgba(91,207,255,0.14)`; purple `#5A2E9E` on `rgba(177,123,255,0.13)`; neutral `#2A2A33` on
+`rgba(10,10,15,0.07)`. Brand gradient (logo/avatar only): `90deg #5BCFFF 0%, #6E8BFF 28%, #B17BFF
+55%, #FF7BC5 78%, #FFB060 100%`. Chain colours from `lib/chains/registry.ts`: BTC `#F7931A`, ETH
+`#627EEA`, SOL `#9945FF`, XLM `#14B8A6`. MUI grey ramp (legacy screens only): 50 #FCFDFD, 100
+#F8FAFC, 200 #F4F6F8, 250 #f1f3f4, 300 #DFE3E8, 400 #C4CDD5, 500 #919EAB, 600 #637381, 700 #454F5B,
+800 #1C252E, 900 #141A21, 950 #2B2B2B; purple light #947BFF main #6E4BFF dark #4B29DB.
+
+**Type.** Satoshi (Fontshare CDN, 300/400/500/700/900; `font-feature-settings "ss01","ss03"` on
+`html`) for UI; **Geist Mono** (`@fontsource/geist-mono` 400/500/700, `ss01 ss02 zero`,
+tabular-nums, letterSpacing -0.01em) for every number, amount and address. Weights used: 400, 500,
+600, 700 (600 via the variable font; Satoshi has no static 600 — mobile maps 600→Bold). Scale: name
+15/600; email 13 muted; "Total balance" 14/500 ink-2; total 22/400 mono; row label 13.5 muted; row
+value 15/400 mono; asset name 14/600; asset sub 12 muted; asset usd 14/400 mono; asset qty 11.5 mono
+muted; action label 12/500; tabs 13.5/500 (selected ink, 2px ink indicator); filter pill 12/600;
+chip 11/600 h20; footnote 11 faint mono; empty title 16/500; body 14 at 50% ink. Drop Barlow and
+Satoshi Light/Black (unused on product surfaces).
+
+**Radii.** 16 balance card; 12 action tiles, list rows, product CTA; 8 icon boxes + icon buttons;
+22 dialogs; 999 pills; 6 chips; 10 small secondary buttons. **No shadows** on product surfaces.
+
+**Spacing.** Balance card padding `4 4 12`; rows px14 py12; dividers 1px inset mx14; action grid gap
+6, mt 12, mx 8, tile padding `12 6`, icon box 28×28 r8 bg #F4F4F7; asset row padding `12 8`, gap 12,
+icon 36 circle; activity icon 32 circle on rgba(10,10,15,0.06); avatar 44; section gap 20; inner
+card gap 16; empty-state card p24. Mobile: 16 gutters, 20 between cards, 12 inside rows, touch
+targets ≥44, one press state = the 0.03 tint.
+
+**Buttons.** Product CTA: fullWidth, r12, bg ink, 15/700, py13, letterSpacing -0.01em, pressed
+`#1a1a25`, disabled bg `rgba(10,10,15,0.08)` text `rgba(10,10,15,0.3)`. Small secondary dark: r10,
+px12 py6, 12/600. Pills: r999, 13/500, ink on white. Icon buttons: 20px outline glyph, r8, muted.
+
+**Surfaces.** Card: white, 1px border rgba(10,10,15,0.08), r16, no shadow. List rows: r12, press
+tint, no dividers between rows. Inputs: custom boxes, mono, bg #FAFAFB r12–14. Dialogs r22. Receive
+modal: QR panel r16 bg #FAFAFB; address box r12 bg #FAFAFB 12px mono; copy/share r10 white 13px.
+Empty state: white card p24, 28px outline icon in a #F4F4F7 box, 16/500 title, 14 body at 50% ink,
+ink pill CTA. Skeletons: explicit-size text/circular.
+
+**Numbers** (`src/utils/format-number.ts`, port with a locale arg): `fCurrencyTwoDecimals` for
+totals; `fCurrency` for row USD; `fTokenAmount` 0–7 fraction digits; `fCurrencyCompact`; `fPercent`.
+Display decimals policy (mobile picks, web has none): BTC 8, ETH 6, SOL 4, XLM 2–4, USDC 2, trailing
+zeros trimmed.
+
+**Icons.** Product surfaces: `@mui/icons-material` *Outlined 16–20px; intent = thin outline,
+stroke 1.6–2, round caps. lucide-react-native matches; use wallet, piggy-bank, arrow-left-right,
+arrow-up, arrow-down, plus, minus, settings, clock, copy, external-link, chevron-down/right, x, info,
+triangle-alert, check.
+
+**CDN.** No manifest; Cloudflare-fronted; **no Cache-Control** returned → cache by URL client-side.
+App uses `tokens/*`, `logo/logo-single.svg|png`, `logo/logo-full.svg`, `icons/moneygram/mgi.webp`.
+No chain badges, no wallet-provider icons. Never use `about-page/`, `testimonials/`, `homepage/`,
+`mockups/`, `blog/`. Logo mark = gradient rounded arch; no dark variants; app-icon master SVG is not
+in the repo — ask Niko or derive from `logo-single.svg`.
+
+**Dark mode.** Theme supports it; every product surface hardcodes light. Mobile v1: light only.
+
+**Source of truth.** No Figma, no tokens export; lineage is an HTML/JSX prototype → hand-ported to
+MUI `sx`. The web product screens are the spec, the drawer above all. Design decisions are Niko's.
+
+**Mobile differences (web's recommendation, Niko decides).** No accent picker; no drawer — its
+content becomes the Home screen; bottom tabs fine (suggested Home / Savings / Swap / Activity /
+Settings); fixed action row (not a wrapping 5-tile grid). Do not copy: the swap card's density and
+inline asset picker, the template EmptyContent / soft buttons / duotone icons.

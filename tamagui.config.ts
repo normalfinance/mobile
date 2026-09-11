@@ -1,6 +1,8 @@
 import { createTamagui, createFont, CreateTamaguiProps } from "tamagui";
 import { config as defaultConfig } from "@tamagui/config";
 
+import { ink } from "./lib/theme/tokens";
+
 const {
   themes: baseThemes,
   tokens: baseTokens,
@@ -16,226 +18,186 @@ const baseColorTokens =
   (baseTokens as BaseTokens & { color?: BaseColorTokens }).color ??
   ({} as BaseColorTokens);
 
+// ---------------------------------------------------------------------------
+// Fonts. Web: Satoshi for UI (Fontshare, weights 400/500/600/700 in practice)
+// and Geist Mono for every number, amount and address. Satoshi ships no static
+// 600 cut (web gets it from the variable font), so 600 maps to Bold here.
+// ---------------------------------------------------------------------------
+
+const sizes = {
+  1: 11,
+  2: 12,
+  3: 13,
+  4: 14,
+  5: 15,
+  6: 16,
+  7: 18,
+  8: 22,
+  9: 28,
+  10: 32,
+  11: 40
+} as const;
+
+const lineHeights = {
+  1: 14,
+  2: 16,
+  3: 18,
+  4: 20,
+  5: 20,
+  6: 22,
+  7: 24,
+  8: 28,
+  9: 34,
+  10: 38,
+  11: 46
+} as const;
+
 const satoshiFont = createFont({
   family: "Satoshi-Regular",
   face: {
-    300: { normal: "Satoshi-Light" },
+    300: { normal: "Satoshi-Regular" },
     400: { normal: "Satoshi-Regular" },
     500: { normal: "Satoshi-Medium" },
+    600: { normal: "Satoshi-Bold" },
     700: { normal: "Satoshi-Bold" },
-    900: { normal: "Satoshi-Black" }
+    800: { normal: "Satoshi-Bold" },
+    900: { normal: "Satoshi-Bold" }
   },
-  size: {
-    1: 14,
-    2: 16,
-    3: 18,
-    4: 20,
-    5: 24,
-    6: 28,
-    7: 32,
-    8: 38,
-    9: 44,
-    10: 52
-  },
-  lineHeight: {
-    1: 20,
-    2: 22,
-    3: 24,
-    4: 28,
-    5: 32,
-    6: 36,
-    7: 40,
-    8: 46,
-    9: 52,
-    10: 58
-  },
+  size: sizes,
+  lineHeight: lineHeights,
   weight: {
-    1: "300",
-    2: "300",
+    1: "400",
+    2: "400",
     3: "400",
     4: "400",
-    5: "500",
+    5: "400",
     6: "500",
-    7: "700",
-    8: "700",
-    9: "900",
-    10: "900"
+    7: "500",
+    8: "600",
+    9: "700",
+    10: "700",
+    11: "700"
   },
   letterSpacing: {
     1: 0,
-    2: -0.1,
-    3: -0.15,
-    4: -0.2,
-    5: -0.25,
-    6: -0.3,
-    7: -0.35,
-    8: -0.4,
-    9: -0.45,
-    10: -0.5
+    2: 0,
+    3: 0,
+    4: 0,
+    5: -0.15,
+    6: -0.16,
+    7: -0.18,
+    8: -0.22,
+    9: -0.28,
+    10: -0.32,
+    11: -0.4
   }
 });
 
-const satoshiBodyFont = createFont({
-  family: "Satoshi-Regular",
+// -0.01em tracking, tabular figures: the drawer's MONO style.
+const geistMonoFont = createFont({
+  family: "GeistMono-Regular",
   face: {
-    300: { normal: "Satoshi-Light" },
-    400: { normal: "Satoshi-Regular" },
-    500: { normal: "Satoshi-Medium" },
-    700: { normal: "Satoshi-Bold" },
-    900: { normal: "Satoshi-Black" }
+    300: { normal: "GeistMono-Regular" },
+    400: { normal: "GeistMono-Regular" },
+    500: { normal: "GeistMono-Medium" },
+    600: { normal: "GeistMono-Bold" },
+    700: { normal: "GeistMono-Bold" },
+    800: { normal: "GeistMono-Bold" },
+    900: { normal: "GeistMono-Bold" }
   },
-  size: {
-    1: 12,
-    2: 14,
-    3: 16,
-    4: 18,
-    5: 20,
-    6: 24,
-    7: 28,
-    8: 32,
-    9: 36,
-    10: 40
-  },
-  lineHeight: {
-    1: 18,
-    2: 20,
-    3: 24,
-    4: 28,
-    5: 30,
-    6: 34,
-    7: 38,
-    8: 42,
-    9: 46,
-    10: 50
-  },
+  size: sizes,
+  lineHeight: lineHeights,
   weight: {
-    1: "300",
-    2: "300",
+    1: "400",
+    2: "400",
     3: "400",
     4: "400",
-    5: "500",
-    6: "500",
-    7: "700",
-    8: "700",
-    9: "900",
-    10: "900"
+    5: "400",
+    6: "400",
+    7: "400",
+    8: "400",
+    9: "500",
+    10: "500",
+    11: "500"
   },
   letterSpacing: {
-    1: 0.1,
-    2: 0.12,
-    3: 0.15,
-    4: 0.18,
-    5: 0.2,
-    6: 0.22,
-    7: 0.24,
-    8: 0.26,
-    9: 0.28,
-    10: 0.3
+    1: -0.11,
+    2: -0.12,
+    3: -0.13,
+    4: -0.14,
+    5: -0.15,
+    6: -0.16,
+    7: -0.18,
+    8: -0.22,
+    9: -0.28,
+    10: -0.32,
+    11: -0.4
   }
 });
 
-const barlowFont = createFont({
-  family: "Barlow-Regular",
-  face: {
-    100: { normal: "Barlow-Thin" },
-    200: { normal: "Barlow-ExtraLight" },
-    300: { normal: "Barlow-Light" },
-    400: { normal: "Barlow-Regular" },
-    500: { normal: "Barlow-Medium" },
-    600: { normal: "Barlow-SemiBold" },
-    700: { normal: "Barlow-Bold" },
-    800: { normal: "Barlow-ExtraBold" },
-    900: { normal: "Barlow-Black" }
-  },
-  size: {
-    1: 12,
-    2: 14,
-    3: 16,
-    4: 18,
-    5: 20,
-    6: 24,
-    7: 28,
-    8: 32,
-    9: 36,
-    10: 40
-  },
-  lineHeight: {
-    1: 18,
-    2: 20,
-    3: 24,
-    4: 28,
-    5: 30,
-    6: 34,
-    7: 38,
-    8: 42,
-    9: 46,
-    10: 50
-  },
-  weight: {
-    1: "100",
-    2: "200",
-    3: "300",
-    4: "400",
-    5: "500",
-    6: "600",
-    7: "700",
-    8: "800",
-    9: "900",
-    10: "900"
-  },
-  letterSpacing: {
-    1: 0.05,
-    2: 0.1,
-    3: 0.15,
-    4: 0.2,
-    5: 0.25,
-    6: 0.3,
-    7: 0.35,
-    8: 0.4,
-    9: 0.45,
-    10: 0.5
-  }
-});
+// ---------------------------------------------------------------------------
+// Tokens. New names are the ink system; the old names the prototype screens
+// still reference ($textSecondary, $purple500, …) are kept but re-pointed at
+// the closest value from the drawer so legacy screens drift toward the spec.
+// ---------------------------------------------------------------------------
 
 const tokens = {
   ...baseTokens,
   color: {
     ...baseColorTokens,
-    brandPrimary: "#0A7EA4",
-    brandPrimaryHover: "#086080",
-    brandSecondary: "#151718",
-    brandSurface: "#E6F4FE",
-    success: "#12B76A",
-    warning: "#F79009",
-    danger: "#F04438",
-    buttonColor: "#FF6E86",
-    // Purple color palette for swap interface
-    purple500: "#8B5CF6",
-    purple600: "#7C3AED",
-    purple700: "#6D28D9",
-    purple50: "#F3F4F6",
-    purple100: "#E5E7EB",
-    // Light grays for cards and backgrounds
-    cardBackground: "#FFFFFF",
-    pageBackground: "#F8FAFC",
-    sectionBackground: "#F3F4F6",
-    inputBackground: "#FFFFFF",
-    textPrimary: "#111827",
-    textSecondary: "#6B7280",
-    textTertiary: "#9CA3AF"
+    // ink system (docs/web-agent-answers.md D-colors)
+    ink: ink.ink,
+    ink2: ink.ink2,
+    muted: ink.muted,
+    faint: ink.faint,
+    surface: ink.surface,
+    iconBg: ink.iconBg,
+    inputBg: ink.inputBg,
+    divider: ink.divider,
+    border: ink.border,
+    pressTint: ink.pressTint,
+    positive: ink.positive,
+    failed: ink.failed,
+
+    // legacy names, re-pointed
+    brandPrimary: ink.ink,
+    brandPrimaryHover: ink.ctaPressed,
+    brandSecondary: ink.ink2,
+    brandSurface: ink.iconBg,
+    success: ink.positive,
+    warning: "#8A4A00",
+    danger: ink.failed,
+    buttonColor: ink.ink,
+    purple500: "#6E4BFF",
+    purple600: "#4B29DB",
+    purple700: "#30189C",
+    purple50: ink.iconBg,
+    purple100: "rgba(148,123,255,0.29)",
+    cardBackground: ink.surface,
+    pageBackground: ink.surface,
+    sectionBackground: ink.iconBg,
+    inputBackground: ink.inputBg,
+    textPrimary: ink.ink,
+    textSecondary: ink.muted,
+    textTertiary: ink.faint
   },
   space: {
     ...baseTokens.space,
-    section: 24,
-    page: 32,
-    cardPadding: 20,
+    gutter: 16,
+    section: 20,
+    page: 16,
+    cardPadding: 16,
     sectionPadding: 16
   },
   radius: {
     ...baseTokens.radius,
-    card: 20,
+    card: 16,
+    row: 12,
     button: 12,
-    input: 8
+    iconBox: 8,
+    dialog: 22,
+    input: 12,
+    pill: 999
   }
 } as BaseTokens;
 
@@ -243,63 +205,45 @@ const themes = {
   ...baseThemes,
   light: {
     ...baseThemes.light,
-    background: "#F8FAFC",
-    backgroundHover: "#F8FAFC",
-    backgroundPress: "#EEF2FF",
-    backgroundFocus: "#E6F4FE",
-    color: "#111827",
-    colorHover: "#0A7EA4",
-    colorPress: "#086080",
-    colorFocus: "#0A7EA4",
-    borderColor: "#919eab1f",
-    shadowColor: "#0A7EA433",
-    accentColor: "#8B5CF6",
-    buttonColor: "#8B5CF6",
-    cardBackground: "#FFFFFF",
-    pageBackground: "#F8FAFC",
-    sectionBackground: "#F3F4F6",
-    textPrimary: "#111827",
-    textSecondary: "#6B7280",
-    textTertiary: "#9CA3AF"
+    background: ink.surface,
+    backgroundHover: ink.surface,
+    backgroundPress: ink.pressTint,
+    backgroundFocus: ink.surface,
+    color: ink.ink,
+    colorHover: ink.ink,
+    colorPress: ink.ink2,
+    colorFocus: ink.ink,
+    borderColor: ink.border,
+    shadowColor: "transparent",
+    accentColor: ink.ink,
+    buttonColor: ink.ink,
+    cardBackground: ink.surface,
+    pageBackground: ink.surface,
+    sectionBackground: ink.iconBg,
+    textPrimary: ink.ink,
+    textSecondary: ink.muted,
+    textTertiary: ink.faint
   },
+  // Product surfaces are light-only on web too (D9). Kept so nothing that
+  // references the dark theme breaks; it is never selected.
   dark: {
     ...baseThemes.dark,
     background: "#0F172A",
-    backgroundHover: "#111C34",
-    backgroundPress: "#0A1624",
-    backgroundFocus: "#142038",
     color: "#ECEDEE",
-    colorHover: "#38BDF8",
-    colorPress: "#0EA5E9",
-    colorFocus: "#38BDF8",
     borderColor: "#1E293B",
-    shadowColor: "#0A7EA480",
     accentColor: "#38BDF8",
-    buttonColor: "#FF6E86"
-  },
-  brand: {
-    ...baseThemes.light,
-    background: "#E6F4FE",
-    backgroundHover: "#D5EBFC",
-    backgroundPress: "#C4E2FB",
-    backgroundFocus: "#B3D9F9",
-    color: "#0A7EA4",
-    colorHover: "#086080",
-    colorPress: "#064B62",
-    colorFocus: "#086080",
-    borderColor: "#BFDDF4",
-    shadowColor: "#0A7EA433",
-    accentColor: "#0A7EA4"
+    buttonColor: "#ECEDEE"
   }
 };
 
 const fonts = {
   ...baseFonts,
   heading: satoshiFont,
-  body: satoshiBodyFont,
+  body: satoshiFont,
   text: satoshiFont,
-  numeric: barlowFont,
-  mono: barlowFont
+  // every number / amount / address
+  mono: geistMonoFont,
+  numeric: geistMonoFont
 };
 
 export const config = createTamagui({

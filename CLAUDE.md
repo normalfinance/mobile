@@ -269,6 +269,26 @@ re-source, don't delete); `components/swap/*` (presentational, reusable for Soro
 `@stellar/typescript-wallet-sdk-km` from `package.json` (unused; its Trezor peer deps are what
 rewrite the lockfile on every `npm install`).
 
+### Design system (2026-09-11)
+
+**The spec is the web ACCOUNT DRAWER, not the MUI theme** — see `docs/web-agent-answers.md`
+"Design system (D1–D12)". Encoded once in `lib/theme/tokens.ts` (ink `#0A0A0F`, muted `#6B6B76`,
+border `rgba(10,10,15,0.08)`, press tint `rgba(10,10,15,0.03)`, positive `#1AB37D`, chips, radii
+16/12/8/22, spacing) and `tamagui.config.ts` (fonts, tokens, light theme). Rules: text and solid
+buttons are ink; every number/amount/address is **Geist Mono** (`fontFamily='$mono'` or `$numeric`)
+with -0.01em tracking; UI text is **Satoshi** 400/500/600(→Bold)/700; white cards with a 1px
+border and **no shadow**; one press state everywhere (the tint); positives green, negatives ink;
+light only. Fonts on disk: `assets/fonts/satoshi/{Regular,Medium,Bold}.otf`,
+`assets/fonts/geist-mono/{Regular,Medium,Bold}.ttf` (OFL). Barlow and Satoshi Light/Black removed.
+Building blocks: `components/home/primitives.tsx` (Card, Divider, Pressable, Mono, UiText, IconBox,
+Chip, PrimaryButton, PillButton, EmptyState, Skeleton), `BalanceCard`, `AssetRow`, `ActivityRow`,
+`HomeTabs`, `ReceiveSheet`. Number formatting: `lib/utils/number-format.utils.ts` (port of web
+`format-number.ts`; display decimals BTC 8 / ETH 6 / SOL 4 / XLM 4 / USDC 2). Icons: lucide, 16–20px,
+stroke 1.8–2. Token icons and logo from the CDN via `lib/utils/cdn.utils.ts`.
+`app/(tabs)/index.tsx` is the drawer's content (header · balance card · Tokens/Activity). Legacy
+screens (`prices.tsx`, `asset/[symbol].tsx`, `settings.tsx`, onboarding, sign-in) still use the old
+look and must be restyled against the same primitives.
+
 ### Stack as configured
 
 Expo SDK 54, React Native 0.81.4, React 19.1.0, New Architecture on, React Compiler experiment

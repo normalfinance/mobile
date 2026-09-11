@@ -57,8 +57,9 @@ const TAB_ITEMS: TabItem[] = [
   }
 ];
 
-const ACTIVE_TAB_COLOR = "#1C252E";
-const INACTIVE_TAB_COLOR = "#9DB2CE";
+// Drawer ink system (lib/theme/tokens.ts): selected = ink, rest = muted.
+const ACTIVE_TAB_COLOR = "#0A0A0F";
+const INACTIVE_TAB_COLOR = "#6B6B76";
 
 export default function TabLayout() {
   const { session, isLoading: isAuthLoading } = useSupabaseAuth();
@@ -178,9 +179,9 @@ export default function TabLayout() {
               right={0}
             >
               <Tabs.List
-                backgroundColor='$background'
+                backgroundColor='#FFFFFF'
                 borderTopWidth={1}
-                borderTopColor='$borderColor'
+                borderTopColor='rgba(10,10,15,0.08)'
                 width='100%'
                 paddingVertical='$2'
                 paddingBottom={insets.bottom + 8}
