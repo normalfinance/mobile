@@ -23,7 +23,7 @@ import {
 } from "@/components/home/primitives";
 import { ReceiveSheet } from "@/components/home/ReceiveSheet";
 import { useBackendPortfolio } from "@/hooks/use-backend-portfolio";
-import { useTurnkeyWallet } from "@/hooks/use-turnkey-wallet";
+import { useTurnkeyWallet, walletAddresses } from "@/hooks/use-turnkey-wallet";
 import { useColors } from "@/lib/theme/appearance";
 import { space } from "@/lib/theme/tokens";
 import { BRAND_ASSETS } from "@/lib/utils/cdn.utils";
@@ -33,7 +33,8 @@ export default function HomeScreen() {
   const router = useRouter();
   const c = useColors();
   const { user } = useSupabaseAuth();
-  const { stellarAddress } = useTurnkeyWallet();
+  const { wallet } = useTurnkeyWallet();
+  const addresses = React.useMemo(() => walletAddresses(wallet), [wallet]);
   const { portfolioData, transactions, isLoading, hasError, errorMessage, refetch } =
     useBackendPortfolio();
 
@@ -64,7 +65,8 @@ export default function HomeScreen() {
     [router]
   );
 
-  const heldAssets = portfolioData.assets.filter((a) => Number(a.balance) > 0);
+  // Like the web drawer: every asset the user has an address for, zero balances included.
+  const heldAssets = portfolioData.assets.filter((a) => !!a.address);
   const email = user?.email ?? "";
   const displayName = email ? email.split("@")[0] : "Your wallet";
 
@@ -187,7 +189,7 @@ export default function HomeScreen() {
 
       <ReceiveSheet
         open={receiveOpen}
-        address={stellarAddress}
+        addresses={addresses}
         onClose={() => setReceiveOpen(false)}
       />
     </Screen>

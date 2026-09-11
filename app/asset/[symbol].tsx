@@ -28,7 +28,7 @@ import {
   useBackendPortfolio,
   usePriceHistory
 } from "@/hooks/use-backend-portfolio";
-import { useTurnkeyWallet } from "@/hooks/use-turnkey-wallet";
+import { useTurnkeyWallet, walletAddresses } from "@/hooks/use-turnkey-wallet";
 import { useColors } from "@/lib/theme/appearance";
 import { radius, space, tracking } from "@/lib/theme/tokens";
 import {
@@ -62,7 +62,8 @@ export default function AssetDetailScreen() {
   const symbol = (raw ?? "").toUpperCase();
 
   const { portfolioData, transactions, isLoading } = useBackendPortfolio();
-  const { stellarAddress } = useTurnkeyWallet();
+  const { wallet } = useTurnkeyWallet();
+  const addresses = React.useMemo(() => walletAddresses(wallet), [wallet]);
   const [period, setPeriod] = React.useState<PortfolioPeriod>("7D");
   const [receiveOpen, setReceiveOpen] = React.useState(false);
 
@@ -258,7 +259,12 @@ export default function AssetDetailScreen() {
         </YStack>
       </ScrollView>
 
-      <ReceiveSheet open={receiveOpen} address={stellarAddress} onClose={() => setReceiveOpen(false)} />
+      <ReceiveSheet
+        open={receiveOpen}
+        addresses={addresses}
+        initialChain={asset?.chain}
+        onClose={() => setReceiveOpen(false)}
+      />
     </Screen>
   );
 }

@@ -17,7 +17,7 @@ import {
   SecondaryButton,
   UiText
 } from "@/components/home/primitives";
-import { useTurnkeyWallet } from "@/hooks/use-turnkey-wallet";
+import { CHAIN_META, useTurnkeyWallet, type WalletChain } from "@/hooks/use-turnkey-wallet";
 import { supabase } from "@/lib/supabase";
 import { useAppearance, useColors, type AppearanceMode } from "@/lib/theme/appearance";
 import { space } from "@/lib/theme/tokens";
@@ -34,14 +34,13 @@ export default function SettingsScreen() {
   const c = useColors();
   const { mode, setMode } = useAppearance();
   const { user } = useSupabaseAuth();
-  const { stellarAddress } = useTurnkeyWallet();
-  const [copied, setCopied] = React.useState(false);
+  const { addresses } = useTurnkeyWallet();
+  const [copiedChain, setCopiedChain] = React.useState<WalletChain | null>(null);
 
-  const copyAddress = async () => {
-    if (!stellarAddress) return;
-    await Clipboard.setStringAsync(stellarAddress);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const copyAddress = async (chain: WalletChain, address: string) => {
+    await Clipboard.setStringAsync(address);
+    setCopiedChain(chain);
+    setTimeout(() => setCopiedChain((cur) => (cur === chain ? null : cur)), 2000);
   };
 
   const signOut = () => {
@@ -76,27 +75,54 @@ export default function SettingsScreen() {
                 label='Email'
                 sub={user?.email ?? "—"}
               />
-              <Divider />
-              <ListRow
-                icon={<Wallet size={16} color={c.ink} strokeWidth={1.8} />}
-                label='Stellar address'
-                sub={stellarAddress ? undefined : "No Stellar address yet"}
-                right={
-                  stellarAddress ? (
-                    <XStack alignItems='center' gap={8}>
-                      <Mono fontSize={12} color={c.muted}>
-                        {shortenAddress(stellarAddress, 6, 6)}
-                      </Mono>
-                      {copied ? (
-                        <Check size={16} color={c.positive} strokeWidth={2} />
-                      ) : (
-                        <Copy size={16} color={c.muted} strokeWidth={2} />
-                      )}
-                    </XStack>
-                  ) : undefined
-                }
-                onPress={stellarAddress ? copyAddress : undefined}
-              />
+            </Card>
+          </YStack>
+
+          {/* One row per chain the wallet has an address for (lazy creation: a
+              chain appears here the first time it is used). Tap to copy. */}
+          <YStack gap={10}>
+            <UiText fontSize={13} color={c.muted}>
+              Wallet addresses
+            </UiText>
+            <Card>
+              {addresses.length === 0 ? (
+                <ListRow
+                  icon={<Wallet size={16} color={c.ink} strokeWidth={1.8} />}
+                  label='No addresses yet'
+                  sub='Addresses are created the first time you use an asset.'
+                />
+              ) : (
+                addresses.map(({ chain, address }, i) => (
+                  <React.Fragment key={chain}>
+                    {i > 0 ? <Divider /> : null}
+                    <ListRow
+                      icon={
+                        <YStack
+                          width={10}
+                          height={10}
+                          borderRadius={5}
+                          backgroundColor={CHAIN_META[chain].color}
+                        />
+                      }
+                      label={CHAIN_META[chain].name}
+                      sub={CHAIN_META[chain].assets}
+                      right={
+                        <XStack alignItems='center' gap={8}>
+                          <Mono fontSize={12} color={c.muted}>
+                            {shortenAddress(address, 6, 6)}
+                          </Mono>
+                          {copiedChain === chain ? (
+                            <Check size={16} color={c.positive} strokeWidth={2} />
+                          ) : (
+                            <Copy size={16} color={c.muted} strokeWidth={2} />
+                          )}
+                        </XStack>
+                      }
+                      onPress={() => void copyAddress(chain, address)}
+                    />
+                  </React.Fragment>
+                ))
+              )}
             </Card>
           </YStack>
 

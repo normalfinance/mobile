@@ -27,6 +27,56 @@ interface TurnkeyWalletResponse {
   wallet: TurnkeyWallet | null;
 }
 
+export type WalletChain = "stellar" | "bitcoin" | "ethereum" | "solana";
+
+/** Per-chain display facts. Colours from web lib/chains/registry.ts brandColor. */
+export const CHAIN_META: Record<
+  WalletChain,
+  { name: string; assets: string; color: string; warning: string }
+> = {
+  stellar: {
+    name: "Stellar",
+    assets: "XLM · USDC",
+    color: "#14B8A6",
+    warning: "Send only XLM or USDC on the Stellar network to this address."
+  },
+  bitcoin: {
+    name: "Bitcoin",
+    assets: "BTC",
+    color: "#F7931A",
+    warning: "Send only BTC on the Bitcoin network to this address."
+  },
+  ethereum: {
+    name: "Ethereum",
+    assets: "ETH",
+    color: "#627EEA",
+    warning: "Send only ETH on Ethereum mainnet to this address."
+  },
+  solana: {
+    name: "Solana",
+    assets: "SOL",
+    color: "#9945FF",
+    warning: "Send only SOL on the Solana network to this address."
+  }
+};
+
+export interface WalletAddress {
+  chain: WalletChain;
+  address: string;
+}
+
+/** The chains this wallet has an address for, in display order. */
+export const walletAddresses = (wallet: TurnkeyWallet | null | undefined): WalletAddress[] => {
+  if (!wallet) return [];
+  const pairs: [WalletChain, string | null][] = [
+    ["stellar", wallet.stellarAddress],
+    ["bitcoin", wallet.bitcoinAddress],
+    ["ethereum", wallet.ethereumAddress],
+    ["solana", wallet.solanaAddress]
+  ];
+  return pairs.flatMap(([chain, address]) => (address ? [{ chain, address }] : []));
+};
+
 /**
  * - `none`        → no sub-org yet; the user must create a wallet (passkey ceremony)
  * - `no-stellar`  → sub-org exists but Stellar has not been set up (add-account branch)
@@ -70,6 +120,7 @@ export const useTurnkeyWallet = (enabled: boolean = true) => {
     wallet,
     status,
     stellarAddress: wallet?.stellarAddress ?? null,
+    addresses: walletAddresses(wallet),
     isLoading: isAuthLoading || (query.isLoading && !!user),
     error: query.error as Error | null,
     refetch: query.refetch

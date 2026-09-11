@@ -8,6 +8,9 @@ export interface AssetWithPrice extends DisplayAsset {
   usdValue: number;
   usdPrice: number;
   priceChange24h?: number;
+  /** From the backend: which chain the asset lives on and the user's address there (null = chain not set up). */
+  chain?: "bitcoin" | "ethereum" | "solana" | "stellar";
+  address?: string | null;
 }
 
 export interface PortfolioData {

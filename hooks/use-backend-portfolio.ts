@@ -69,7 +69,9 @@ const toAssetWithPrice = (asset: PortfolioAsset): AssetWithPrice => ({
   display_name: ASSET_NAMES[asset.symbol] ?? asset.symbol,
   usdValue: toNumber(asset.usdValue),
   usdPrice: toNumber(asset.price),
-  priceChange24h: asset.change24h ?? undefined
+  priceChange24h: asset.change24h ?? undefined,
+  chain: asset.chain,
+  address: asset.address
 });
 
 const toPortfolioData = (payload: PortfolioPayload | undefined): PortfolioData => {
