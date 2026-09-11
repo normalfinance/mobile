@@ -1,136 +1,142 @@
+// Settings — account, appearance (light / dark / system), about, sign out.
+
 import React from "react";
-import { useRouter } from "expo-router";
-import { Pressable } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Alert, ScrollView } from "react-native";
+import Constants from "expo-constants";
+import * as Clipboard from "expo-clipboard";
+import { XStack, YStack } from "tamagui";
+import { Check, Copy, LogOut, Mail, Moon, Smartphone, Sun, Wallet } from "lucide-react-native";
+
 import {
-  ArrowLeft,
-  ChevronRight,
-  Globe,
-  Lock,
-  Wallet,
-  Bell,
-  Smile,
-  CircleDollarSign
-} from "lucide-react-native";
-import { Text, View, XStack, YStack } from "tamagui";
-import { SignOutButton } from "@/components/sign-out";
+  Card,
+  Divider,
+  ListRow,
+  Mono,
+  Screen,
+  ScreenTitle,
+  SecondaryButton,
+  UiText
+} from "@/components/home/primitives";
+import { useTurnkeyWallet } from "@/hooks/use-turnkey-wallet";
+import { supabase } from "@/lib/supabase";
+import { useAppearance, useColors, type AppearanceMode } from "@/lib/theme/appearance";
+import { space } from "@/lib/theme/tokens";
+import { shortenAddress } from "@/lib/utils/number-format.utils";
+import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
 
-type IconComponent = React.ComponentType<{ size?: number; color?: string }>;
-
-type SettingsItem = {
-  key:
-    | "language"
-    | "currency"
-    | "reset"
-    | "notifications"
-    | "faceId"
-    | "wallet";
-  label: string;
-  Icon: IconComponent;
-  disabled: boolean;
-};
-
-const ACCOUNT_ITEMS: SettingsItem[] = [
-  { key: "language", label: "Language", Icon: Globe, disabled: true },
-  {
-    key: "currency",
-    label: "Currency",
-    Icon: CircleDollarSign,
-    disabled: true
-  },
-  { key: "reset", label: "Reset Password", Icon: Lock, disabled: true },
-  {
-    key: "notifications",
-    label: "Notification Settings",
-    Icon: Bell,
-    disabled: true
-  },
-  { key: "faceId", label: "Face ID", Icon: Smile, disabled: true },
-  { key: "wallet", label: "Wallet Settings", Icon: Wallet, disabled: false }
+const APPEARANCE: { key: AppearanceMode; label: string; Icon: typeof Sun }[] = [
+  { key: "light", label: "Light", Icon: Sun },
+  { key: "dark", label: "Dark", Icon: Moon },
+  { key: "system", label: "System", Icon: Smartphone }
 ];
 
-function SettingsRow({
-  item,
-  onPress
-}: {
-  item: SettingsItem;
-  onPress: (item: SettingsItem) => void;
-}) {
-  const { Icon } = item;
-
-  return (
-    <Pressable onPress={() => onPress(item)} disabled={item.disabled}>
-      <View style={{ opacity: item.disabled ? 0.4 : 1 }}>
-        <XStack
-          alignItems='center'
-          justifyContent='space-between'
-          paddingVertical='$3'
-          paddingHorizontal='$4'
-          backgroundColor='#FFFFFF'
-        >
-          <XStack alignItems='center' space='$3'>
-            <View padding='$2' borderRadius={8} backgroundColor='transparent'>
-              <Icon size={16} color='#1B1D28' />
-            </View>
-            <Text fontSize='$3' fontWeight='500' color='#1C252E'>
-              {item.label}
-            </Text>
-          </XStack>
-          <ChevronRight size={20} color='#9AA5B5' />
-        </XStack>
-      </View>
-    </Pressable>
-  );
-}
-
 export default function SettingsScreen() {
-  const router = useRouter();
-  const insets = useSafeAreaInsets();
+  const c = useColors();
+  const { mode, setMode } = useAppearance();
+  const { user } = useSupabaseAuth();
+  const { stellarAddress } = useTurnkeyWallet();
+  const [copied, setCopied] = React.useState(false);
 
-  const handleItemPress = (item: SettingsItem) => {
-    if (item.disabled) return;
-
-    if (item.key === "wallet") {
-      router.push("/(tabs)/wallet-settings");
-    }
+  const copyAddress = async () => {
+    if (!stellarAddress) return;
+    await Clipboard.setStringAsync(stellarAddress);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
+  const signOut = () => {
+    Alert.alert("Sign out", "You can sign back in with the same email any time.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Sign out",
+        style: "destructive",
+        onPress: async () => {
+          const { error } = await supabase.auth.signOut();
+          if (error) Alert.alert("Sign out failed", error.message);
+        }
+      }
+    ]);
+  };
+
+  const version = Constants.expoConfig?.version ?? "—";
+
   return (
-    <YStack flex={1} backgroundColor='#F4F7FB' paddingTop={12}>
-      <YStack paddingHorizontal='$4' space='$5'>
-        <XStack alignItems='center' justifyContent='space-between'>
-          <Text fontSize='$6' fontWeight='600' color='#1B1D28'>
-            Settings
-          </Text>
-          <View width={24} />
-        </XStack>
+    <Screen>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 96 }}>
+        <YStack paddingHorizontal={space.gutter} paddingTop={8} gap={space.section}>
+          <ScreenTitle title='Settings' />
 
-        <YStack space='$3'>
-          <Text fontSize='$3' color='#6B7280'>
-            Account
-          </Text>
-          <View
-            backgroundColor='#FFFFFF'
-            borderRadius={12}
-            borderWidth={1}
-            borderColor='#E2E8F0'
-            overflow='hidden'
-          >
-            {ACCOUNT_ITEMS.map((item, index) => (
-              <React.Fragment key={item.key}>
-                <SettingsRow item={item} onPress={handleItemPress} />
-                {index < ACCOUNT_ITEMS.length - 1 ? (
-                  <View height={1} backgroundColor='#EEF2F7' marginLeft={64} />
-                ) : null}
-              </React.Fragment>
-            ))}
-          </View>
-        </YStack>
+          <YStack gap={10}>
+            <UiText fontSize={13} color={c.muted}>
+              Account
+            </UiText>
+            <Card>
+              <ListRow
+                icon={<Mail size={16} color={c.ink} strokeWidth={1.8} />}
+                label='Email'
+                sub={user?.email ?? "—"}
+              />
+              <Divider />
+              <ListRow
+                icon={<Wallet size={16} color={c.ink} strokeWidth={1.8} />}
+                label='Stellar address'
+                sub={stellarAddress ? undefined : "No Stellar address yet"}
+                right={
+                  stellarAddress ? (
+                    <XStack alignItems='center' gap={8}>
+                      <Mono fontSize={12} color={c.muted}>
+                        {shortenAddress(stellarAddress, 6, 6)}
+                      </Mono>
+                      {copied ? (
+                        <Check size={16} color={c.positive} strokeWidth={2} />
+                      ) : (
+                        <Copy size={16} color={c.muted} strokeWidth={2} />
+                      )}
+                    </XStack>
+                  ) : undefined
+                }
+                onPress={stellarAddress ? copyAddress : undefined}
+              />
+            </Card>
+          </YStack>
 
-        <YStack space='$3'>
-          <SignOutButton />
+          <YStack gap={10}>
+            <UiText fontSize={13} color={c.muted}>
+              Appearance
+            </UiText>
+            <Card>
+              {APPEARANCE.map(({ key, label, Icon }, i) => (
+                <React.Fragment key={key}>
+                  {i > 0 ? <Divider /> : null}
+                  <ListRow
+                    icon={<Icon size={16} color={c.ink} strokeWidth={1.8} />}
+                    label={label}
+                    right={mode === key ? <Check size={18} color={c.ink} strokeWidth={2} /> : undefined}
+                    onPress={() => setMode(key)}
+                  />
+                </React.Fragment>
+              ))}
+            </Card>
+          </YStack>
+
+          <YStack gap={10}>
+            <UiText fontSize={13} color={c.muted}>
+              About
+            </UiText>
+            <Card>
+              <ListRow label='Version' right={<Mono fontSize={12} color={c.muted}>{version}</Mono>} />
+              <Divider />
+              <ListRow label='Network' right={<Mono fontSize={12} color={c.muted}>Stellar mainnet</Mono>} />
+            </Card>
+          </YStack>
+
+          <SecondaryButton
+            label='Sign out'
+            onPress={signOut}
+            icon={<LogOut size={16} color={c.ink} strokeWidth={1.8} />}
+          />
         </YStack>
-      </YStack>
-    </YStack>
+      </ScrollView>
+    </Screen>
   );
 }

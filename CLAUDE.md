@@ -250,9 +250,18 @@ Verified at `develop@3bc0217` plus the deletions below. Treat as the starting po
 | Chains | BTC, ETH, SOL, XLM | ❌ Stellar only. No registry. |
 | Swap | Soroswap / LI.FI / CCTP | ☠️ deleted (was `normal_pool_router` AMM). UI shells in `components/swap/*` kept, unreferenced. |
 | Backend | Next.js API, Bearer | ✅ `lib/api.ts` — `apiFetch()`: Bearer, `Cookie: normal-network=mainnet`, 401 → refresh once → retry once → `onSessionExpired`; `ApiError` with `status` and the server's `error`. Reads `EXPO_PUBLIC_API_BASE_URL`. `hooks/use-transaction.ts` still posts to a hardcoded `http://localhost:8095` — dead, replace with `fees/execute-pair` / `swap/submit-single`. |
-| Prices | backend `wallet/portfolio` + `prices/history` | ⚠️ **Home is done**: `hooks/use-backend-portfolio.ts` (portfolio + 24h change from `wallet/portfolio`, chart from `prices/history`, Stellar txs from Horizon keyed by the Turnkey address). `lib/types/portfolio.types.ts` is a verbatim copy of web `src/types/portfolio.ts`. Still on CMC/oracle: `app/asset/[symbol].tsx`, `app/(tabs)/prices.tsx`, `hooks/use-asset-detail.ts`, `hooks/use-token-price.ts`, `hooks/use-portfolio.ts` (now unused). Move those, then delete CMC + oracle. |
+| Prices | backend `wallet/portfolio` + `prices/history` | ✅ Done. `hooks/use-backend-portfolio.ts` (portfolio + 24h change from `wallet/portfolio`, `usePriceHistory` from `prices/history`, Stellar txs from Horizon keyed by the Turnkey address). `lib/types/portfolio.types.ts` is a verbatim copy of web `src/types/portfolio.ts`. **CoinMarketCap and the Reflector oracle are deleted**; `EXPO_PUBLIC_CMC_API_KEY` is no longer read. |
 | Indexes / Invest | not a product | ☠️ deleted. |
-| Onboarding | savings + multi-chain | ⚠️ `app/onboarding.tsx` slides still advertise synthetics ("Normal Ethereum", "Normal Tesla") and indexes; images `assets/images/splash-screens/splash1-3.png`. Needs new copy + art. |
+| Savings | DeFindex vault | ⚠️ `app/(tabs)/savings.tsx` shows live vault facts (`hooks/use-savings.ts` → public `savings/vault-info`: APY, asset); position + deposit/withdraw wait for the Turnkey wallet. |
+| Onboarding | — | ☠️ Removed (Niko, 2026-09-11): no pre-login carousel; unauthenticated users land on sign-in. Bring back later with new art if wanted. |
+
+**Deleted 2026-09-11 (design pass)**: `app/onboarding.tsx` + `assets/images/splash-screens/`, `app/font-test.tsx`,
+`app/modal.tsx`, `app/(tabs)/{prices,wallet-settings,assets}.tsx`, `components/icons/navbar/`, `components/swap/`,
+`components/portfolio/TransactionHistory.tsx`, all `components/ui/skeleton/*-skeletons.tsx`, `components/sign-out.tsx`,
+`services/{coinmarketcap,oracle,prices,balance}.service.ts`, `hooks/{use-portfolio,use-asset-detail,use-token-price}.ts`,
+`lib/utils/{oracle,format,http,mocks}.utils.ts`, `lib/types/{oracle,tokenprice.hook}.types.ts`, `lib/contracts/oracle/`,
+`lib/constants/api.constants.ts`, `constants/assetClassStyles.ts`, Barlow + unused Satoshi cuts, template images.
+`services/portfolio.service.ts` is now types-only.
 
 **Deleted 2026-09-10** (~7,200 lines, all confirmed dead): `lib/contracts/pool_router/`,
 `lib/utils/pool-router.utils.ts`, `services/swap.service.ts`, `hooks/use-swap.ts`,
@@ -278,21 +287,23 @@ border `rgba(10,10,15,0.08)`, press tint `rgba(10,10,15,0.03)`, positive `#1AB37
 buttons are ink; every number/amount/address is **Geist Mono** (`fontFamily='$mono'` or `$numeric`)
 with -0.01em tracking; UI text is **Satoshi** 400/500/600(→Bold)/700; white cards with a 1px
 border and **no shadow**; one press state everywhere (the tint); positives green, negatives ink;
-light only. Fonts on disk: `assets/fonts/satoshi/{Regular,Medium,Bold}.otf`,
+**light and dark** (`lib/theme/appearance.tsx`: Light / Dark / System chosen in Settings, persisted in AsyncStorage; `useColors()` returns `ink` or the derived `inkDark`; the root layout switches the Tamagui `Theme`, React Navigation colours and the status bar). Fonts on disk: `assets/fonts/satoshi/{Regular,Medium,Bold}.otf`,
 `assets/fonts/geist-mono/{Regular,Medium,Bold}.ttf` (OFL). Barlow and Satoshi Light/Black removed.
 Building blocks: `components/home/primitives.tsx` (Card, Divider, Pressable, Mono, UiText, IconBox,
 Chip, PrimaryButton, PillButton, EmptyState, Skeleton), `BalanceCard`, `AssetRow`, `ActivityRow`,
 `HomeTabs`, `ReceiveSheet`. Number formatting: `lib/utils/number-format.utils.ts` (port of web
 `format-number.ts`; display decimals BTC 8 / ETH 6 / SOL 4 / XLM 4 / USDC 2). Icons: lucide, 16–20px,
 stroke 1.8–2. Token icons and logo from the CDN via `lib/utils/cdn.utils.ts`.
-`app/(tabs)/index.tsx` is the drawer's content (header · balance card · Tokens/Activity). Legacy
-screens (`prices.tsx`, `asset/[symbol].tsx`, `settings.tsx`, onboarding, sign-in) still use the old
-look and must be restyled against the same primitives.
+Every routed screen uses these primitives: Home (the drawer's content), Savings, Swap (shell), Activity,
+Settings (appearance, account, sign out), `asset/[symbol]` (ink line chart from `prices/history`),
+sign-in + OTP components, auth callback, create-wallet. App icon / splash / adaptive icon are
+derived from `logo/logo-single.svg` (`assets/images/*`; monochrome Android icon still the old one).
+**Icon changes need a native rebuild to show on the phone.**
 
 ### Stack as configured
 
 Expo SDK 54, React Native 0.81.4, React 19.1.0, New Architecture on, React Compiler experiment
-on. `expo-router` with typed routes (`app/`, tabs under `app/(tabs)/` = Home / Prices / Settings).
+on. `expo-router` with typed routes (`app/`, tabs under `app/(tabs)/` = **Home / Savings / Swap / Activity / Settings**, custom bar in `_layout.tsx`).
 Tamagui UI. TanStack Query for server state. Aliases `@/*` → root, `@svgs/*` → `assets/svgs/*`.
 `expo-dev-client` is **not** installed. No `ios/`/`android/` committed (CNG; both gitignored).
 
@@ -301,7 +312,6 @@ Tamagui UI. TanStack Query for server state. Aliases `@/*` → root, `@svgs/*` �
 | Variable | Behaviour if missing |
 |---|---|
 | `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY` | throws at startup (`lib/supabase.ts`) |
-| `EXPO_PUBLIC_CMC_API_KEY` | throws in `coinmarketcap.service.ts` → portfolio value + charts dead. Stopgap only; the key ships inside the bundle. |
 | `EXPO_PUBLIC_NETWORK` | **must be `MAINNET`**; several files still default to `TESTNET` |
 | `EXPO_PUBLIC_RPC_API_KEY` | optional; switches Stellar RPC to validationcloud |
 | `EXPO_PUBLIC_MAINNET_{HORIZON_URL,RPC_URL}` | fall back to public SDF endpoints |

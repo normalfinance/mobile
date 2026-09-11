@@ -1,6 +1,13 @@
-import React, { useState } from "react";
+// Email + 6-digit code sign-in (Supabase signInWithOtp → verifyOtp). Same calls
+// as before; only the presentation changed to the drawer's primitives.
+
+import React, { useEffect, useRef, useState } from "react";
 import { Alert } from "react-native";
-import { Button, Text, Input, YStack, H6, XStack, Separator } from "tamagui";
+import { Input, XStack, YStack } from "tamagui";
+
+import { PillButton, PrimaryButton, UiText } from "@/components/home/primitives";
+import { useColors } from "@/lib/theme/appearance";
+import { radius, tracking } from "@/lib/theme/tokens";
 import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
 
 interface PasswordlessSignInProps {
@@ -8,10 +15,8 @@ interface PasswordlessSignInProps {
   onEmailSent?: () => void;
 }
 
-export default function PasswordlessSignIn({
-  onSuccess,
-  onEmailSent
-}: PasswordlessSignInProps) {
+export default function PasswordlessSignIn({ onSuccess, onEmailSent }: PasswordlessSignInProps) {
+  const c = useColors();
   const { supabase } = useSupabaseAuth();
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
@@ -19,6 +24,28 @@ export default function PasswordlessSignIn({
   const [isVerifying, setIsVerifying] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
   const [cooldown, setCooldown] = useState(0);
+  const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(
+    () => () => {
+      if (timer.current) clearInterval(timer.current);
+    },
+    []
+  );
+
+  const startCooldownTimer = () => {
+    if (timer.current) clearInterval(timer.current);
+    timer.current = setInterval(() => {
+      setCooldown((prev) => {
+        if (prev <= 1) {
+          if (timer.current) clearInterval(timer.current);
+          timer.current = null;
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
 
   const sendCode = async () => {
     const normalizedEmail = email.trim().toLowerCase();
@@ -28,26 +55,18 @@ export default function PasswordlessSignIn({
     try {
       const { error } = await supabase.auth.signInWithOtp({
         email: normalizedEmail,
-        options: {
-          shouldCreateUser: true
-        }
+        options: { shouldCreateUser: true }
       });
-
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
 
       setEmailSent(true);
       setCooldown(60);
       startCooldownTimer();
       onEmailSent?.();
     } catch (error) {
-      console.error("Send code error:", error);
       const message =
-        error instanceof Error
-          ? error.message
-          : "Failed to send verification code. Please try again.";
-      Alert.alert("Error", message);
+        error instanceof Error ? error.message : "Failed to send the code. Please try again.";
+      Alert.alert("Couldn’t send code", message);
     } finally {
       setIsLoading(false);
     }
@@ -55,7 +74,7 @@ export default function PasswordlessSignIn({
 
   const verifyCode = async () => {
     const normalizedEmail = email.trim().toLowerCase();
-    if (!normalizedEmail || !code.trim() || code.length !== 6) return;
+    if (!normalizedEmail || code.trim().length !== 6) return;
 
     setIsVerifying(true);
     try {
@@ -64,48 +83,29 @@ export default function PasswordlessSignIn({
         token: code.trim(),
         type: "email"
       });
-
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
 
       if (data.session) {
         onSuccess?.();
       } else {
-        Alert.alert(
-          "Verification Incomplete",
-          "We couldn't verify your session. Please request a new code."
-        );
+        Alert.alert("Verification incomplete", "We couldn’t verify your session. Request a new code.");
       }
     } catch (error) {
-      console.error("Code verification error:", error);
       const message =
         error instanceof Error
           ? error.message
-          : "The code you entered is invalid or has expired. Please check your email and try again.";
-      Alert.alert("Invalid Code", message);
-      setCode(""); // Clear the code field on error
+          : "The code is invalid or has expired. Check your email and try again.";
+      Alert.alert("Invalid code", message);
+      setCode("");
     } finally {
       setIsVerifying(false);
     }
   };
 
-  const startCooldownTimer = () => {
-    const timer = setInterval(() => {
-      setCooldown((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-  };
-
   const resendCode = () => {
     if (cooldown === 0) {
-      setCode(""); // Clear code field when resending
-      sendCode();
+      setCode("");
+      void sendCode();
     }
   };
 
@@ -113,128 +113,91 @@ export default function PasswordlessSignIn({
     setEmailSent(false);
     setCode("");
     setCooldown(0);
+    if (timer.current) clearInterval(timer.current);
   };
 
+  const inputBase = {
+    backgroundColor: c.inputBg,
+    borderWidth: 1,
+    borderColor: c.border,
+    borderRadius: radius.input,
+    height: 48,
+    paddingHorizontal: 14,
+    color: c.ink,
+    placeholderTextColor: c.faint,
+    focusStyle: { borderColor: c.borderStrong }
+  } as const;
+
+  if (!emailSent) {
+    return (
+      <YStack gap={10} width='100%'>
+        <Input
+          {...inputBase}
+          fontFamily='$body'
+          fontSize={15}
+          placeholder='Email address'
+          keyboardType='email-address'
+          autoCapitalize='none'
+          autoCorrect={false}
+          autoComplete='email'
+          textContentType='emailAddress'
+          value={email}
+          onChangeText={setEmail}
+          editable={!isLoading}
+          onSubmitEditing={sendCode}
+          returnKeyType='send'
+        />
+        <PrimaryButton
+          label={isLoading ? "Sending…" : "Continue with email"}
+          onPress={sendCode}
+          disabled={!email.trim()}
+          loading={isLoading}
+        />
+      </YStack>
+    );
+  }
+
   return (
-    <YStack space='$3' width='100%'>
-      {!emailSent ? (
-        <YStack space='$3'>
-          <Input
-            size='$4'
-            placeholder='Enter your email'
-            keyboardType='email-address'
-            autoCapitalize='none'
-            autoCorrect={false}
-            value={email}
-            onChangeText={setEmail}
-            editable={!isLoading}
-            borderWidth={1}
-            borderColor='$borderColor'
-            backgroundColor='$background'
-            color='$text'
-          />
-
-          <Button
-            backgroundColor={email.trim() && !isLoading ? "#1C252E" : "#F2F4F7"}
-            size='$4'
-            onPress={sendCode}
-            disabled={!email.trim() || isLoading}
-            opacity={!email.trim() || isLoading ? 0.6 : 1}
-            borderRadius={6}
-            borderWidth={1}
-            borderColor={
-              email.trim() && !isLoading ? "#1C252E" : "$borderColor"
-            }
-          >
-            <Text
-              color={email.trim() && !isLoading ? "white" : "#1C252E"}
-              fontWeight='600'
-            >
-              {isLoading ? "Sending..." : "Send Code"}
-            </Text>
-          </Button>
-        </YStack>
-      ) : (
-        <YStack space='$3'>
-          <YStack
-            bg='#F2F4F7'
-            p='$3'
-            borderLeftWidth={4}
-            borderLeftColor='#1C252E'
-          >
-            <Text fontSize='$4' color='#1C252E' fontWeight='600'>
-              Code sent to {email}
-            </Text>
-            <Text fontSize='$3' color='#666D80' mt='$1'>
-              Enter the 6-digit code from your email below.
-            </Text>
-          </YStack>
-          <Input
-            size='$4'
-            placeholder='Enter 6-digit code'
-            keyboardType='number-pad'
-            maxLength={6}
-            value={code}
-            onChangeText={setCode}
-            editable={!isVerifying}
-            borderWidth={1}
-            borderColor='$borderColor'
-            fontSize='$5'
-            fontWeight='bold'
-          />
-
-          <Button
-            backgroundColor={
-              code.length === 6 && !isVerifying ? "#1C252E" : "#F2F4F7"
-            }
-            size='$4'
-            borderRadius={6}
-            borderWidth={1}
-            borderColor={
-              code.length === 6 && !isVerifying ? "#1C252E" : "$borderColor"
-            }
-            onPress={verifyCode}
-            disabled={code.length !== 6 || isVerifying}
-            opacity={code.length !== 6 || isVerifying ? 0.6 : 1}
-          >
-            <Text
-              color={code.length === 6 && !isVerifying ? "white" : "#1C252E"}
-              fontWeight='600'
-            >
-              {isVerifying ? "Verifying..." : "Verify Code"}
-            </Text>
-          </Button>
-
-          {/* @ts-ignore */}
-          <XStack space='$2' justifyContent='center'>
-            <Button
-              size='$3'
-              onPress={resendCode}
-              disabled={cooldown > 0}
-              opacity={cooldown > 0 ? 0.6 : 1}
-              paddingHorizontal={16}
-              borderRadius={6}
-              borderWidth={1}
-              borderColor={cooldown > 0 ? "#1C252E" : "$borderColor"}
-            >
-              <Text fontWeight='500'>
-                {cooldown > 0 ? `Resend in ${cooldown}s` : "Resend Code"}
-              </Text>
-            </Button>
-
-            <Button
-              size='$3'
-              variant='outlined'
-              onPress={resetFlow}
-              borderRadius={6}
-              borderWidth={1}
-              borderColor='$borderColor'
-            >
-              <Text fontWeight='500'>Change Email</Text>
-            </Button>
-          </XStack>
-        </YStack>
-      )}
+    <YStack gap={12} width='100%'>
+      <YStack gap={2}>
+        <UiText fontSize={14} fontWeight='500'>
+          Check your email
+        </UiText>
+        <UiText fontSize={13} color={c.muted}>
+          We sent a 6-digit code to {email.trim().toLowerCase()}.
+        </UiText>
+      </YStack>
+      <Input
+        {...inputBase}
+        fontFamily='$mono'
+        fontSize={22}
+        letterSpacing={tracking(22) + 6}
+        textAlign='center'
+        height={56}
+        placeholder='000000'
+        keyboardType='number-pad'
+        maxLength={6}
+        autoComplete='one-time-code'
+        textContentType='oneTimeCode'
+        value={code}
+        onChangeText={setCode}
+        editable={!isVerifying}
+        onSubmitEditing={verifyCode}
+        autoFocus
+      />
+      <PrimaryButton
+        label={isVerifying ? "Verifying…" : "Verify code"}
+        onPress={verifyCode}
+        disabled={code.length !== 6}
+        loading={isVerifying}
+      />
+      <XStack gap={8} justifyContent='center'>
+        <PillButton
+          label={cooldown > 0 ? `Resend in ${cooldown}s` : "Resend code"}
+          onPress={cooldown > 0 ? undefined : resendCode}
+        />
+        <PillButton label='Change email' onPress={resetFlow} />
+      </XStack>
     </YStack>
   );
 }

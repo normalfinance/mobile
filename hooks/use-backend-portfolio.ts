@@ -101,9 +101,9 @@ const toPortfolioData = (payload: PortfolioPayload | undefined): PortfolioData =
 // GET /api/prices/history  →  portfolio value over time
 // ---------------------------------------------------------------------------
 
-type HistoryRange = "1d" | "1w" | "1m" | "1y" | "5y" | "all";
+export type HistoryRange = "1d" | "1w" | "1m" | "1y" | "5y" | "all";
 
-const PERIOD_TO_RANGE: Record<PortfolioPeriod, HistoryRange> = {
+export const PERIOD_TO_RANGE: Record<PortfolioPeriod, HistoryRange> = {
   "1D": "1d",
   "7D": "1w",
   "30D": "1m",
@@ -125,6 +125,16 @@ const fetchPriceHistory = (symbol: string, range: HistoryRange) =>
   apiFetch<PriceHistoryResponse>("/api/prices/history", {
     anonymous: true,
     query: { symbol, range }
+  });
+
+/** One asset's price series for the asset detail chart (public route). */
+export const usePriceHistory = (symbol: string | undefined, range: HistoryRange) =>
+  useQuery({
+    queryKey: priceHistoryQueryKey(symbol ?? "", range),
+    queryFn: () => fetchPriceHistory(symbol!, range),
+    enabled: !!symbol,
+    staleTime: 10 * 60_000,
+    retry: 1
   });
 
 /** Price at or before `ts` in an ascending [ts, price][] series. */
@@ -218,6 +228,11 @@ export const useBackendPortfolio = () => {
     | Error
     | undefined;
 
+  // Stable, fixed-length dependency for the memo: React requires the deps
+  // array to keep its size, and the number of history queries varies with the
+  // number of held assets. A joined key of update timestamps changes exactly
+  // when any series changes.
+  const historyKey = historyQueries.map((q) => q.dataUpdatedAt).join(",");
   const chartData = useMemo(() => {
     const histories: Record<string, [number, number][]> = {};
     held.forEach(({ symbol }, i) => {
@@ -225,9 +240,8 @@ export const useBackendPortfolio = () => {
       if (prices) histories[symbol] = prices;
     });
     return buildChart(held, histories);
-    // historyQueries is a new array each render; depend on its data only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [held, ...historyQueries.map((q) => q.data)]);
+  }, [held, historyKey]);
 
   const {
     transactions,

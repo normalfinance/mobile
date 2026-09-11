@@ -11,7 +11,8 @@ import {
   type LucideIcon
 } from "lucide-react-native";
 
-import { ink, radius, space, tracking, typeScale as t } from "@/lib/theme/tokens";
+import { useColors } from "@/lib/theme/appearance";
+import { radius, space, tracking, typeScale as t } from "@/lib/theme/tokens";
 import { fCurrencyTwoDecimals } from "@/lib/utils/number-format.utils";
 import { Card, Divider, Mono, Skeleton, UiText } from "./primitives";
 
@@ -43,26 +44,29 @@ const Row = ({
   value: string;
   isLoading?: boolean;
   onPress?: () => void;
-}) => (
-  <XStack
-    paddingHorizontal={space.rowX}
-    paddingVertical={space.rowY}
-    justifyContent='space-between'
-    alignItems='center'
-    borderRadius={radius.iconBox}
-    onPress={onPress}
-    pressStyle={onPress ? { backgroundColor: ink.pressTint } : undefined}
-  >
-    <UiText fontSize={t.rowLabel.size} color={ink.muted}>
-      {label}
-    </UiText>
-    {isLoading ? (
-      <Skeleton width={60} height={22} />
-    ) : (
-      <Mono fontSize={t.rowValue.size}>{value}</Mono>
-    )}
-  </XStack>
-);
+}) => {
+  const c = useColors();
+  return (
+    <XStack
+      paddingHorizontal={space.rowX}
+      paddingVertical={space.rowY}
+      justifyContent='space-between'
+      alignItems='center'
+      borderRadius={radius.iconBox}
+      onPress={onPress}
+      pressStyle={onPress ? { backgroundColor: c.pressTint } : undefined}
+    >
+      <UiText fontSize={t.rowLabel.size} color={c.muted}>
+        {label}
+      </UiText>
+      {isLoading ? (
+        <Skeleton width={60} height={22} />
+      ) : (
+        <Mono fontSize={t.rowValue.size}>{value}</Mono>
+      )}
+    </XStack>
+  );
+};
 
 export const BalanceCard = ({
   totalUsd,
@@ -71,78 +75,78 @@ export const BalanceCard = ({
   isLoading,
   onAction,
   onSavingsPress
-}: BalanceCardProps) => (
-  <Card paddingTop={4} paddingHorizontal={4} paddingBottom={12}>
-    {/* Total row */}
-    <XStack
-      paddingHorizontal={space.rowX}
-      paddingTop={14}
-      paddingBottom={space.rowY}
-      justifyContent='space-between'
-      alignItems='center'
-    >
-      <UiText fontSize={t.totalLabel.size} fontWeight='500' color={ink.ink2}>
-        Total balance
-      </UiText>
-      {isLoading ? (
-        <Skeleton width={110} height={28} />
-      ) : (
-        <Mono fontSize={t.total.size} letterSpacing={tracking(t.total.size)}>
-          {fCurrencyTwoDecimals(totalUsd)}
-        </Mono>
-      )}
-    </XStack>
+}: BalanceCardProps) => {
+  const c = useColors();
+  return (
+    <Card paddingTop={4} paddingHorizontal={4} paddingBottom={12}>
+      <XStack
+        paddingHorizontal={space.rowX}
+        paddingTop={14}
+        paddingBottom={space.rowY}
+        justifyContent='space-between'
+        alignItems='center'
+      >
+        <UiText fontSize={t.totalLabel.size} fontWeight='500' color={c.ink2}>
+          Total balance
+        </UiText>
+        {isLoading ? (
+          <Skeleton width={110} height={28} />
+        ) : (
+          <Mono fontSize={t.total.size} letterSpacing={tracking(t.total.size)}>
+            {fCurrencyTwoDecimals(totalUsd)}
+          </Mono>
+        )}
+      </XStack>
 
-    <Divider />
-    <Row
-      label='Assets'
-      value={fCurrencyTwoDecimals(assetsUsd)}
-      isLoading={isLoading}
-    />
-    <Divider />
-    <Row
-      label='Savings'
-      value={
-        savingsUsd === null || savingsUsd === undefined
-          ? "—"
-          : fCurrencyTwoDecimals(savingsUsd)
-      }
-      isLoading={isLoading}
-      onPress={onSavingsPress}
-    />
+      <Divider />
+      <Row label='Assets' value={fCurrencyTwoDecimals(assetsUsd)} isLoading={isLoading} />
+      <Divider />
+      <Row
+        label='Savings'
+        value={
+          savingsUsd === null || savingsUsd === undefined
+            ? "—"
+            : fCurrencyTwoDecimals(savingsUsd)
+        }
+        isLoading={isLoading}
+        onPress={onSavingsPress}
+      />
 
-    {/* Action tiles — fixed row of four (D12: never a wrapping grid) */}
-    <XStack gap={space.tileGap} marginTop={12} marginHorizontal={8}>
-      {ACTIONS.map(({ key, label, Icon }) => (
-        <YStack
-          key={key}
-          flex={1}
-          onPress={() => onAction(key)}
-          borderWidth={1}
-          borderColor={ink.border}
-          borderRadius={radius.tile}
-          paddingVertical={12}
-          paddingHorizontal={6}
-          alignItems='center'
-          gap={8}
-          minHeight={space.touchTarget}
-          pressStyle={{ backgroundColor: ink.pressTint, borderColor: ink.borderStrong }}
-        >
+      {/* Action tiles — fixed row of four (D12: never a wrapping grid) */}
+      <XStack gap={space.tileGap} marginTop={12} marginHorizontal={8}>
+        {ACTIONS.map(({ key, label, Icon }) => (
           <YStack
-            width={28}
-            height={28}
-            borderRadius={radius.iconBox}
-            backgroundColor={ink.iconBg}
+            key={key}
+            flex={1}
+            onPress={() => onAction(key)}
+            borderWidth={1}
+            borderColor={c.border}
+            borderRadius={radius.tile}
+            paddingVertical={12}
+            paddingHorizontal={6}
             alignItems='center'
-            justifyContent='center'
+            gap={8}
+            minHeight={space.touchTarget}
+            pressStyle={{ backgroundColor: c.pressTint, borderColor: c.borderStrong }}
+            accessibilityRole='button'
+            accessibilityLabel={label}
           >
-            <Icon size={16} color={ink.ink} strokeWidth={2} />
+            <YStack
+              width={28}
+              height={28}
+              borderRadius={radius.iconBox}
+              backgroundColor={c.iconBg}
+              alignItems='center'
+              justifyContent='center'
+            >
+              <Icon size={16} color={c.ink} strokeWidth={2} />
+            </YStack>
+            <UiText fontSize={t.actionLabel.size} fontWeight='500' color={c.muted}>
+              {label}
+            </UiText>
           </YStack>
-          <UiText fontSize={t.actionLabel.size} fontWeight='500' color={ink.muted}>
-            {label}
-          </UiText>
-        </YStack>
-      ))}
-    </XStack>
-  </Card>
-);
+        ))}
+      </XStack>
+    </Card>
+  );
+};

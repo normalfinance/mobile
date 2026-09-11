@@ -54,14 +54,3 @@ export type { WalletInfo } from "./wallet.service";
 export type { SignedTransaction } from "./transaction.service";
 export type { AuthCredentials, AuthStatus } from "./auth.service";
 
-export {
-  getFeaturedAssets,
-  getCollectionAssets,
-  getAssetCategories
-} from "./prices.service";
-
-export {
-  coinMarketCapService,
-  useHistoricalPrices,
-  coinMarketCapQueryKeys
-} from "./coinmarketcap.service";

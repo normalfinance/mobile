@@ -14,26 +14,28 @@ import { ActivityRow, ActivityRowSkeleton } from "@/components/home/ActivityRow"
 import { AssetRow, AssetRowSkeleton } from "@/components/home/AssetRow";
 import { BalanceCard, type HomeAction } from "@/components/home/BalanceCard";
 import { HomeTabs, type HomeTab } from "@/components/home/HomeTabs";
-import { EmptyState, PillButton, UiText } from "@/components/home/primitives";
+import {
+  EmptyState,
+  IconButton,
+  PillButton,
+  Screen,
+  UiText
+} from "@/components/home/primitives";
 import { ReceiveSheet } from "@/components/home/ReceiveSheet";
 import { useBackendPortfolio } from "@/hooks/use-backend-portfolio";
 import { useTurnkeyWallet } from "@/hooks/use-turnkey-wallet";
-import { ink, radius, space } from "@/lib/theme/tokens";
+import { useColors } from "@/lib/theme/appearance";
+import { space } from "@/lib/theme/tokens";
 import { BRAND_ASSETS } from "@/lib/utils/cdn.utils";
 import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
 
 export default function HomeScreen() {
   const router = useRouter();
+  const c = useColors();
   const { user } = useSupabaseAuth();
   const { stellarAddress } = useTurnkeyWallet();
-  const {
-    portfolioData,
-    transactions,
-    isLoading,
-    hasError,
-    errorMessage,
-    refetch
-  } = useBackendPortfolio();
+  const { portfolioData, transactions, isLoading, hasError, errorMessage, refetch } =
+    useBackendPortfolio();
 
   const [tab, setTab] = React.useState<HomeTab>("tokens");
   const [receiveOpen, setReceiveOpen] = React.useState(false);
@@ -48,26 +50,31 @@ export default function HomeScreen() {
     }
   }, [refetch]);
 
-  const handleAction = React.useCallback((action: HomeAction) => {
-    if (action === "receive") {
-      setReceiveOpen(true);
-      return;
-    }
-    // Send / Swap / Buy arrive with the Turnkey wallet (Stage C).
-    Alert.alert("Coming soon", "Send, swap and buy arrive with the Normal wallet.");
-  }, []);
+  const handleAction = React.useCallback(
+    (action: HomeAction) => {
+      if (action === "receive") {
+        setReceiveOpen(true);
+      } else if (action === "swap") {
+        router.push("/(tabs)/swap");
+      } else {
+        // Send / Buy arrive with the Turnkey wallet (Stage C).
+        Alert.alert("Coming soon", "Send and buy arrive with the Normal wallet.");
+      }
+    },
+    [router]
+  );
 
   const heldAssets = portfolioData.assets.filter((a) => Number(a.balance) > 0);
   const email = user?.email ?? "";
   const displayName = email ? email.split("@")[0] : "Your wallet";
 
   return (
-    <YStack flex={1} backgroundColor={ink.surface}>
+    <Screen>
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 96 }}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.muted} />
         }
       >
         <YStack paddingHorizontal={space.gutter} paddingTop={8} gap={space.section}>
@@ -79,7 +86,7 @@ export default function HomeScreen() {
                 height={44}
                 borderRadius={22}
                 overflow='hidden'
-                backgroundColor={ink.iconBg}
+                backgroundColor={c.iconBg}
               >
                 <Image
                   source={{ uri: BRAND_ASSETS.logoSinglePng() }}
@@ -93,28 +100,20 @@ export default function HomeScreen() {
                   {displayName}
                 </UiText>
                 {email ? (
-                  <UiText fontSize={13} color={ink.muted}>
+                  <UiText fontSize={13} color={c.muted}>
                     {email}
                   </UiText>
                 ) : null}
               </YStack>
             </XStack>
-            <YStack
-              onPress={() => router.push("/(tabs)/settings")}
-              width={44}
-              height={44}
-              borderRadius={radius.iconBox}
-              alignItems='center'
-              justifyContent='center'
-              pressStyle={{ backgroundColor: ink.iconPressTint }}
-            >
-              <Settings size={20} color={ink.muted} strokeWidth={1.8} />
-            </YStack>
+            <IconButton onPress={() => router.push("/(tabs)/settings")} label='Settings'>
+              <Settings size={20} color={c.muted} strokeWidth={1.8} />
+            </IconButton>
           </XStack>
 
           {hasError ? (
             <EmptyState
-              icon={<Wallet size={24} color={ink.ink} strokeWidth={1.8} />}
+              icon={<Wallet size={24} color={c.ink} strokeWidth={1.8} />}
               title='Couldn’t load your portfolio'
               body={errorMessage ?? "Please check your connection and try again."}
               action={<PillButton label='Try again' onPress={() => void refetch()} />}
@@ -127,6 +126,7 @@ export default function HomeScreen() {
                 savingsUsd={null}
                 isLoading={isLoading}
                 onAction={handleAction}
+                onSavingsPress={() => router.push("/(tabs)/savings")}
               />
 
               <YStack>
@@ -143,14 +143,11 @@ export default function HomeScreen() {
                     ) : heldAssets.length === 0 ? (
                       <YStack paddingTop={12}>
                         <EmptyState
-                          icon={<Wallet size={24} color={ink.ink} strokeWidth={1.8} />}
+                          icon={<Wallet size={24} color={c.ink} strokeWidth={1.8} />}
                           title='No assets yet'
                           body='Receive XLM or USDC to get started.'
                           action={
-                            <PillButton
-                              label='Receive'
-                              onPress={() => setReceiveOpen(true)}
-                            />
+                            <PillButton label='Receive' onPress={() => setReceiveOpen(true)} />
                           }
                         />
                       </YStack>
@@ -173,7 +170,7 @@ export default function HomeScreen() {
                   ) : transactions.length === 0 ? (
                     <YStack paddingTop={12}>
                       <EmptyState
-                        icon={<Inbox size={24} color={ink.ink} strokeWidth={1.8} />}
+                        icon={<Inbox size={24} color={c.ink} strokeWidth={1.8} />}
                         title='No activity yet'
                         body='Your transactions will show up here.'
                       />
@@ -193,6 +190,6 @@ export default function HomeScreen() {
         address={stellarAddress}
         onClose={() => setReceiveOpen(false)}
       />
-    </YStack>
+    </Screen>
   );
 }

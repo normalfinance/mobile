@@ -1,7 +1,9 @@
 // The design contract for product surfaces. Mirrors the web app's ACCOUNT
 // DRAWER (packages/web/src/components/_common/drawer-components/*), which is
-// Niko's spec — not the MUI theme. Every value below is copied from those
-// files' `sx` blocks; see docs/web-agent-answers.md "Design system (D1–D12)".
+// Niko's spec — not the MUI theme. Light values are copied from those files'
+// `sx` blocks; see docs/web-agent-answers.md "Design system (D1–D12)".
+// Web has no dark product design; `inkDark` is derived here (same roles,
+// inverted) so both schemes share one component set.
 //
 // Rules that follow from it:
 //   - text and solid buttons are `ink`, never grey[800] and never palette blue
@@ -9,8 +11,40 @@
 //   - cards are white with a 1px border and NO shadow
 //   - exactly one press state everywhere: `pressTint`
 //   - positive amounts are `positive`; negatives stay ink (no red)
+//
+// Components never import `ink` directly — they call useColors() from
+// lib/theme/appearance.tsx, which returns the palette for the active scheme.
 
-export const ink = {
+export interface Palette {
+  ink: string;
+  ink2: string;
+  muted: string;
+  faint: string;
+  surface: string;
+  iconBg: string;
+  inputBg: string;
+  divider: string;
+  border: string;
+  borderStrong: string;
+  pressTint: string;
+  iconPressTint: string;
+  iconCircle: string;
+  body50: string;
+  /** Solid CTA background and its label colour. */
+  cta: string;
+  ctaText: string;
+  ctaPressed: string;
+  ctaDisabledBg: string;
+  ctaDisabledText: string;
+  positive: string;
+  failed: string;
+  /** Status chips: text on a translucent background. */
+  chips: Record<ChipTone, { color: string; bg: string }>;
+}
+
+export type ChipTone = "green" | "amber" | "blue" | "purple" | "neutral";
+
+export const ink: Palette = {
   ink: "#0A0A0F",
   ink2: "#2A2A33",
   muted: "#6B6B76",
@@ -25,22 +59,52 @@ export const ink = {
   iconPressTint: "rgba(10,10,15,0.04)",
   iconCircle: "rgba(10,10,15,0.06)",
   body50: "rgba(10,10,15,0.5)",
+  cta: "#0A0A0F",
+  ctaText: "#FFFFFF",
   ctaPressed: "#1a1a25",
   ctaDisabledBg: "rgba(10,10,15,0.08)",
   ctaDisabledText: "rgba(10,10,15,0.3)",
   positive: "#1AB37D",
-  failed: "#7A1D4A"
-} as const;
+  failed: "#7A1D4A",
+  chips: {
+    green: { color: "#0A6649", bg: "rgba(26,179,125,0.11)" },
+    amber: { color: "#8A4A00", bg: "rgba(255,176,96,0.16)" },
+    blue: { color: "#0A5272", bg: "rgba(91,207,255,0.14)" },
+    purple: { color: "#5A2E9E", bg: "rgba(177,123,255,0.13)" },
+    neutral: { color: "#2A2A33", bg: "rgba(10,10,15,0.07)" }
+  }
+};
 
-/** Activity / status chips: text colour on a translucent background. */
-export const chips = {
-  green: { color: "#0A6649", bg: "rgba(26,179,125,0.11)" },
-  amber: { color: "#8A4A00", bg: "rgba(255,176,96,0.16)" },
-  blue: { color: "#0A5272", bg: "rgba(91,207,255,0.14)" },
-  purple: { color: "#5A2E9E", bg: "rgba(177,123,255,0.13)" },
-  neutral: { color: "#2A2A33", bg: "rgba(10,10,15,0.07)" }
-} as const;
-export type ChipTone = keyof typeof chips;
+export const inkDark: Palette = {
+  ink: "#F5F5F7",
+  ink2: "#D6D6DC",
+  muted: "#9A9AA5",
+  faint: "#6B6B76",
+  surface: "#0F0F14",
+  iconBg: "#1C1C24",
+  inputBg: "#16161C",
+  divider: "rgba(255,255,255,0.06)",
+  border: "rgba(255,255,255,0.10)",
+  borderStrong: "rgba(255,255,255,0.18)",
+  pressTint: "rgba(255,255,255,0.04)",
+  iconPressTint: "rgba(255,255,255,0.06)",
+  iconCircle: "rgba(255,255,255,0.08)",
+  body50: "rgba(245,245,247,0.55)",
+  cta: "#F5F5F7",
+  ctaText: "#0A0A0F",
+  ctaPressed: "#E4E4EA",
+  ctaDisabledBg: "rgba(255,255,255,0.10)",
+  ctaDisabledText: "rgba(255,255,255,0.35)",
+  positive: "#34C98F",
+  failed: "#E07A9A",
+  chips: {
+    green: { color: "#5FE0B0", bg: "rgba(26,179,125,0.18)" },
+    amber: { color: "#FFC98A", bg: "rgba(255,176,96,0.18)" },
+    blue: { color: "#8ADCFF", bg: "rgba(91,207,255,0.16)" },
+    purple: { color: "#CDAEFF", bg: "rgba(177,123,255,0.18)" },
+    neutral: { color: "#D6D6DC", bg: "rgba(255,255,255,0.09)" }
+  }
+};
 
 /** Logo / avatar / CTA-shine only. Never for text. */
 export const brandGradient = {
@@ -100,7 +164,8 @@ export const typeScale = {
   footnote: { size: 11, mono: true },
   cta: { size: 15, weight: "700" },
   emptyTitle: { size: 16, weight: "500" },
-  body: { size: 14 }
+  body: { size: 14 },
+  title: { size: 22, weight: "600" }
 } as const;
 
 /** -0.01em, expressed in points for a given font size (RN takes absolute values). */

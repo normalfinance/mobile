@@ -5,7 +5,8 @@ import React from "react";
 import { XStack, YStack } from "tamagui";
 
 import { AssetIcon } from "@/components/ui/AssetIcon";
-import { ink, space, tracking, typeScale as t } from "@/lib/theme/tokens";
+import { useColors } from "@/lib/theme/appearance";
+import { space, tracking, typeScale as t } from "@/lib/theme/tokens";
 import { fAssetQuantity, fCurrency } from "@/lib/utils/number-format.utils";
 import type { AssetWithPrice } from "@/services/portfolio.service";
 import { Mono, Pressable, Skeleton, UiText } from "./primitives";
@@ -16,40 +17,43 @@ export const AssetRow = ({
 }: {
   asset: AssetWithPrice;
   onPress?: () => void;
-}) => (
-  <Pressable
-    onPress={onPress}
-    paddingVertical={space.rowY}
-    paddingHorizontal={8}
-    flexDirection='row'
-    alignItems='center'
-    justifyContent='space-between'
-    minHeight={space.touchTarget}
-  >
-    <XStack alignItems='center' gap={space.rowGap}>
-      <AssetIcon symbol={asset.asset_code} size={36} fontSize='$3' />
-      <YStack>
-        <UiText
-          fontSize={t.assetName.size}
-          fontWeight='600'
-          letterSpacing={tracking(t.assetName.size)}
-          lineHeight={18}
-        >
-          {asset.asset_code}
-        </UiText>
-        <UiText fontSize={t.assetSub.size} color={ink.muted} marginTop={2}>
-          {asset.display_name}
-        </UiText>
+}) => {
+  const c = useColors();
+  return (
+    <Pressable
+      onPress={onPress}
+      paddingVertical={space.rowY}
+      paddingHorizontal={8}
+      flexDirection='row'
+      alignItems='center'
+      justifyContent='space-between'
+      minHeight={space.touchTarget}
+    >
+      <XStack alignItems='center' gap={space.rowGap}>
+        <AssetIcon symbol={asset.asset_code} size={36} fontSize='$3' />
+        <YStack>
+          <UiText
+            fontSize={t.assetName.size}
+            fontWeight='600'
+            letterSpacing={tracking(t.assetName.size)}
+            lineHeight={18}
+          >
+            {asset.asset_code}
+          </UiText>
+          <UiText fontSize={t.assetSub.size} color={c.muted} marginTop={2}>
+            {asset.display_name}
+          </UiText>
+        </YStack>
+      </XStack>
+      <YStack alignItems='flex-end'>
+        <Mono fontSize={t.assetUsd.size}>{fCurrency(asset.usdValue)}</Mono>
+        <Mono fontSize={t.assetQty.size} color={c.muted} marginTop={2}>
+          {fAssetQuantity(asset.balance, asset.asset_code)} {asset.asset_code}
+        </Mono>
       </YStack>
-    </XStack>
-    <YStack alignItems='flex-end'>
-      <Mono fontSize={t.assetUsd.size}>{fCurrency(asset.usdValue)}</Mono>
-      <Mono fontSize={t.assetQty.size} color={ink.muted} marginTop={2}>
-        {fAssetQuantity(asset.balance, asset.asset_code)} {asset.asset_code}
-      </Mono>
-    </YStack>
-  </Pressable>
-);
+    </Pressable>
+  );
+};
 
 export const AssetRowSkeleton = () => (
   <XStack

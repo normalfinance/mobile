@@ -1,404 +1,264 @@
-import React, { useMemo, useState } from "react";
-import { ScrollView, TouchableOpacity } from "react-native";
+// Asset detail: price + 24h change, an ink line chart from prices/history,
+// the user's balance, Receive / Send, and this asset's activity. Same
+// primitives and tokens as the drawer; no CoinMarketCap, no oracle.
+
+import React from "react";
+import { Alert, Dimensions, ScrollView } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useAssets } from "expo-asset";
-import { SvgUri } from "react-native-svg";
-import { YStack, XStack, Text, Button } from "tamagui";
-import { ChevronDown, AlertCircle, ArrowUpRight } from "lucide-react-native";
+import { LineChart } from "react-native-gifted-charts";
+import { XStack, YStack } from "tamagui";
+import { ArrowDown, ArrowUp, ChevronLeft, Inbox } from "lucide-react-native";
 
+import { ActivityRow } from "@/components/home/ActivityRow";
+import {
+  Card,
+  Divider,
+  EmptyState,
+  IconButton,
+  Mono,
+  Screen,
+  SecondaryButton,
+  Skeleton,
+  UiText
+} from "@/components/home/primitives";
+import { ReceiveSheet } from "@/components/home/ReceiveSheet";
 import { AssetIcon } from "@/components/ui/AssetIcon";
-import { PortfolioChart } from "@/components/portfolio/PortfolioChart";
-import { TransactionHistory } from "@/components/portfolio/TransactionHistory";
-import { usePortfolio } from "@/hooks/use-portfolio";
-import { AssetDetailSkeleton } from "@/components/ui/skeleton/price-skeletons";
-import { assetClassStyles } from "@/constants/assetClassStyles";
-import type { AssetClass } from "@/services/prices.service";
+import {
+  PERIOD_TO_RANGE,
+  useBackendPortfolio,
+  usePriceHistory
+} from "@/hooks/use-backend-portfolio";
+import { useTurnkeyWallet } from "@/hooks/use-turnkey-wallet";
+import { useColors } from "@/lib/theme/appearance";
+import { radius, space, tracking } from "@/lib/theme/tokens";
+import {
+  fAssetQuantity,
+  fCurrency,
+  fCurrencyTwoDecimals,
+  fPercent
+} from "@/lib/utils/number-format.utils";
 import type { PortfolioPeriod } from "@/services/portfolio.service";
-import { formatNormalToken } from "@/lib/utils/format.utils";
-import { useAssetDetail } from "@/hooks/use-asset-detail";
 
-const DEFAULT_ASSET_CLASS: AssetClass = "Crypto";
-
-const formatCurrency = (amount: number | null): string => {
-  if (amount == null || !Number.isFinite(amount)) {
-    return "$0.00";
-  }
-
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  }).format(amount);
+const ASSET_NAMES: Record<string, string> = {
+  BTC: "Bitcoin",
+  ETH: "Ethereum",
+  SOL: "Solana",
+  XLM: "Stellar Lumens",
+  USDC: "USD Coin"
 };
 
-const getAssetClass = (symbol: string): AssetClass => {
-  if (symbol.startsWith("n")) {
-    return "Crypto";
-  }
-
-  if (symbol === "XLM") {
-    return "Crypto";
-  }
-
-  return DEFAULT_ASSET_CLASS;
-};
-
-const getAssetDisplayName = (
-  symbol: string,
-  fallback: string,
-  walletDisplayName?: string
-): string => {
-  if (walletDisplayName?.length) {
-    return walletDisplayName;
-  }
-
-  if (symbol.startsWith("n")) {
-    const base = formatNormalToken(symbol, "without-n");
-    return `Normal ${base.toUpperCase()}`;
-  }
-
-  return fallback;
-};
-
-const formatChangeLabel = (period: PortfolioPeriod): string => {
-  switch (period) {
-    case "1D":
-      return "Past 24h";
-    case "7D":
-      return "Past 7d";
-    case "30D":
-      return "Past 30d";
-    case "180D":
-      return "Past 6mo";
-    case "365D":
-      return "Past year";
-    default:
-      return "All time";
-  }
-};
-
-const formatChangePercent = (value: number | null | undefined): string => {
-  if (value == null || !Number.isFinite(value)) {
-    return "0.00%";
-  }
-
-  const formatted = Math.abs(value).toFixed(2);
-  return value >= 0 ? `+${formatted}%` : `-${formatted}%`;
-};
-
-const renderErrorBadge = (message?: string) => {
-  if (!message) {
-    return null;
-  }
-
-  return (
-    <XStack
-      alignItems='center'
-      space='$2'
-      padding='$2'
-      backgroundColor='#FFF3F0'
-      borderRadius='$4'
-      borderWidth={1}
-      borderColor='#FFD0C2'
-    >
-      <AlertCircle size={14} color='#FF5630' />
-      <Text fontSize='$2' color='#FF5630' fontWeight='600'>
-        {message}
-      </Text>
-    </XStack>
-  );
-};
+const PERIODS: { key: PortfolioPeriod; label: string }[] = [
+  { key: "1D", label: "1D" },
+  { key: "7D", label: "1W" },
+  { key: "30D", label: "1M" },
+  { key: "365D", label: "1Y" },
+  { key: "All", label: "All" }
+];
 
 export default function AssetDetailScreen() {
+  const c = useColors();
   const router = useRouter();
-  const { symbol } = useLocalSearchParams<{ symbol?: string }>();
-  const normalizedSymbol = (symbol ?? "nETH").toString().toUpperCase();
-  const [selectedPeriod, setSelectedPeriod] = useState<PortfolioPeriod>("1D");
-  const [infoExpanded, setInfoExpanded] = useState(true);
-  const [changeIcons] = useAssets([
-    require("@svgs/increase.svg"),
-    require("@svgs/decrease.svg")
-  ]);
-  const {
-    transactions,
-    isLoading: isTransactionsLoading,
-    portfolioData
-  } = usePortfolio();
+  const { symbol: raw } = useLocalSearchParams<{ symbol?: string }>();
+  const symbol = (raw ?? "").toUpperCase();
 
-  const assetFromPortfolio = useMemo(() => {
-    return portfolioData.assets.find(
-      (item) => item.asset_code?.toUpperCase() === normalizedSymbol
-    );
-  }, [portfolioData.assets, normalizedSymbol]);
+  const { portfolioData, transactions, isLoading } = useBackendPortfolio();
+  const { stellarAddress } = useTurnkeyWallet();
+  const [period, setPeriod] = React.useState<PortfolioPeriod>("7D");
+  const [receiveOpen, setReceiveOpen] = React.useState(false);
 
-  const assetClass = useMemo(
-    () => getAssetClass(normalizedSymbol),
-    [normalizedSymbol]
+  const history = usePriceHistory(symbol || undefined, PERIOD_TO_RANGE[period]);
+  const asset = portfolioData.assets.find((a) => a.asset_code === symbol);
+
+  const points = history.data?.prices ?? [];
+  const lastHistoryPrice = points.length ? points[points.length - 1][1] : null;
+  const firstHistoryPrice = points.length ? points[0][1] : null;
+  const price = asset?.usdPrice || lastHistoryPrice || 0;
+  const change24h = asset?.priceChange24h;
+  const periodChange =
+    firstHistoryPrice && lastHistoryPrice
+      ? ((lastHistoryPrice - firstHistoryPrice) / firstHistoryPrice) * 100
+      : null;
+
+  const chartData = React.useMemo(
+    () => points.map(([, value]) => ({ value })),
+    [points]
   );
+  const chartWidth = Dimensions.get("window").width - space.gutter * 2 - 2;
 
-  const {
-    price,
-    priceChangePercent,
-    chartData,
-    metrics,
-    isLoading,
-    isFetching,
-    errors,
-    symbol: resolvedSymbol
-  } = useAssetDetail({
-    symbol: normalizedSymbol,
-    period: selectedPeriod,
-    enabled: true
-  });
-
-  const increaseIcon = changeIcons?.[0];
-  const increaseIconUri = increaseIcon?.localUri ?? increaseIcon?.uri;
-  const decreaseIcon = changeIcons?.[1];
-  const decreaseIconUri = decreaseIcon?.localUri ?? decreaseIcon?.uri;
-
-  const classStyle = assetClassStyles[assetClass];
-
-  const changeIsPositive = (priceChangePercent ?? 0) >= 0;
-  const changeColor = changeIsPositive ? "#00C48C" : "#FF5630";
-
-  const assetSymbol = resolvedSymbol || normalizedSymbol;
-  const displayName = getAssetDisplayName(
-    assetSymbol,
-    assetSymbol,
-    assetFromPortfolio?.display_name
-  );
-
-  const formattedPrice = useMemo(() => formatCurrency(price), [price]);
-
-  const assetTransactions = useMemo(() => {
-    const targetSymbol = assetSymbol.toLowerCase();
-    return transactions.filter((tx) => tx.asset.toLowerCase() === targetSymbol);
-  }, [transactions, assetSymbol]);
-
-  const formattedChangePercent = useMemo(
-    () => formatChangePercent(priceChangePercent),
-    [priceChangePercent]
-  );
-
-  const changeIconUri = changeIsPositive ? increaseIconUri : decreaseIconUri;
-
-  const handleSwapPress = () => {
-    router.push({
-      pathname: "/(tabs)/invest",
-      params: { sellAsset: assetSymbol }
-    });
-  };
-
-  if (isLoading) {
-    return (
-      <YStack flex={1} backgroundColor='#FFFFFF'>
-        <AssetDetailSkeleton show={true} />
-      </YStack>
-    );
-  }
+  const assetTxs = transactions.filter((tx) => tx.asset === symbol);
+  const positiveChange = (change24h ?? periodChange ?? 0) >= 0;
 
   return (
-    <YStack flex={1} backgroundColor='#FFFFFF'>
-      <ScrollView
-        contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }}
-        showsVerticalScrollIndicator={false}
-      >
-        <YStack space='$6' paddingTop={24}>
-          <XStack alignItems='center' space='$4'>
-            <XStack space='$3' alignItems='center'>
-              <AssetIcon
-                symbol={assetSymbol}
-                size={48}
-                backgroundColor={classStyle?.color}
-              />
-              <YStack space='$1' flex={1}>
-                <XStack
-                  alignItems='center'
-                  space='$2'
-                  justifyContent='space-between'
-                >
-                  <Text fontSize='$4' fontWeight='700' color='#1C252E'>
-                    {displayName}
-                  </Text>
-                  <Text
-                    fontSize='$1'
-                    fontWeight='700'
-                    color={classStyle?.color}
-                    backgroundColor={classStyle?.backgroundColor}
-                    paddingVertical={4}
-                    paddingHorizontal={8}
-                    borderRadius={6}
-                  >
-                    {assetClass}
-                  </Text>
-                </XStack>
-                <Text
-                  fontSize='$2'
-                  fontWeight='600'
-                  color='#637381'
-                  fontFamily='$numeric'
-                >
-                  {assetSymbol}
-                </Text>
-              </YStack>
-            </XStack>
+    <Screen>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 48 }}>
+        <YStack paddingHorizontal={space.gutter} paddingTop={56} gap={space.section}>
+          {/* Header */}
+          <XStack alignItems='center' gap={8}>
+            <IconButton onPress={() => router.back()} label='Back'>
+              <ChevronLeft size={22} color={c.ink} strokeWidth={2} />
+            </IconButton>
+            <AssetIcon symbol={symbol} size={36} fontSize='$3' />
+            <YStack>
+              <UiText fontSize={15} fontWeight='600'>
+                {ASSET_NAMES[symbol] ?? symbol}
+              </UiText>
+              <UiText fontSize={12} color={c.muted}>
+                {symbol}
+              </UiText>
+            </YStack>
           </XStack>
 
-          <YStack space='$2'>
-            <Text
-              fontSize='$8'
-              fontWeight='700'
-              color='#1C252E'
-              fontFamily='$numeric'
-            >
-              {formattedPrice}
-            </Text>
-            <XStack alignItems='center' space='$1 '>
-              <Text fontSize='$2' fontWeight='400' color={"#1C252E"}>
-                {formatChangeLabel(selectedPeriod)}
-              </Text>
-              <XStack alignItems='center' space='$1'>
-                {changeIconUri ? (
-                  <SvgUri width={18} height={18} uri={changeIconUri} />
-                ) : (
-                  <ArrowUpRight size={16} color={changeColor} />
-                )}
-                <Text
-                  fontSize='$2'
-                  fontWeight='500'
-                  color={"#637381"}
-                  fontFamily='$numeric'
-                >
-                  {formattedChangePercent}
-                </Text>
+          {/* Price + chart */}
+          <Card paddingTop={16} paddingBottom={8}>
+            <YStack paddingHorizontal={space.rowX} gap={4}>
+              {history.isLoading && !asset ? (
+                <Skeleton width={140} height={30} />
+              ) : (
+                <Mono fontSize={28} letterSpacing={tracking(28)}>
+                  {fCurrencyTwoDecimals(price)}
+                </Mono>
+              )}
+              <XStack alignItems='center' gap={6}>
+                <Mono fontSize={13} color={positiveChange ? c.positive : c.ink}>
+                  {change24h !== undefined && change24h !== null
+                    ? `${change24h >= 0 ? "+" : ""}${fPercent(change24h, { maximumFractionDigits: 2 })}`
+                    : periodChange !== null
+                      ? `${periodChange >= 0 ? "+" : ""}${fPercent(periodChange, { maximumFractionDigits: 2 })}`
+                      : "—"}
+                </Mono>
+                <UiText fontSize={12} color={c.muted}>
+                  {change24h !== undefined && change24h !== null ? "24h" : PERIODS.find((p) => p.key === period)?.label}
+                </UiText>
               </XStack>
-            </XStack>
-            {renderErrorBadge(errors.price)}
-          </YStack>
+            </YStack>
 
-          <PortfolioChart
-            data={chartData}
-            selectedPeriod={selectedPeriod}
-            onPeriodChange={(period) =>
-              setSelectedPeriod(period as PortfolioPeriod)
-            }
-            isRefreshing={isFetching}
-          />
-
-          <YStack
-            backgroundColor='#F9FAFB'
-            borderRadius={24}
-            borderWidth={1}
-            borderColor='#919EAB1F'
-            padding={20}
-            space='$3'
-          >
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={() => setInfoExpanded((prev) => !prev)}
-            >
-              <XStack justifyContent='space-between' alignItems='center'>
-                <Text fontSize='$3' fontWeight='700' color='#1C252E'>
-                  Asset Information
-                </Text>
-                <ChevronDown
-                  size={18}
-                  color='#919EAB'
-                  style={{
-                    transform: [{ rotate: infoExpanded ? "0deg" : "-90deg" }]
-                  }}
+            <YStack height={180} marginTop={12} justifyContent='center'>
+              {history.isLoading ? (
+                <YStack paddingHorizontal={space.rowX}>
+                  <Skeleton width='100%' height={140} />
+                </YStack>
+              ) : chartData.length > 1 ? (
+                <LineChart
+                  data={chartData}
+                  width={chartWidth}
+                  height={160}
+                  color={c.ink}
+                  thickness={2}
+                  curved
+                  hideDataPoints
+                  hideAxesAndRules
+                  areaChart
+                  startFillColor={c.ink}
+                  startOpacity={0.08}
+                  endFillColor={c.surface}
+                  endOpacity={0}
+                  initialSpacing={0}
+                  endSpacing={0}
+                  spacing={chartWidth / Math.max(1, chartData.length - 1)}
+                  disableScroll
+                  adjustToWidth
                 />
-              </XStack>
-            </TouchableOpacity>
-            {infoExpanded ? (
-              <YStack space='$3'>
-                {metrics.length > 0 ? (
-                  metrics.map((detail) => {
-                    const isChangeMetric = detail.label.includes("Change");
-                    const isPositive = detail.value.startsWith("+");
-                    const valueWithoutSign = detail.value.replace(/^[+-]/, "");
-                    const metricChangeIconUri = isPositive
-                      ? increaseIconUri
-                      : decreaseIconUri;
+              ) : (
+                <UiText fontSize={13} color={c.muted} textAlign='center'>
+                  No price history{history.error ? `: ${history.error.message}` : ""}
+                </UiText>
+              )}
+            </YStack>
 
-                    return (
-                      <XStack
-                        key={`${assetSymbol}-${detail.label}`}
-                        justifyContent='space-between'
-                        alignItems='center'
-                        paddingVertical='$2'
-                      >
-                        <Text
-                          fontSize='$2'
-                          color='#637381'
-                          fontWeight='600'
-                          fontFamily='$numeric'
-                        >
-                          {detail.label}
-                        </Text>
-                        {isChangeMetric ? (
-                          <XStack alignItems='center' space='$1'>
-                            {metricChangeIconUri && (
-                              <SvgUri
-                                width={16}
-                                height={16}
-                                uri={metricChangeIconUri}
-                              />
-                            )}
-                            <Text
-                              fontSize='$2'
-                              color='#1C252E'
-                              fontWeight='600'
-                              fontFamily='$numeric'
-                              textAlign='right'
-                            >
-                              {valueWithoutSign}
-                            </Text>
-                          </XStack>
-                        ) : (
-                          <Text
-                            fontSize='$2'
-                            color='#1C252E'
-                            fontWeight='600'
-                            fontFamily='$numeric'
-                            textAlign='right'
-                          >
-                            {detail.value}
-                          </Text>
-                        )}
-                      </XStack>
-                    );
-                  })
-                ) : (
-                  <Text fontSize='$2' color='#637381'>
-                    No additional market data available.
-                  </Text>
-                )}
-                {renderErrorBadge(errors.historical)}
+            {/* Period pills: 12/600 */}
+            <XStack gap={6} paddingHorizontal={space.rowX} paddingTop={8} justifyContent='center'>
+              {PERIODS.map(({ key, label }) => {
+                const selected = period === key;
+                return (
+                  <XStack
+                    key={key}
+                    onPress={() => setPeriod(key)}
+                    paddingHorizontal={12}
+                    height={28}
+                    borderRadius={radius.pill}
+                    alignItems='center'
+                    backgroundColor={selected ? c.ink : "transparent"}
+                    pressStyle={{ backgroundColor: selected ? c.ctaPressed : c.pressTint }}
+                  >
+                    <UiText fontSize={12} fontWeight='600' color={selected ? c.ctaText : c.muted}>
+                      {label}
+                    </UiText>
+                  </XStack>
+                );
+              })}
+            </XStack>
+          </Card>
+
+          {/* Balance */}
+          <Card paddingTop={4} paddingHorizontal={4} paddingBottom={12}>
+            <XStack
+              paddingHorizontal={space.rowX}
+              paddingTop={14}
+              paddingBottom={space.rowY}
+              justifyContent='space-between'
+              alignItems='center'
+            >
+              <UiText fontSize={14} fontWeight='500' color={c.ink2}>
+                Your balance
+              </UiText>
+              {isLoading ? (
+                <Skeleton width={90} height={24} />
+              ) : (
+                <Mono fontSize={22} letterSpacing={tracking(22)}>
+                  {fCurrency(asset?.usdValue ?? 0)}
+                </Mono>
+              )}
+            </XStack>
+            <Divider />
+            <XStack
+              paddingHorizontal={space.rowX}
+              paddingVertical={space.rowY}
+              justifyContent='space-between'
+              alignItems='center'
+            >
+              <UiText fontSize={13.5} color={c.muted}>
+                Amount
+              </UiText>
+              <Mono fontSize={15}>
+                {fAssetQuantity(asset?.balance ?? 0, symbol)} {symbol}
+              </Mono>
+            </XStack>
+            <XStack gap={8} marginTop={8} marginHorizontal={8}>
+              <YStack flex={1}>
+                <SecondaryButton
+                  label='Receive'
+                  icon={<ArrowDown size={16} color={c.ink} strokeWidth={2} />}
+                  onPress={() => setReceiveOpen(true)}
+                />
               </YStack>
-            ) : null}
+              <YStack flex={1}>
+                <SecondaryButton
+                  label='Send'
+                  icon={<ArrowUp size={16} color={c.ink} strokeWidth={2} />}
+                  onPress={() => Alert.alert("Coming soon", "Send arrives with the Normal wallet.")}
+                />
+              </YStack>
+            </XStack>
+          </Card>
+
+          {/* Activity for this asset */}
+          <YStack gap={8}>
+            <UiText fontSize={14} fontWeight='500' color={c.ink2}>
+              Activity
+            </UiText>
+            {assetTxs.length === 0 ? (
+              <EmptyState
+                icon={<Inbox size={24} color={c.ink} strokeWidth={1.8} />}
+                title={`No ${symbol} activity yet`}
+              />
+            ) : (
+              assetTxs.map((tx) => <ActivityRow key={tx.id} tx={tx} />)
+            )}
           </YStack>
-
-          <Button
-            backgroundColor='#947BFF33'
-            color='#947BFF'
-            borderRadius={16}
-            fontSize='$3'
-            fontWeight='700'
-            onPress={handleSwapPress}
-          >
-            <Text fontSize='$3' fontWeight='700' color='#947BFF'>
-              Swap {assetSymbol}
-            </Text>
-          </Button>
-
-          <TransactionHistory
-            transactions={assetTransactions}
-            isLoading={isTransactionsLoading}
-          />
         </YStack>
       </ScrollView>
-    </YStack>
+
+      <ReceiveSheet open={receiveOpen} address={stellarAddress} onClose={() => setReceiveOpen(false)} />
+    </Screen>
   );
 }

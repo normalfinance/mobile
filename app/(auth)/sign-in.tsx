@@ -1,161 +1,132 @@
-import { useRouter } from "expo-router";
+// Sign in: email code (Supabase OTP) or Google (PKCE, services/auth.service.ts).
+// On success the auth layout redirects to the tabs; nothing is stored locally.
+
 import React from "react";
-import { Alert } from "react-native";
+import { Alert, KeyboardAvoidingView, Platform, ScrollView } from "react-native";
 import { Image } from "expo-image";
+import { XStack, YStack } from "tamagui";
+
 import PasswordlessSignIn from "@/components/passwordless-signin";
-import { secureStorage } from "@/lib/utils";
-import { STORAGE_KEYS } from "@/lib/constants";
-import { Button, Paragraph, Text, XStack, YStack, Separator } from "tamagui";
+import { Divider, Screen, SecondaryButton, UiText } from "@/components/home/primitives";
+import { useColors } from "@/lib/theme/appearance";
+import { radius, space, tracking } from "@/lib/theme/tokens";
+import { BRAND_ASSETS } from "@/lib/utils/cdn.utils";
 import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
 import { signInWithGoogle } from "@/services";
 
 export default function SignInScreen() {
-  const router = useRouter();
+  const c = useColors();
   const { isLoading: authLoading } = useSupabaseAuth();
   const [isGoogleLoading, setIsGoogleLoading] = React.useState(false);
 
   const handleGoogleSignIn = React.useCallback(async () => {
     setIsGoogleLoading(true);
-
     try {
-      // signInWithGoogle will open OAuth browser and redirect to wallet-setup
-      // The wallet-setup page will handle the code exchange
-      const completed = await signInWithGoogle();
-
-      if (completed) {
-        // Mark onboarding as complete
-        await secureStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETE, "true");
-        // Note: The OAuth redirect will automatically open wallet-setup
-        // so we don't need to navigate manually
-      }
+      // Exchanges the PKCE code itself; the session change redirects us.
+      await signInWithGoogle();
     } catch (error) {
-      console.error("Google sign-in error:", error);
       const message =
-        error instanceof Error
-          ? error.message
-          : "We couldn't complete Google sign-in. Please try again.";
-      Alert.alert("Google Sign-In Failed", message);
+        error instanceof Error ? error.message : "We couldn’t complete Google sign-in.";
+      Alert.alert("Google sign-in failed", message);
     } finally {
       setIsGoogleLoading(false);
     }
   }, []);
 
   const handleAppleSignIn = React.useCallback(() => {
-    Alert.alert(
-      "Coming Soon",
-      "Apple sign-in is not yet available. Please use email sign-in for now."
-    );
+    Alert.alert("Coming soon", "Apple sign-in is not available yet. Use email or Google.");
   }, []);
 
   return (
-    <YStack
-      flex={1}
-      bg='#F7F8FA'
-      alignItems='center'
-      justifyContent='space-around'
-      p='$4'
-    >
-      <YStack alignItems='center' space='$4' justifyContent='space-between'>
-        <YStack
-          width={64}
-          height={64}
-          borderRadius={44}
-          borderWidth={3}
-          borderColor='rgba(148,163,184,0.1)'
-          bg='white'
-          alignItems='center'
-          justifyContent='center'
-          shadowColor='rgba(15, 23, 42, 0.08)'
-          shadowOffset={{ width: 0, height: 12 }}
-          shadowOpacity={1}
-          shadowRadius={24}
-          overflow='hidden'
-        >
-          <Image
-            source={require("@/assets/icons/normal.png")}
-            style={{ width: 56, height: 56 }}
-          />
-        </YStack>
-
-        <YStack space='$2' alignItems='center'>
-          <Text fontSize={24} fontWeight='500' color='#0D0D12'>
-            Sign in to Normal
-          </Text>
-          <Paragraph
-            color='#666D80'
-            textAlign='center'
-            fontWeight='400'
-            fontSize={16}
-          >
-            Welcome back!
-          </Paragraph>
-          {authLoading && (
-            <Text color='#666D80' fontSize={14}>
-              Checking your session...
-            </Text>
-          )}
-        </YStack>
-      </YStack>
-
-      <PasswordlessSignIn
-        onSuccess={async () => {
-          await secureStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETE, "true");
-          router.replace("/(tabs)");
-        }}
-      />
-      <XStack
-        // @ts-ignore
-        justifyContent='center'
-        alignItems='center'
-        mv='$0'
+    <Screen>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <Separator flex={1} mr='$3' />
-        <Text color='$color10'>OR</Text>
-        <Separator flex={1} ml='$3' />
-      </XStack>
-
-      <YStack space='$3' width='100%'>
-        <Button
-          size='$5'
-          backgroundColor='#FFFFFF'
-          borderColor='rgba(208, 213, 221, 0.8)'
-          borderWidth={1}
-          borderRadius={6}
-          fontWeight='600'
-          onPress={handleGoogleSignIn}
-          disabled={isGoogleLoading}
-          opacity={isGoogleLoading ? 0.6 : 1}
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1, justifyContent: "center" }}
+          keyboardShouldPersistTaps='handled'
+          showsVerticalScrollIndicator={false}
         >
-          <XStack alignItems='center' justifyContent='center' space='$3'>
-            <Image
-              source={require("@/assets/icons/auth/google.png")}
-              style={{ width: 24, height: 24 }}
-            />
-            <Text color='#101828' fontWeight='600'>
-              {isGoogleLoading ? "Signing in..." : "Sign in with Google"}
-            </Text>
-          </XStack>
-        </Button>
+          <YStack paddingHorizontal={space.gutter} paddingVertical={40} gap={28}>
+            <YStack alignItems='center' gap={14}>
+              <YStack
+                width={64}
+                height={64}
+                borderRadius={32}
+                overflow='hidden'
+                backgroundColor={c.iconBg}
+              >
+                <Image
+                  source={{ uri: BRAND_ASSETS.logoSinglePng() }}
+                  style={{ width: 64, height: 64 }}
+                  contentFit='cover'
+                  cachePolicy='memory-disk'
+                />
+              </YStack>
+              <YStack alignItems='center' gap={4}>
+                <UiText fontSize={22} fontWeight='600' letterSpacing={tracking(22)}>
+                  Sign in to Normal
+                </UiText>
+                <UiText fontSize={14} color={c.muted}>
+                  {authLoading ? "Checking your session…" : "Save, hold and swap — securely."}
+                </UiText>
+              </YStack>
+            </YStack>
 
-        <Button
-          size='$5'
-          backgroundColor='#000000'
-          borderColor='$borderColor'
-          borderWidth={1}
-          borderRadius={6}
-          onPress={handleAppleSignIn}
-        >
-          <XStack alignItems='center' justifyContent='center' space='$3'>
-            <Image
-              source={require("@/assets/icons/auth/apple.png")}
-              style={{ width: 24, height: 24 }}
-            />
-            <Text color='#FFFFFF' fontWeight='600'>
-              Sign in with Apple
-            </Text>
-          </XStack>
-        </Button>
-      </YStack>
-    </YStack>
+            <PasswordlessSignIn />
+
+            <XStack alignItems='center' gap={12}>
+              <YStack flex={1}>
+                <Divider inset={0} />
+              </YStack>
+              <UiText fontSize={12} color={c.faint}>
+                or
+              </UiText>
+              <YStack flex={1}>
+                <Divider inset={0} />
+              </YStack>
+            </XStack>
+
+            <YStack gap={10}>
+              <SecondaryButton
+                label={isGoogleLoading ? "Signing in…" : "Continue with Google"}
+                onPress={handleGoogleSignIn}
+                disabled={isGoogleLoading}
+                icon={
+                  <Image
+                    source={require("@/assets/icons/auth/google.png")}
+                    style={{ width: 18, height: 18 }}
+                  />
+                }
+              />
+              <XStack
+                onPress={handleAppleSignIn}
+                height={44}
+                borderRadius={radius.smallButton}
+                backgroundColor={c.cta}
+                pressStyle={{ backgroundColor: c.ctaPressed }}
+                alignItems='center'
+                justifyContent='center'
+                gap={8}
+                accessibilityRole='button'
+              >
+                <Image
+                  source={require("@/assets/icons/auth/apple.png")}
+                  style={{ width: 18, height: 18, tintColor: c.ctaText }}
+                />
+                <UiText fontSize={13} fontWeight='500' color={c.ctaText}>
+                  Continue with Apple
+                </UiText>
+              </XStack>
+            </YStack>
+
+            <UiText fontSize={11} color={c.faint} textAlign='center' lineHeight={16}>
+              By continuing you agree to Normal’s Terms and Privacy Policy.
+            </UiText>
+          </YStack>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </Screen>
   );
 }

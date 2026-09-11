@@ -1,7 +1,7 @@
 import { createTamagui, createFont, CreateTamaguiProps } from "tamagui";
 import { config as defaultConfig } from "@tamagui/config";
 
-import { ink } from "./lib/theme/tokens";
+import { ink, inkDark } from "./lib/theme/tokens";
 
 const {
   themes: baseThemes,
@@ -224,15 +224,27 @@ const themes = {
     textSecondary: ink.muted,
     textTertiary: ink.faint
   },
-  // Product surfaces are light-only on web too (D9). Kept so nothing that
-  // references the dark theme breaks; it is never selected.
+  // Derived dark palette (lib/theme/tokens.ts inkDark); chosen in Settings.
   dark: {
     ...baseThemes.dark,
-    background: "#0F172A",
-    color: "#ECEDEE",
-    borderColor: "#1E293B",
-    accentColor: "#38BDF8",
-    buttonColor: "#ECEDEE"
+    background: inkDark.surface,
+    backgroundHover: inkDark.surface,
+    backgroundPress: inkDark.pressTint,
+    backgroundFocus: inkDark.surface,
+    color: inkDark.ink,
+    colorHover: inkDark.ink,
+    colorPress: inkDark.ink2,
+    colorFocus: inkDark.ink,
+    borderColor: inkDark.border,
+    shadowColor: "transparent",
+    accentColor: inkDark.ink,
+    buttonColor: inkDark.cta,
+    cardBackground: inkDark.surface,
+    pageBackground: inkDark.surface,
+    sectionBackground: inkDark.iconBg,
+    textPrimary: inkDark.ink,
+    textSecondary: inkDark.muted,
+    textTertiary: inkDark.faint
   }
 };
 

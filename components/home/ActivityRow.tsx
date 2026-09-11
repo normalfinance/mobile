@@ -13,7 +13,8 @@ import {
   type LucideIcon
 } from "lucide-react-native";
 
-import { ink, space, typeScale as t, type ChipTone } from "@/lib/theme/tokens";
+import { useColors } from "@/lib/theme/appearance";
+import { space, typeScale as t, type ChipTone } from "@/lib/theme/tokens";
 import { fAssetQuantity, fCurrency } from "@/lib/utils/number-format.utils";
 import type { Transaction, TransactionType } from "@/services/portfolio.service";
 import { Chip, Mono, Pressable, Skeleton, UiText } from "./primitives";
@@ -41,10 +42,11 @@ export const ActivityRow = ({
   tx: Transaction;
   onPress?: () => void;
 }) => {
+  const c = useColors();
   const meta = TYPE_META[tx.type] ?? TYPE_META.send;
   const failed = tx.status === "failed";
   const pending = tx.status === "pending";
-  const amountColor = failed ? ink.failed : meta.positive ? ink.positive : ink.ink;
+  const amountColor = failed ? c.failed : meta.positive ? c.positive : c.ink;
   const prefix = meta.positive && !failed ? "+" : "";
 
   return (
@@ -62,11 +64,11 @@ export const ActivityRow = ({
           width={32}
           height={32}
           borderRadius={16}
-          backgroundColor={ink.iconCircle}
+          backgroundColor={c.iconCircle}
           alignItems='center'
           justifyContent='center'
         >
-          <meta.Icon size={16} color={ink.ink} strokeWidth={2} />
+          <meta.Icon size={16} color={c.ink} strokeWidth={2} />
         </YStack>
         <YStack gap={3} flexShrink={1}>
           <XStack alignItems='center' gap={6}>
@@ -76,7 +78,7 @@ export const ActivityRow = ({
             {pending ? <Chip tone='amber' label='Pending' /> : null}
             {failed ? <Chip tone='neutral' label='Failed' /> : null}
           </XStack>
-          <UiText fontSize={t.assetSub.size} color={ink.muted}>
+          <UiText fontSize={t.assetSub.size} color={c.muted}>
             {formatWhen(tx.timestamp)}
           </UiText>
         </YStack>
@@ -87,7 +89,7 @@ export const ActivityRow = ({
           {fAssetQuantity(tx.amount, tx.asset)} {tx.asset}
         </Mono>
         {tx.usdValue ? (
-          <Mono fontSize={t.assetQty.size} color={ink.muted}>
+          <Mono fontSize={t.assetQty.size} color={c.muted}>
             {fCurrency(tx.usdValue)}
           </Mono>
         ) : null}

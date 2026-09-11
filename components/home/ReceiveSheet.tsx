@@ -1,5 +1,5 @@
-// Receive modal, after web's receive-modal.tsx: dialog r22, QR panel r16 on
-// #FAFAFB, address box r12 on #FAFAFB in 12px mono, copy button r10 white 13px.
+// Receive modal, after web's receive-modal.tsx: dialog r22, QR panel r16 on the
+// input background, address box r12 in 12px mono, copy button r10.
 
 import React from "react";
 import { Modal } from "react-native";
@@ -8,8 +8,9 @@ import QRCode from "react-native-qrcode-svg";
 import * as Clipboard from "expo-clipboard";
 import { Check, Copy, X } from "lucide-react-native";
 
-import { ink, radius, space, tracking } from "@/lib/theme/tokens";
-import { Mono, UiText } from "./primitives";
+import { useColors } from "@/lib/theme/appearance";
+import { radius, space, tracking } from "@/lib/theme/tokens";
+import { IconButton, Mono, SecondaryButton, UiText } from "./primitives";
 
 export const ReceiveSheet = ({
   open,
@@ -20,12 +21,16 @@ export const ReceiveSheet = ({
   address: string | null;
   onClose: () => void;
 }) => {
+  const c = useColors();
   const [copied, setCopied] = React.useState(false);
   const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  React.useEffect(() => () => {
-    if (timer.current) clearTimeout(timer.current);
-  }, []);
+  React.useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    []
+  );
 
   const copy = async () => {
     if (!address) return;
@@ -37,9 +42,9 @@ export const ReceiveSheet = ({
 
   return (
     <Modal visible={open} transparent animationType='slide' onRequestClose={onClose}>
-      <YStack flex={1} justifyContent='flex-end' backgroundColor='rgba(10,10,15,0.35)'>
+      <YStack flex={1} justifyContent='flex-end' backgroundColor='rgba(10,10,15,0.45)'>
         <YStack
-          backgroundColor={ink.surface}
+          backgroundColor={c.surface}
           borderTopLeftRadius={radius.dialog}
           borderTopRightRadius={radius.dialog}
           padding={space.gutter}
@@ -50,20 +55,12 @@ export const ReceiveSheet = ({
             <UiText fontSize={16} fontWeight='600'>
               Receive
             </UiText>
-            <YStack
-              onPress={onClose}
-              width={32}
-              height={32}
-              borderRadius={radius.iconBox}
-              alignItems='center'
-              justifyContent='center'
-              pressStyle={{ backgroundColor: ink.iconPressTint }}
-            >
-              <X size={20} color={ink.muted} strokeWidth={2} />
-            </YStack>
+            <IconButton onPress={onClose} label='Close'>
+              <X size={20} color={c.muted} strokeWidth={2} />
+            </IconButton>
           </XStack>
 
-          <UiText fontSize={14} color={ink.body50}>
+          <UiText fontSize={14} color={c.body50}>
             Stellar address. Send XLM or USDC on Stellar only — assets from other
             networks will be lost.
           </UiText>
@@ -74,45 +71,31 @@ export const ReceiveSheet = ({
                 alignItems='center'
                 padding={20}
                 borderRadius={radius.card}
-                backgroundColor={ink.inputBg}
+                backgroundColor='#FAFAFB'
               >
-                <QRCode value={address} size={180} backgroundColor={ink.inputBg} />
+                <QRCode value={address} size={180} backgroundColor='#FAFAFB' />
               </YStack>
 
-              <YStack
-                padding={12}
-                borderRadius={radius.input}
-                backgroundColor={ink.inputBg}
-              >
+              <YStack padding={12} borderRadius={radius.input} backgroundColor={c.inputBg}>
                 <Mono fontSize={12} letterSpacing={tracking(12)} selectable>
                   {address}
                 </Mono>
               </YStack>
 
-              <XStack
+              <SecondaryButton
                 onPress={copy}
-                height={40}
-                borderRadius={radius.smallButton}
-                borderWidth={1}
-                borderColor={ink.border}
-                backgroundColor={ink.surface}
-                pressStyle={{ backgroundColor: ink.iconBg }}
-                alignItems='center'
-                justifyContent='center'
-                gap={8}
-              >
-                {copied ? (
-                  <Check size={16} color={ink.positive} strokeWidth={2} />
-                ) : (
-                  <Copy size={16} color={ink.ink} strokeWidth={2} />
-                )}
-                <UiText fontSize={13} fontWeight='500'>
-                  {copied ? "Copied" : "Copy address"}
-                </UiText>
-              </XStack>
+                label={copied ? "Copied" : "Copy address"}
+                icon={
+                  copied ? (
+                    <Check size={16} color={c.positive} strokeWidth={2} />
+                  ) : (
+                    <Copy size={16} color={c.ink} strokeWidth={2} />
+                  )
+                }
+              />
             </>
           ) : (
-            <UiText fontSize={14} color={ink.muted}>
+            <UiText fontSize={14} color={c.muted}>
               This wallet has no Stellar address yet.
             </UiText>
           )}

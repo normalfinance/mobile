@@ -1,44 +1,30 @@
 import { useEffect } from "react";
+import { ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
-import { Spinner, Text, YStack } from "tamagui";
 
+import { Screen, UiText } from "@/components/home/primitives";
+import { useColors } from "@/lib/theme/appearance";
 import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
 
 export default function AuthCallbackScreen() {
+  const c = useColors();
   const router = useRouter();
   const { session, isLoading } = useSupabaseAuth();
 
-  console.log("AuthCallbackScreen", isLoading, session);
-
   useEffect(() => {
-    console.log("AuthCallbackScreen", isLoading, session);
-    if (isLoading) {
-      return;
-    }
-
-    if (session) {
-      router.replace("/(tabs)");
-    } else {
-      router.replace("/sign-in");
-    }
+    if (isLoading) return;
+    router.replace(session ? "/(tabs)" : "/sign-in");
   }, [isLoading, session, router]);
 
   return (
-    <YStack
-      flex={1}
-      justifyContent='center'
-      alignItems='center'
-      backgroundColor='#F7F8FA'
-      padding='$4'
-      space='$3'
-    >
-      <Spinner size='large' color='#1C252E' />
-      <Text fontSize={16} fontWeight='600' color='#1C252E'>
-        Finishing sign-in...
-      </Text>
-      <Text fontSize={14} color='#666D80' textAlign='center'>
-        You will be redirected shortly.
-      </Text>
-    </YStack>
+    <Screen justifyContent='center' alignItems='center' gap={12} padding={24}>
+      <ActivityIndicator color={c.muted} />
+      <UiText fontSize={16} fontWeight='500'>
+        Finishing sign-in…
+      </UiText>
+      <UiText fontSize={14} color={c.muted}>
+        You’ll be redirected in a moment.
+      </UiText>
+    </Screen>
   );
 }
