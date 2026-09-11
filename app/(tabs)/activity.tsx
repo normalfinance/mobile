@@ -1,6 +1,6 @@
-// Activity tab — the drawer's Activity tab as a full screen. Source today:
-// Stellar history from Horizon keyed by the Turnkey address. Web merges eight
-// sources (Q21); the rest join once their flows exist.
+// Activity tab — the drawer's Activity tab as a full screen. Source: the four
+// public activity/{chain} routes merged newest-first (hooks/use-activity-feed).
+// Savings and swap rows (wallet/activity) join once those flows exist.
 
 import React from "react";
 import { RefreshControl, ScrollView } from "react-native";
@@ -9,13 +9,19 @@ import { Inbox } from "lucide-react-native";
 
 import { ActivityRow, ActivityRowSkeleton } from "@/components/home/ActivityRow";
 import { EmptyState, Screen, ScreenTitle } from "@/components/home/primitives";
-import { useWalletTransactions } from "@/hooks/use-wallet-transactions";
+import { useActivityFeed } from "@/hooks/use-activity-feed";
+import { useBackendPortfolio } from "@/hooks/use-backend-portfolio";
 import { useColors } from "@/lib/theme/appearance";
 import { space } from "@/lib/theme/tokens";
 
 export default function ActivityScreen() {
   const c = useColors();
-  const { transactions, isLoading, isFetching, refetch } = useWalletTransactions();
+  const { portfolioData } = useBackendPortfolio();
+  const priceOf = React.useCallback(
+    (symbol: string) => portfolioData.assets.find((a) => a.asset_code === symbol)?.usdPrice ?? 0,
+    [portfolioData.assets]
+  );
+  const { transactions, isLoading, isFetching, refetch } = useActivityFeed(priceOf);
 
   return (
     <Screen>

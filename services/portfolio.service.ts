@@ -40,4 +40,7 @@ export interface Transaction {
   changeUsd?: number;
   timestamp: Date;
   status: "completed" | "pending" | "failed";
+  chain?: "bitcoin" | "ethereum" | "solana" | "stellar";
+  txHash?: string | null;
+  counterparty?: string;
 }

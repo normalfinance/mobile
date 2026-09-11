@@ -24,7 +24,7 @@ import type {
   PortfolioData,
   PortfolioPeriod
 } from "@/services/portfolio.service";
-import { useWalletTransactions } from "@/hooks/use-wallet-transactions";
+import { useActivityFeed } from "@/hooks/use-activity-feed";
 
 // ---------------------------------------------------------------------------
 // GET /api/wallet/portfolio
@@ -245,12 +245,17 @@ export const useBackendPortfolio = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [held, historyKey]);
 
+  const priceOf = useMemo(() => {
+    const prices = new Map(portfolioData.assets.map((a) => [a.asset_code, a.usdPrice]));
+    return (symbol: string) => prices.get(symbol) ?? 0;
+  }, [portfolioData.assets]);
+
   const {
     transactions,
     isLoading: isLoadingTransactions,
     error: transactionsError,
     refetch: refetchTransactions
-  } = useWalletTransactions();
+  } = useActivityFeed(priceOf);
 
   const isLoading =
     portfolioQuery.isLoading ||
