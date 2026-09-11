@@ -488,3 +488,76 @@ or copy-with-sync both add drift for no benefit. Resolve the Node/yarn mismatch 
    401-refresh-retry, `error` as the only reliable error key.
 3. Signup = Supabase `signUp` → RN `createPasskey` → `POST /api/turnkey/wallet { ..., chain:'stellar' }`.
 4. Do not promise existing-user signin until the synced-passkey question (Q33) is settled.
+
+---
+
+## Addendum 2026-09-11 — Turnkey contract details for the mobile wallet gate (Q51–Q56)
+
+Asked by the mobile session after Google sign-in worked on the phone; answered by the web
+session the same day, read from code. Paths relative to `packages/web`.
+
+**Q51. `GET /api/turnkey/credentials`** (`src/app/api/turnkey/credentials/route.ts:35-71`).
+Success: `{ success: true, credentials: [{ id, transports: ["internal","hybrid",…] }], credentialIds: [...], subOrgId }`.
+No sub-org yet: `{ success: true, credentialIds: [] }` (**no `credentials` key** in that branch, `:41`).
+Any error: HTTP 200 `{ success: false, credentials: [], credentialIds: [], error }` — web treats it as
+"no restriction" and proceeds. `id` = Turnkey's stored `authenticator.credentialId` verbatim =
+**base64url, no padding** (what web sent at registration, `passkey.ts:10-15`). `transports` mapped from
+Turnkey enums (`route.ts:27-33`): ble/internal/nfc/usb/hybrid; unknown dropped. allowCredentials web builds
+(`passkey-stamper.ts:129-136`): `{ id: base64urlToBytes(c.id), type: 'public-key', transports? }`, omitted
+entirely when empty. Cached 60s; transports are load-bearing (without them Chrome offered "insert USB key"
+for a phone-synced passkey). **RN: pass the same ids + transports to the native stamper's allowCredentials.**
+
+**Q52. `POST /api/turnkey/wallet` body** (`wallet/route.ts:54-63`, `server.ts:45-70`). All four strings are
+**base64url without padding**: `challenge` (32 random bytes), `attestation.credentialId` (rawId),
+`clientDataJson`, `attestationObject`. This is Turnkey's own attestation format; **RN `createPasskey()` output
+passes through untouched.** `transports` accepted: usb, nfc, ble, internal, hybrid (`server.ts:29-35`); anything
+else → INTERNAL; empty array fine. Nothing else required. Server derives `userName = email ?? uid`,
+`userEmail`, authenticator name `'Passkey'`, sub-org name `normal-<uid8>-<ts36>`, quorum 1. `chain` defaults to
+`'bitcoin'` — **always send `'stellar'`**. 400 if `!challenge || !attestation?.credentialId`. Existing row →
+200 `{ wallet }` without calling Turnkey.
+
+**Q53. Stellar signing, verbatim** (`stellar-signer.ts:18-60`, `@turnkey/http` 4.1.0):
+```ts
+const tx = TransactionBuilder.fromXDR(xdr, passphrase);          // always pass Networks.PUBLIC explicitly
+const payload = tx.hash().toString('hex');                       // SHA-256 of signature base, lowercase hex, no 0x
+const client = new TurnkeyClient({ baseUrl: 'https://api.turnkey.com' }, stamper);
+const result = await client.signRawPayload({
+  type: 'ACTIVITY_TYPE_SIGN_RAW_PAYLOAD_V2',
+  timestampMs: String(Date.now()),
+  organizationId: subOrgId,                 // wallet.subOrgId from GET /api/turnkey/wallet
+  parameters: { signWith: stellarAddress,   // the G… address string itself
+                payload, encoding: 'PAYLOAD_ENCODING_HEXADECIMAL',
+                hashFunction: 'HASH_FUNCTION_NOT_APPLICABLE' } });
+const sig = result?.activity?.result?.signRawPayloadResult;      // r, s: 32-byte hex each; v unused
+const signature = Buffer.from(sig.r + sig.s, 'hex');             // 64 bytes
+const hint = Keypair.fromPublicKey(stellarAddress).signatureHint();
+tx.signatures.push(new xdr.DecoratedSignature({ hint, signature }));
+return tx.toXDR();
+```
+**No polling**: with quorum 1 and a passkey stamp the single POST returns the activity COMPLETED. Same shape for
+Solana (payload = hex of `serializeMessage()`, no pre-hash). EVM uses `signTransaction` with
+`ACTIVITY_TYPE_SIGN_TRANSACTION_V2`. `runWebauthnCeremony` only serialises back-to-back ceremonies.
+
+**Q54. Decision when `GET /api/turnkey/wallet` → `{ wallet: null }`.** Login path
+(`onboarding-wizard.tsx:295-359`): `GET /api/wallets/linked` → zero linked → `get-started` step (asset-first,
+**no wallet created until the user picks an asset**); else `GET /api/turnkey/wallet` → `stellarAddress` →
+connect; else legacy picker. Only those two server calls. Action path to mirror (`use-asset-actions.tsx:113-156`):
+`addressFor(chain)` null → `ChainSetupDialog` → `checkWalletLinkLimit()` **before** the ceremony
+(`chain-setup-dialog.tsx:74-84`) → `ensureChainAccount(chain, uid, email)` → for Stellar `POST /api/wallets/link
+{ address }` + adopt. **Mobile mirror (Turnkey-only):** after login `GET /api/turnkey/wallet`; `null` → "no wallet
+yet"; non-null with `stellarAddress: null` → "Set up Stellar" (add-account branch); set → done. **Also call
+`POST /api/wallets/link` with the Stellar address after creation** — `wallet/activity` and several ownership
+checks read `linked_wallets`.
+
+**Q55. Passkey creation params** (`passkey.ts:32-78`): `rp: { id: resolveRpId(), name: 'Normal Finance' }`;
+`user: { id: utf8(SupabaseUid), name: email ?? uid, displayName: email ?? 'Normal User' }`; ES256 + RS256;
+timeout 60000; `attestation: 'direct'`; `authenticatorSelection: { residentKey: 'preferred', requireResidentKey:
+false, userVerification: 'preferred' }`. Nothing server-side keyed on name/displayName. RN: same values;
+Android wants `user.id` base64 — encode the same uid bytes. `rp.id = 'normalfinance.io'`, `rp.name = 'Normal Finance'`.
+
+**Q56. "Activated chains" record: none** beyond the four nullable address columns. `availableChains(addresses)`
+derives from non-null fields (`registry.ts:161-164`). Stellar null + Bitcoin set: any USDC/XLM action opens
+`ChainSetupDialog('stellar')` → link-limit check → `ensureChainAccount('stellar')` branch 2 (`add-account.ts:138-148`:
+passkey-stamped `CREATE_WALLET_ACCOUNTS` with the SEP-0005 spec → `POST /api/turnkey/import { walletId,
+chain:'stellar' }` so the server writes the column) → `linkWallet` → adopt. Drawer gate:
+`availableChains(turnkeyAddresses).length > 0`.

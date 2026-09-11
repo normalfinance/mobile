@@ -28,7 +28,9 @@ export default function UnAuthenticatedLayout() {
   }
 
   if (session) {
-    return <Redirect href='/wallet-setup' />;
+    // The tabs layout asks the server whether this user has a wallet
+    // (GET /api/turnkey/wallet) and routes to /create-wallet if not.
+    return <Redirect href='/(tabs)' />;
   }
 
   if (hasCompletedOnboarding === null) {

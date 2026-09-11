@@ -110,13 +110,17 @@ export const signInWithGoogle = async (): Promise<boolean> => {
     native: "normalapp://wallet-setup"
   });
 
-  // Ensure the Supabase Google provider redirect matches `normalapp://wallet-setup`
-  // and the provider is enabled in the Supabase dashboard before using this helper.
+  // `redirectTo` must be listed verbatim in Supabase → Authentication → URL Configuration
+  // → Redirect URLs, or Supabase falls back to the web Site URL.
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
     options: {
       redirectTo,
-      skipBrowserRedirect: true
+      skipBrowserRedirect: true,
+      // Always show Google's account chooser. The auth browser shares Safari's
+      // cookies, so without this Google silently reuses whichever account is
+      // already signed in there.
+      queryParams: { prompt: "select_account" }
     }
   });
 
@@ -130,13 +134,57 @@ export const signInWithGoogle = async (): Promise<boolean> => {
     throw new Error("Unable to start Google authentication flow.");
   }
 
-  // Open the browser for OAuth - the redirect will bring user back to wallet-setup
-  // where the code exchange will happen
+  // The auth browser intercepts the `normalapp://wallet-setup?code=…` redirect and
+  // hands it back here as `authResult.url`. It is NOT delivered to the app as a
+  // deep link, so the wallet-setup screen never sees `params.code`; the PKCE
+  // exchange has to happen right here.
   const authResult = await WebBrowser.openAuthSessionAsync(url, redirectTo);
 
-  // Return true if user completed OAuth (even if we don't have session yet)
-  // The code exchange will happen on the wallet-setup page
-  return authResult.type === "success";
+  if (authResult.type !== "success") {
+    // "cancel" / "dismiss" — the user closed the browser.
+    return false;
+  }
+
+  const callback = new URL(authResult.url);
+  const params = new URLSearchParams(
+    callback.search || callback.hash.replace(/^#/, "?")
+  );
+
+  const providerError = params.get("error_description") ?? params.get("error");
+  if (providerError) {
+    throw new Error(providerError.replace(/\+/g, " "));
+  }
+
+  const code = params.get("code");
+  if (code) {
+    // PKCE (the configured flow): one-time code → session.
+    const { error: exchangeError } =
+      await supabase.auth.exchangeCodeForSession(code);
+    if (exchangeError) {
+      throw exchangeError;
+    }
+  } else {
+    // Implicit flow fallback: tokens arrive in the URL fragment. Only happens if
+    // the client's flowType is ever changed away from "pkce".
+    const access_token = params.get("access_token");
+    const refresh_token = params.get("refresh_token");
+    if (!access_token || !refresh_token) {
+      throw new Error(
+        "Google sign-in returned neither an authorization code nor a session."
+      );
+    }
+    const { error: sessionError } = await supabase.auth.setSession({
+      access_token,
+      refresh_token
+    });
+    if (sessionError) {
+      throw sessionError;
+    }
+  }
+
+  // The session is now set; SupabaseAuthProvider's onAuthStateChange fires and
+  // app/(auth)/_layout.tsx redirects to /wallet-setup on its own.
+  return true;
 };
 
 // Utility function for components that need auth

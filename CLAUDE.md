@@ -23,7 +23,11 @@ Normal no longer runs **liquidity pools**, **synthetic assets** (nBTC/nETH/nSOL,
 `web:src/...` mean `../normal-v1-interface/packages/web/src/...`; `web:../utils/...` means the
 sibling package. Open questions and their answers live in `docs/web-agent-questions.md` and
 `docs/web-agent-answers.md`; check the answers before inferring web behaviour, and ask Niko
-rather than guess when something is unanswered.
+rather than guess when something is unanswered. The web repo keeps its own copy at
+`docs/mobile/web-agent-answers.md` (with a corrected Q30) and `docs/mobile/MOBILE_APP_CONTEXT.md`;
+when they disagree with the live site, trust the live site. The web repo's Claude session can be
+reached by cross-session message as `normal-v1-interface-58` for anything that must change on the
+backend — never ask it to commit.
 
 Niko is the sole mobile developer and the decision maker. Justin (CEO) grants account access.
 
@@ -64,7 +68,7 @@ v1 scope: sign up / sign in, passkey wallet, portfolio, savings deposit/withdraw
 | **Turnkey passkeys, rpId `normalfinance.io`** | Wallets are passkey-only. Mobile stack: `@turnkey/http` + `@turnkey/crypto` + `@turnkey/react-native-passkey-stamper` + `react-native-passkey`. **Not** `@turnkey/react-native-wallet-kit` (hosted auth-proxy model; our server creates sub-orgs itself). ❌ Not started here. |
 | **Mainnet only, testnet discontinued** | No network switch in the app. Still send `Cookie: normal-network=mainnet` on every request and `?network=mainnet` on the five routes that honour it (Q1) so we never depend on a deployment default. |
 | **API backward compatibility from launch** | Installed apps cannot be force-updated. No breaking API change without versioning once shipped. |
-| **Bundle identifiers** | iOS `io.normalfinance.app` (prod) / `io.normalfinance.app.dev` (dev+staging); Android package `io.normalfinance.app`. Apple Team `FA938A596N` (Normal Finance, Inc.). Live in the AASA already. `app.json` still says `io.normalfinance.normalfi` — must change (§11). |
+| **Bundle identifiers** | iOS `io.normalfinance.app` (prod) / `io.normalfinance.app.dev` (dev+staging); Android package `io.normalfinance.app`. Apple Team `FA938A596N` (Normal Finance, Inc.) — **Niko is Admin, and the team shows in Xcode → Settings → Accounts** (confirmed 2026-09-11). Live in the AASA already. `app.json` still says `io.normalfinance.normalfi` — must change (§11). |
 
 ## 3. Talking to the backend
 
@@ -78,7 +82,9 @@ The bare `normalfinance.io` redirects to www for everything except `/.well-known
 are no mocks or dry-run flags anywhere. Test with $10–$50 and never with a wallet that matters.
 
 **Every request:** `Authorization: Bearer <supabase access_token>`, `Content-Type: application/json`,
-`Cookie: normal-network=mainnet`, and `x-mobile-app: true` (middleware early-exits on it, Q7).
+`Cookie: normal-network=mainnet`. **Never send `x-mobile-app: true`** — it is an unconditional
+bypass of the web middleware (`web:src/middleware.ts:203`) including the parked geo-blocking; the
+app must not pre-exempt itself from a future compliance control.
 `?network=mainnet` additionally on `savings/vault-info`, `savings/user-position`,
 `savings/earnings-history`, `wallet/portfolio` (and the dead `portfolio/activity`).
 
@@ -182,8 +188,12 @@ must debounce hard. Raise this with the web side before the swap screen ships.
   flow on either side. **Consequence: an existing web user can sign in on mobile only if their
   passkey is synced (iCloud Keychain / Google Password Manager).** Chrome-on-Windows users have
   no path in. Fixing it means `CREATE_AUTHENTICATORS_V2` on web too — a product decision (§11).
-- **Free Apple ID builds cannot do passkeys**: WebAuthn under `normalfinance.io` needs the
-  associated-domains entitlement, which needs Team `FA938A596N`. Personal-team builds are for UI.
+- **Personal-team builds cannot do passkeys**: WebAuthn under `normalfinance.io` needs the
+  associated-domains entitlement, which needs Team `FA938A596N`. That team is available in Xcode;
+  for Phase 2 switch the target to Team = Normal Finance, Inc., bundle id `io.normalfinance.app.dev`
+  (Debug) / `io.normalfinance.app` (Release), add the Associated Domains capability
+  `webcredentials:normalfinance.io?mode=developer` (Developer Mode on the phone makes the
+  `?mode=developer` suffix bypass Apple's CDN cache), and let Xcode create the profile.
 
 ## 6. Money flows (port the logic, rebuild the UI)
 
@@ -197,7 +207,9 @@ must debounce hard. Raise this with the web side before the swap screen ships.
   `POST lifi/statuses`). No pagination.
 - **New Stellar accounts: nobody sponsors them** (Q36). The user funds their own address with
   XLM (default 4, min 2) then signs a `changeTrust` for USDC. Gate every USDC action behind
-  "fund first, then trustline", exactly like web.
+  "fund first, then trustline", exactly like web. **A first savings deposit therefore has three
+  prerequisites — funded account, USDC trustline, a USDC balance — so Receive or a ramp precedes
+  it in the real journey.** For development, fund the test account from the web app.
 - **Savings** (Q34/35): `POST savings/deposit { amount: net, caller }` → unsigned XDR; `POST
   fees/build-payment` → fee XDR at sequence+1; client signs **both** (two prompts); `POST
   fees/execute-pair` submits server-side. Fees: 50 bps deposit, 50 bps swap, yield commission
@@ -234,11 +246,11 @@ Verified at `develop@3bc0217` plus the deletions below. Treat as the starting po
 | Area | Target | On disk |
 |---|---|---|
 | Auth | Supabase | ✅ `lib/supabase.ts` (AsyncStorage adapter, `detectSessionInUrl:false`), `providers/supabase-auth-provider.tsx`, `services/auth.service.ts` (OTP, magic link, Google + Apple OAuth via `expo-auth-session`), `app/auth/callback.tsx`. **Sends no `captchaToken`.** |
-| Wallet | Turnkey sub-org, passkey-only | ❌ **BIP-39 seed phrase**: `lib/utils/mnemonic.utils.ts`, `crypto.utils.ts`, `services/wallet.service.ts`, keys in SecureStore. A replacement, not a refactor. `hasWalletWithBackendCheck` is a stub that always returns `exists:false` (its backend call is commented out). |
+| Wallet | Turnkey sub-org, passkey-only | ⚠️ **Gate done, creation not.** `hooks/use-turnkey-wallet.ts` asks `GET /api/turnkey/wallet`; `app/(tabs)/_layout.tsx` routes `wallet === null` → `app/create-wallet.tsx` (placeholder until the passkey ceremony lands). The BIP-39 files (`lib/utils/mnemonic.utils.ts`, `crypto.utils.ts`, `services/wallet.service.ts`, `app/wallet-setup.tsx`) are still on disk but **nothing routes to them** — delete in a later commit. |
 | Chains | BTC, ETH, SOL, XLM | ❌ Stellar only. No registry. |
 | Swap | Soroswap / LI.FI / CCTP | ☠️ deleted (was `normal_pool_router` AMM). UI shells in `components/swap/*` kept, unreferenced. |
-| Backend | Next.js API, Bearer | ☠️ `services/api.service.ts` deleted (`api.normalfinance.io`, `check-wallet` — none of it exists, Q15). `hooks/use-transaction.ts` still posts to a hardcoded `http://localhost:8095` — dead, replace. |
-| Prices | backend `wallet/portfolio` + `prices/history` | ❌ Reflector oracle on-chain (`lib/utils/oracle.utils.ts`, `services/oracle.service.ts`) + **CoinMarketCap from the device** (`services/coinmarketcap.service.ts`, feeds portfolio + all charts). Re-source, then delete CMC. |
+| Backend | Next.js API, Bearer | ✅ `lib/api.ts` — `apiFetch()`: Bearer, `Cookie: normal-network=mainnet`, 401 → refresh once → retry once → `onSessionExpired`; `ApiError` with `status` and the server's `error`. Reads `EXPO_PUBLIC_API_BASE_URL`. `hooks/use-transaction.ts` still posts to a hardcoded `http://localhost:8095` — dead, replace with `fees/execute-pair` / `swap/submit-single`. |
+| Prices | backend `wallet/portfolio` + `prices/history` | ⚠️ **Home is done**: `hooks/use-backend-portfolio.ts` (portfolio + 24h change from `wallet/portfolio`, chart from `prices/history`, Stellar txs from Horizon keyed by the Turnkey address). `lib/types/portfolio.types.ts` is a verbatim copy of web `src/types/portfolio.ts`. Still on CMC/oracle: `app/asset/[symbol].tsx`, `app/(tabs)/prices.tsx`, `hooks/use-asset-detail.ts`, `hooks/use-token-price.ts`, `hooks/use-portfolio.ts` (now unused). Move those, then delete CMC + oracle. |
 | Indexes / Invest | not a product | ☠️ deleted. |
 | Onboarding | savings + multi-chain | ⚠️ `app/onboarding.tsx` slides still advertise synthetics ("Normal Ethereum", "Normal Tesla") and indexes; images `assets/images/splash-screens/splash1-3.png`. Needs new copy + art. |
 
@@ -348,13 +360,15 @@ ids) and `assetlinks.json` (Android SHA-256 still the all-zero placeholder until
 
 - **Change `app.json` `ios.bundleIdentifier` to `io.normalfinance.app`** (+ an `.app.dev` variant
   for dev builds) and add `android.package: io.normalfinance.app`. Both must match the live
-  association files. Needs the `FA938A596N` team in Xcode/EAS to sign — i.e. Apple Developer access.
+  association files. The `FA938A596N` team is available in Xcode; do this at the start of Phase 2.
 - **Existing-user sign-in** (Q33): decide whether v1 ships without it (synced-passkey users
   only) or whether web builds `CREATE_AUTHENTICATORS_V2` first.
 - **Captcha**: confirm whether Supabase captcha protection is on; if so, choose WebView Turnstile
   or a mobile exemption.
-- **Supabase dashboard**: add `normalapp://auth/callback` to the redirect allowlist; enable Apple
-  as a provider.
+- **Supabase dashboard**: add **`normalapp://wallet-setup`** (the exact `redirectTo` the app sends,
+  `services/auth.service.ts:107`) to Authentication → URL Configuration → Redirect URLs — without
+  it every OAuth attempt falls back to the web Site URL and dies with "Missing authorization
+  code". Enable Apple as a provider (App Store guideline 4.8 when Google is offered).
 - **Monorepo** (Q49): web recommends moving this repo to `packages/mobile` with a shared
   `packages/core`. Blocked on the web repo's own Node 20.14 / 22 + yarn 1 / 3 conflict.
 - **Quote rate limit**: per-IP 30/10s on the two public quote routes will collide behind carrier
@@ -365,6 +379,6 @@ ids) and `assetlinks.json` (Android SHA-256 still the all-zero placeholder until
 - Decide the fate of `hooks/use-transaction.ts` / `services/transaction.service.ts` (dead
   `localhost:8095` submit path) — replace with `fees/execute-pair` / `swap/submit-single`.
 - Android: generate the keystore (`eas credentials -p android`) and put its SHA-256 in `assetlinks.json`.
-- Account access still pending: Expo org `normalfi` (possibly orphaned), Apple Developer team
-  `FA938A596N`, Google Play, CoinMarketCap (moot once prices move to the backend).
+- Account access: Apple Developer team `FA938A596N` ✅ (Admin). Still pending: Expo org
+  `normalfi` (possibly orphaned), Google Play. CoinMarketCap is moot once prices move to the backend.
 - Branching: `develop` is the trunk (`origin/HEAD`); `master` is one stale commit — sync or delete.

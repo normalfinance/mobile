@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { fetchWalletTransactions } from "@/lib/utils/transactions.utils";
 import { STALE_TIMES } from "@/lib/utils/query.utils";
-import { useWallet } from "@/services/wallet.service";
+import { useTurnkeyWallet } from "@/hooks/use-turnkey-wallet";
 import type { Transaction } from "@/services/portfolio.service";
 
 const walletTransactionsQueryKey = {
@@ -12,9 +12,9 @@ const walletTransactionsQueryKey = {
 };
 
 export const useWalletTransactions = (enabled: boolean = true) => {
-  const { data: wallet, isLoading: isWalletLoading } = useWallet();
+  const { stellarAddress, isLoading: isWalletLoading } = useTurnkeyWallet();
 
-  const publicKey = wallet?.publicKey;
+  const publicKey = stellarAddress ?? undefined;
 
   const query = useQuery<Transaction[]>({
     queryKey: walletTransactionsQueryKey.list(publicKey || "unknown"),

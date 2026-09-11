@@ -11,11 +11,7 @@ import HomeScreen from "./index";
 import PricesScreen from "./prices";
 import SettingsScreen from "./settings";
 import WalletSettingsScreen from "./wallet-settings";
-import {
-  useHasWallet,
-  useHasWalletWithBackendCheck,
-  useAuthCredentials
-} from "@/services";
+import { useTurnkeyWallet } from "@/hooks/use-turnkey-wallet";
 
 import {
   HomeIcon,
@@ -65,34 +61,18 @@ const ACTIVE_TAB_COLOR = "#1C252E";
 const INACTIVE_TAB_COLOR = "#9DB2CE";
 
 export default function TabLayout() {
-  const { session, user, isLoading: isAuthLoading } = useSupabaseAuth();
+  const { session, isLoading: isAuthLoading } = useSupabaseAuth();
   const isSignedIn = !!session;
-  const userId = user?.id;
   const router = useRouter();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
-  const { data: credentials, isLoading: isLoadingCredentials } =
-    useAuthCredentials();
-  const { data: hasLocalWallet, isLoading: isCheckingLocalWallet } =
-    useHasWallet();
-  const shouldCheckBackend = !!credentials && hasLocalWallet === false;
-  const { data: hasBackendWallet, isLoading: isCheckingBackendWallet } =
-    useHasWalletWithBackendCheck(credentials, shouldCheckBackend);
-
-  const isCheckingWallet =
-    isLoadingCredentials ||
-    isCheckingLocalWallet ||
-    (shouldCheckBackend && isCheckingBackendWallet);
-
-  const resolvedHasWallet =
-    hasLocalWallet === true
-      ? true
-      : hasBackendWallet === true
-      ? true
-      : hasLocalWallet === false &&
-        (!shouldCheckBackend || hasBackendWallet === false)
-      ? false
-      : undefined;
+  // "Does this user have a wallet?" is answered by GET /api/turnkey/wallet,
+  // never by anything stored on the phone.
+  const {
+    status: walletStatus,
+    isLoading: isCheckingWallet,
+    error: walletError
+  } = useTurnkeyWallet(isSignedIn);
 
   const activeTab = React.useMemo<TabKey>(() => {
     console.log("pathname", pathname);
@@ -127,10 +107,6 @@ export default function TabLayout() {
     }
   };
 
-  if (userId) {
-    console.log("userId", userId, "hasWallet", resolvedHasWallet);
-  }
-
   // Single return with all conditional rendering
   return (
     <>
@@ -159,11 +135,27 @@ export default function TabLayout() {
             ))}
           </YStack>
         </YStack>
-      ) : resolvedHasWallet === false ? (
-        <>
-          {console.log("No wallet found, redirecting to wallet setup")}
-          <Redirect href='/wallet-setup' />
-        </>
+      ) : walletStatus === "none" ? (
+        <Redirect href='/create-wallet' />
+      ) : walletError && walletStatus === "unknown" ? (
+        // The request failed (network, 5xx, expired session). Never treat this
+        // as "no wallet" — that would route a real user to wallet creation.
+        // @ts-ignore
+        <YStack
+          flex={1}
+          backgroundColor='$background'
+          padding='$5'
+          justifyContent='center'
+          alignItems='center'
+          space='$3'
+        >
+          <Text fontSize='$5' fontWeight='600' textAlign='center'>
+            Couldn’t reach Normal
+          </Text>
+          <Text fontSize='$3' color='$gray11' textAlign='center'>
+            {walletError.message}
+          </Text>
+        </YStack>
       ) : (
         // @ts-ignore
         <View flex={1} backgroundColor='$background'>

@@ -100,7 +100,7 @@ export default function SignInScreen() {
       <PasswordlessSignIn
         onSuccess={async () => {
           await secureStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETE, "true");
-          router.replace("/wallet-setup");
+          router.replace("/(tabs)");
         }}
       />
       <XStack

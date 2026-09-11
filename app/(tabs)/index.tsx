@@ -1,5 +1,5 @@
 import React from "react";
-import { Modal, ScrollView, View } from "react-native";
+import { Alert, Modal, ScrollView, View } from "react-native";
 import { YStack, XStack, Text, Input, Button } from "tamagui";
 import { useRouter } from "expo-router";
 import QRCode from "react-native-qrcode-svg";
@@ -24,8 +24,8 @@ import {
   AssetListSkeleton,
   TransactionSkeleton
 } from "@/components/ui/skeleton/portfolio-skeletons";
-import { usePortfolio } from "@/hooks/use-portfolio";
-import { useWallet } from "@/services";
+import { useBackendPortfolio } from "@/hooks/use-backend-portfolio";
+import { useTurnkeyWallet } from "@/hooks/use-turnkey-wallet";
 import { useAssets } from "expo-asset";
 import { BlurView } from "expo-blur";
 import { getCurrentNetwork } from "@/lib/utils/stellar.utils";
@@ -39,12 +39,13 @@ export default function HomeScreen() {
     isLoading,
     isChartRefreshing,
     hasError,
+    errorMessage,
     selectedPeriod,
     selectedCategory,
     handlePeriodChange,
     handleCategoryChange
-  } = usePortfolio();
-  const { data: walletInfo } = useWallet();
+  } = useBackendPortfolio();
+  const { stellarAddress } = useTurnkeyWallet();
 
   const [searchQuery, setSearchQuery] = React.useState("");
   const [isReceiveModalOpen, setIsReceiveModalOpen] = React.useState(false);
@@ -61,9 +62,10 @@ export default function HomeScreen() {
     [searchQuery]
   );
 
+  // Swap / send / buy / sell arrive with the Turnkey wallet (Stage C).
   const handleNavigateToInvest = React.useCallback(() => {
-    router.push("/(tabs)/invest");
-  }, [router]);
+    Alert.alert("Coming soon", "Swap, send and buy arrive with the Normal wallet.");
+  }, []);
 
   const handleReceive = React.useCallback(() => {
     setIsReceiveModalOpen(true);
@@ -73,7 +75,7 @@ export default function HomeScreen() {
     setIsReceiveModalOpen(false);
   }, []);
 
-  const walletAddress = walletInfo?.publicKey ?? "";
+  const walletAddress = stellarAddress ?? "";
 
   const walletShareUrl = React.useMemo(() => {
     if (!walletAddress) {
@@ -167,7 +169,7 @@ export default function HomeScreen() {
             Error loading portfolio data
           </Text>
           <Text fontSize='$3' color='$textSecondary' textAlign='center'>
-            Please check your wallet connection and try again
+            {errorMessage ?? "Please check your connection and try again"}
           </Text>
         </YStack>
       ) : (
@@ -387,7 +389,7 @@ export default function HomeScreen() {
                     Share this address to receive funds.
                   </Text>
 
-                  {walletInfo?.publicKey ? (
+                  {walletAddress ? (
                     <YStack alignItems='center' space='$3'>
                       <QRCode value={walletShareUrl} size={180} />
                       <Text

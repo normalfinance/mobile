@@ -17,7 +17,11 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     storage: AsyncStorage,
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: false
+    detectSessionInUrl: false,
+    // Same as the web client. supabase-js defaults to "implicit", which returns
+    // tokens in the redirect URL fragment; PKCE returns a one-time `code` that
+    // signInWithGoogle exchanges, so tokens never travel through a URL.
+    flowType: "pkce"
   }
 });
 

@@ -17,7 +17,7 @@ export default function AuthCallbackScreen() {
     }
 
     if (session) {
-      router.replace("/wallet-setup");
+      router.replace("/(tabs)");
     } else {
       router.replace("/sign-in");
     }
