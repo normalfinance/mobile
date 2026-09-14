@@ -28,6 +28,7 @@ import {
   UiText
 } from "@/components/home/primitives";
 import { useBackendPortfolio } from "@/hooks/use-backend-portfolio";
+import { useSavingsPosition } from "@/hooks/use-savings";
 import { useTurnkeyWallet } from "@/hooks/use-turnkey-wallet";
 import { useColors } from "@/lib/theme/appearance";
 import { radius, space, tracking } from "@/lib/theme/tokens";
@@ -65,6 +66,9 @@ export default function SendScreen() {
   const { wallet } = useTurnkeyWallet();
   const { ready: deviceReady } = useDeviceReady(wallet?.subOrgId);
   const { portfolioData } = useBackendPortfolio();
+  // #67: an active savings position holds back 1 XLM from every outflow so
+  // future withdrawal fees can always be paid.
+  const { hasActiveSavings } = useSavingsPosition(wallet?.stellarAddress);
 
   const initial = (params.symbol ?? "XLM").toUpperCase();
   const [symbol, setSymbol] = React.useState<SendableSymbol>(initial === "USDC" ? "USDC" : "XLM");
@@ -97,7 +101,7 @@ export default function SendScreen() {
         if (cancelled) return;
         setSpendable(
           symbol === "XLM"
-            ? spendableXlmForOutflow(s.xlmBalance, s.subentryCount, false)
+            ? spendableXlmForOutflow(s.xlmBalance, s.subentryCount, hasActiveSavings)
             : s.usdcBalance ?? 0
         );
       })
@@ -108,7 +112,7 @@ export default function SendScreen() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [from, symbol]);
+  }, [from, symbol, hasActiveSavings]);
 
   // Memo-required lookup as soon as the address is valid (seed list first, then the route).
   React.useEffect(() => {
@@ -173,6 +177,7 @@ export default function SendScreen() {
         amount: amountNum,
         destination: destTrim,
         memo: memo.trim() || undefined,
+        hasActiveSavings,
         onStep: setStep
       });
       setResult({ hash: r.hash });

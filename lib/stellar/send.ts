@@ -56,6 +56,24 @@ export const stellarMinReserve = (subentryCount: number): number =>
 export const spendableXlm = (balance: number, subentryCount: number): number =>
   Math.max(balance - stellarMinReserve(subentryCount) - STELLAR_TX_FEE_XLM, 0);
 
+// Soroban fees (savings deposit/withdraw, Soroswap) run 0.05–0.5+ XLM — hundreds
+// of times the classic fee. Web's #67 semaphore: below this the action is
+// blocked, below SAVINGS_XLM_BUFFER it is "low", at/above it "ok".
+export const MIN_XLM_FOR_SOROBAN_TX = 0.5;
+
+/** XLM above the minimum reserve, i.e. what can go to network/Soroban fees. */
+export const xlmAvailableForFees = (xlmBalance: number, subentryCount = 1): number =>
+  Math.max(xlmBalance - stellarMinReserve(subentryCount), 0);
+
+export type XlmFeeStatus = "ok" | "low" | "blocked";
+
+export const xlmFeeStatus = (xlmBalance: number, subentryCount = 1): XlmFeeStatus => {
+  const available = xlmAvailableForFees(xlmBalance, subentryCount);
+  if (available < MIN_XLM_FOR_SOROBAN_TX) return "blocked";
+  if (available < SAVINGS_XLM_BUFFER) return "low";
+  return "ok";
+};
+
 export const spendableXlmForOutflow = (
   balance: number,
   subentryCount: number,
