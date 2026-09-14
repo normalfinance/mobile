@@ -11,7 +11,8 @@ import { StatusBar } from "expo-status-bar";
 import "react-native-reanimated";
 import { PortalProvider, TamaguiProvider, Theme } from "tamagui";
 import tamaguiConfig from "../tamagui.config";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { AppState, Platform } from "react-native";
+import { QueryClient, QueryClientProvider, focusManager } from "@tanstack/react-query";
 import { ToastProvider } from "@/hooks/useToast";
 import { SupabaseAuthProvider } from "@/providers/supabase-auth-provider";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -37,6 +38,17 @@ const queryClient = new QueryClient({
       retry: 1
     }
   }
+});
+
+// Refetch-on-focus for React Native: TanStack's default listener watches the
+// browser window; here "focus" means the app came back to the foreground.
+// With this, every query set to refetchOnWindowFocus (the default) refreshes
+// once when the user returns — no polling needed for the ordinary case.
+focusManager.setEventListener((handleFocus) => {
+  const sub = AppState.addEventListener("change", (state) => {
+    if (Platform.OS !== "web") handleFocus(state === "active");
+  });
+  return () => sub.remove();
 });
 
 SplashScreen.preventAutoHideAsync();

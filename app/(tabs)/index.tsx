@@ -13,6 +13,8 @@ import { Inbox, Settings, Wallet } from "lucide-react-native";
 import { ActivityRow, ActivityRowSkeleton } from "@/components/home/ActivityRow";
 import { AssetRow, AssetRowSkeleton } from "@/components/home/AssetRow";
 import { BalanceCard, type HomeAction } from "@/components/home/BalanceCard";
+import { SavingsRow } from "@/components/home/SavingsRow";
+import { useSavingsPosition, useVaultInfo } from "@/hooks/use-savings";
 import { DeviceSetupCard } from "@/components/home/DeviceSetupCard";
 import { useDeviceReady } from "@/lib/turnkey/device-ready";
 import { HomeTabs, type HomeTab } from "@/components/home/HomeTabs";
@@ -38,8 +40,15 @@ export default function HomeScreen() {
   const { wallet } = useTurnkeyWallet();
   const addresses = React.useMemo(() => walletAddresses(wallet), [wallet]);
   const { ready: deviceReady } = useDeviceReady(wallet?.subOrgId);
-  const { portfolioData, transactions, isLoading, hasError, errorMessage, refetch } =
+  const { portfolioData, transactions, isLoading, hasError, errorMessage, refetch, refetchTransactions } =
     useBackendPortfolio();
+  // Savings composes into the portfolio exactly like the web drawer
+  // (hooks/use-portfolio.ts): total = wallet assets + savings currentValue
+  // ($1-pegged); "Assets" never includes the vault USDC; sources stay
+  // independent (fast wallet read never waits on the slow savings read).
+  const savings = useSavingsPosition(wallet?.stellarAddress);
+  const vault = useVaultInfo();
+  const savingsUsd = savings.position ? savings.value : null; // null = still loading, show "—"
 
   const [tab, setTab] = React.useState<HomeTab>("tokens");
   const [receiveOpen, setReceiveOpen] = React.useState(false);
@@ -48,11 +57,13 @@ export default function HomeScreen() {
   const onRefresh = React.useCallback(async () => {
     setRefreshing(true);
     try {
-      await refetch();
+      // Pull-to-refresh = every source on this screen, in parallel.
+      await Promise.all([refetch(), refetchTransactions(), savings.refetch()]);
     } finally {
       setRefreshing(false);
     }
-  }, [refetch]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refetch, refetchTransactions]);
 
   const handleAction = React.useCallback(
     (action: HomeAction) => {
@@ -130,9 +141,9 @@ export default function HomeScreen() {
                 <DeviceSetupCard subOrgId={wallet.subOrgId} stellarAddress={wallet.stellarAddress} />
               ) : null}
               <BalanceCard
-                totalUsd={portfolioData.totalValue}
+                totalUsd={portfolioData.totalValue + (savingsUsd ?? 0)}
                 assetsUsd={portfolioData.totalValue}
-                savingsUsd={null}
+                savingsUsd={savingsUsd}
                 isLoading={isLoading}
                 onAction={handleAction}
                 onSavingsPress={() => router.push("/(tabs)/savings")}
@@ -161,15 +172,24 @@ export default function HomeScreen() {
                         />
                       </YStack>
                     ) : (
-                      heldAssets.map((asset) => (
-                        <AssetRow
-                          key={asset.asset_code}
-                          asset={asset}
-                          onPress={() =>
-                            router.push(`/asset/${asset.asset_code.toLowerCase()}`)
-                          }
-                        />
-                      ))
+                      <>
+                        {heldAssets.map((asset) => (
+                          <AssetRow
+                            key={asset.asset_code}
+                            asset={asset}
+                            onPress={() =>
+                              router.push(`/asset/${asset.asset_code.toLowerCase()}`)
+                            }
+                          />
+                        ))}
+                        {savings.value > 0 ? (
+                          <SavingsRow
+                            value={savings.value}
+                            apy={vault.data?.apy ?? null}
+                            onPress={() => router.push("/(tabs)/savings")}
+                          />
+                        ) : null}
+                      </>
                     )
                   ) : isLoading ? (
                     <>

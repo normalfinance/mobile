@@ -28,7 +28,14 @@ export interface ChartDataPoint {
 
 export type PortfolioPeriod = "1D" | "7D" | "30D" | "180D" | "365D" | "All";
 
-export type TransactionType = "swap" | "send" | "receive" | "buy" | "sell";
+export type TransactionType =
+  | "swap"
+  | "send"
+  | "receive"
+  | "buy"
+  | "sell"
+  | "savings_deposit"
+  | "savings_withdraw";
 
 export interface Transaction {
   id: string;

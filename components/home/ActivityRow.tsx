@@ -9,6 +9,7 @@ import {
   ArrowLeftRight,
   ArrowUp,
   Minus,
+  PiggyBank,
   Plus,
   type LucideIcon
 } from "lucide-react-native";
@@ -27,7 +28,10 @@ const TYPE_META: Record<
   send: { label: "Sent", Icon: ArrowUp, tone: "neutral", positive: false },
   swap: { label: "Swapped", Icon: ArrowLeftRight, tone: "blue", positive: false },
   buy: { label: "Bought", Icon: Plus, tone: "purple", positive: true },
-  sell: { label: "Sold", Icon: Minus, tone: "amber", positive: false }
+  sell: { label: "Sold", Icon: Minus, tone: "amber", positive: false },
+  // Web wallet/activity: 'Savings Deposit' / 'Savings Withdraw' rows (vault_deposits).
+  savings_deposit: { label: "Saved", Icon: PiggyBank, tone: "green", positive: false },
+  savings_withdraw: { label: "Withdrew", Icon: PiggyBank, tone: "neutral", positive: true }
 };
 
 const formatWhen = (date: Date) =>

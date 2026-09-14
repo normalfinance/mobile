@@ -165,35 +165,47 @@ export default function SavingsActionScreen() {
   if (result) {
     return (
       <Screen>
-        <YStack flex={1} paddingHorizontal={space.gutter} paddingTop={80} gap={20}>
-          <Card padding={20} gap={12} alignItems='center'>
-            <IconBox size={56}>
-              <Check size={28} color={c.positive} strokeWidth={2} />
-            </IconBox>
-            <UiText fontSize={16} fontWeight='500'>
-              {mode === "deposit" ? "Deposited" : "Withdrawn"}
-            </UiText>
-            <Mono fontSize={22} letterSpacing={tracking(22)}>
-              {fCurrency(result.net)}
-            </Mono>
-            <StepList title={mode === "deposit" ? "Deposit complete" : "Withdrawal complete"} timing='' steps={steps} activeId={null} allDone />
-            {!result.feeSubmitted ? (
-              <UiText fontSize={12} color={c.muted} textAlign='center' lineHeight={17}>
-                The Normal fee settles as a separate small USDC transaction in the next few minutes.
+        <ScrollView contentContainerStyle={{ paddingBottom: 48 }}>
+          <YStack paddingHorizontal={space.gutter} paddingTop={72} gap={16}>
+            {/* Headline: centred */}
+            <YStack alignItems='center' gap={10}>
+              <IconBox size={56}>
+                <Check size={28} color={c.positive} strokeWidth={2} />
+              </IconBox>
+              <UiText fontSize={16} fontWeight='500'>
+                {mode === "deposit" ? "Deposited" : "Withdrawn"}
               </UiText>
-            ) : null}
-            <Mono fontSize={11} color={c.faint}>
-              {shortenAddress(result.hash, 8, 8)}
-            </Mono>
-            <YStack width='100%' gap={8} marginTop={4}>
+              <Mono fontSize={28} letterSpacing={tracking(28)}>
+                {fCurrency(result.net)}
+              </Mono>
+            </YStack>
+
+            {/* Steps: full width, all done */}
+            <Card padding={14} gap={12}>
+              <StepList title={mode === "deposit" ? "Deposit complete" : "Withdrawal complete"} timing='' steps={steps} activeId={null} allDone />
+              {!result.feeSubmitted ? (
+                <UiText fontSize={12} color={c.muted} lineHeight={17}>
+                  The Normal fee settles as a separate small USDC transaction in the next few minutes.
+                </UiText>
+              ) : null}
+            </Card>
+
+            <Card paddingTop={4} paddingHorizontal={4} paddingBottom={4}>
+              <XStack paddingHorizontal={space.rowX} paddingVertical={space.rowY} justifyContent='space-between' alignItems='center'>
+                <UiText fontSize={13.5} color={c.muted}>Transaction</UiText>
+                <Mono fontSize={12}>{shortenAddress(result.hash, 8, 8)}</Mono>
+              </XStack>
+            </Card>
+
+            <YStack gap={8}>
               <PrimaryButton label='Done' onPress={() => router.back()} />
               <SecondaryButton
                 label='View on stellar.expert'
                 onPress={() => Linking.openURL(`https://stellar.expert/explorer/public/tx/${result.hash}`)}
               />
             </YStack>
-          </Card>
-        </YStack>
+          </YStack>
+        </ScrollView>
       </Screen>
     );
   }
