@@ -28,7 +28,7 @@ import {
   type Enrollment,
   type EnrollmentStep
 } from "@/lib/turnkey/enroll";
-import { ApiError } from "@/lib/api";
+import { ApiError, errorDetail } from "@/lib/api";
 import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
 
 const STEP_LABEL: Record<EnrollmentStep, string> = {
@@ -40,6 +40,8 @@ const STEP_LABEL: Record<EnrollmentStep, string> = {
 };
 
 const describe = (e: unknown): string => {
+  const detail = errorDetail(e);
+  const withDetail = (text: string) => (detail ? `${text}\n\n${detail}` : text);
   if (e instanceof ApiError) {
     if (e.message === "no_wallet") return "This account has no Normal wallet yet.";
     if (e.message === "no_email" || e.message === "email_mismatch")
@@ -47,8 +49,9 @@ const describe = (e: unknown): string => {
     if (e.message === "too_many_authenticators")
       return "This wallet already has the maximum number of devices. Remove one on the website first.";
     if (e.message === "invalid_code") return "That code is wrong or has expired.";
-    if (e.message === "login_failed") return "Turnkey rejected the login. Request a new code and try again.";
-    if (e.message === "turnkey_error") return "Turnkey is temporarily unavailable. Try again in a minute.";
+    if (e.message === "login_failed") return withDetail("Turnkey rejected the login. Request a new code and try again.");
+    if (e.message === "invalid_code") return withDetail("That code is wrong or has expired.");
+    if (e.message === "turnkey_error") return withDetail("Turnkey is temporarily unavailable. Try again in a minute.");
     if (e.status === 429) return "Too many attempts — wait a few minutes and try again.";
     return e.message;
   }

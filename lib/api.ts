@@ -92,6 +92,15 @@ const readErrorMessage = (body: unknown, fallback: string): string => {
   return fallback;
 };
 
+/** Optional human-readable detail some routes add next to `error` (e.g. Turnkey's text). */
+export const errorDetail = (e: unknown): string | null => {
+  if (e instanceof ApiError && e.body && typeof e.body === "object" && "detail" in e.body) {
+    const d = (e.body as { detail?: unknown }).detail;
+    if (typeof d === "string" && d.trim()) return d;
+  }
+  return null;
+};
+
 const performRequest = async (
   path: string,
   options: ApiRequestOptions,

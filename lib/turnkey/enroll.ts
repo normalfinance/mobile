@@ -24,7 +24,7 @@
 
 import { Platform } from "react-native";
 import { signWithApiKey } from "@turnkey/api-key-stamper";
-import { encryptOtpCodeToBundle, generateP256KeyPair } from "@turnkey/crypto";
+import { compressRawPublicKey, encryptOtpCodeToBundle, generateP256KeyPair } from "@turnkey/crypto";
 
 import { apiFetch } from "@/lib/api";
 import { createSessionClient } from "./client";
@@ -104,6 +104,18 @@ export const completeEnrollment = async (
   const tokenId = String(claims.id ?? "");
   if (!tokenId) throw new Error("Verification token has no id.");
   const boundPublicKey = typeof claims.public_key === "string" ? claims.public_key : keyPair.publicKey;
+  // Invariant: the token must be bound to THIS key pair (the one we encrypted
+  // the code with). Compare in compressed form so encoding differences don't
+  // count; a real mismatch means a stale token or a regenerated key — restart.
+  const boundCompressed =
+    boundPublicKey.length === 130
+      ? Buffer.from(compressRawPublicKey(Buffer.from(boundPublicKey, "hex"))).toString("hex")
+      : boundPublicKey;
+  if (boundCompressed.toLowerCase() !== keyPair.publicKey.toLowerCase()) {
+    throw new Error(
+      "The verification token is bound to a different key than this attempt. Request a new code and try again."
+    );
+  }
   const message = JSON.stringify({
     login: { publicKey: boundPublicKey },
     tokenId,
