@@ -66,10 +66,12 @@ export default function SignInScreen() {
               </YStack>
               <YStack alignItems='center' gap={4}>
                 <UiText fontSize={22} fontWeight='600' letterSpacing={tracking(22)}>
-                  Sign in to Normal
+                  Sign in or create your account
                 </UiText>
                 <UiText fontSize={14} color={c.muted}>
-                  {authLoading ? "Checking your session…" : "Save, hold and swap — securely."}
+                  {authLoading
+                    ? "Checking your session…"
+                    : "New here? Enter your email — that’s the whole sign-up."}
                 </UiText>
               </YStack>
             </YStack>

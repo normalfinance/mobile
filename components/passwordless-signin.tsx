@@ -6,6 +6,7 @@ import { Alert } from "react-native";
 import { Input, XStack, YStack } from "tamagui";
 
 import { PillButton, PrimaryButton, UiText } from "@/components/home/primitives";
+import { CaptchaCancelled, requestCaptchaToken } from "@/lib/auth/captcha";
 import { useColors } from "@/lib/theme/appearance";
 import { radius, tracking } from "@/lib/theme/tokens";
 import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
@@ -53,9 +54,18 @@ export default function PasswordlessSignIn({ onSuccess, onEmailSent }: Passwordl
 
     setIsLoading(true);
     try {
+      // Supabase captcha protection is on: every email-code request needs a
+      // Turnstile token, exactly as the web app sends (src/services/auth.ts:80).
+      let captchaToken: string;
+      try {
+        captchaToken = await requestCaptchaToken();
+      } catch (e) {
+        if (e instanceof CaptchaCancelled) return; // user closed the sheet; no alert
+        throw e;
+      }
       const { error } = await supabase.auth.signInWithOtp({
         email: normalizedEmail,
-        options: { shouldCreateUser: true }
+        options: { shouldCreateUser: true, captchaToken }
       });
       if (error) throw error;
 

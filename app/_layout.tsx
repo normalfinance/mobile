@@ -19,6 +19,7 @@ import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 
 import { loadFonts } from "@/lib/fonts";
 import { AppearanceProvider, useAppearance } from "@/lib/theme/appearance";
+import { CaptchaProvider } from "@/lib/auth/captcha";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
 
@@ -62,6 +63,7 @@ function ThemedApp() {
   return (
     <Theme name={scheme}>
       <NavigationThemeProvider value={navigationTheme}>
+        <CaptchaProvider>
         <Stack
           screenOptions={{
             headerShown: false,
@@ -76,6 +78,7 @@ function ThemedApp() {
           <Stack.Screen name='wallet-setup' />
           <Stack.Screen name='verify-magic-link' options={{ presentation: "modal" }} />
         </Stack>
+        </CaptchaProvider>
         <StatusBar style={scheme === "dark" ? "light" : "dark"} />
       </NavigationThemeProvider>
     </Theme>
