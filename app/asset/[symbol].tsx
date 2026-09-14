@@ -236,7 +236,11 @@ export default function AssetDetailScreen() {
                 <SecondaryButton
                   label='Send'
                   icon={<ArrowUp size={16} color={c.ink} strokeWidth={2} />}
-                  onPress={() => Alert.alert("Coming soon", "Send arrives with the Normal wallet.")}
+                  onPress={() =>
+                    symbol === "XLM" || symbol === "USDC"
+                      ? router.push(`/send?symbol=${symbol}`)
+                      : Alert.alert("Coming soon", `Sending ${symbol} arrives with the ${symbol} chain integration.`)
+                  }
                 />
               </YStack>
             </XStack>

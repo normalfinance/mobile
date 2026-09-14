@@ -28,6 +28,19 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   slug: config.slug ?? "normal",
   // Settings → Appearance → System needs the OS to report its scheme.
   userInterfaceStyle: "automatic",
+  plugins: [
+    ...(config.plugins ?? []),
+    // Send → scan a recipient's QR code. Camera only; no microphone entry.
+    [
+      "expo-camera",
+      {
+        cameraPermission: "Normal uses the camera to scan a recipient's address QR code.",
+        // `false` deletes the plist key (config-plugins applyPermissions) — no mic prompt, ever.
+        microphonePermission: false,
+        recordAudioAndroid: false
+      }
+    ]
+  ],
   ios: {
     ...config.ios,
     bundleIdentifier: BUNDLE_ID,

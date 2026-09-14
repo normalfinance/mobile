@@ -58,11 +58,12 @@ export default function HomeScreen() {
     (action: HomeAction) => {
       if (action === "receive") {
         setReceiveOpen(true);
+      } else if (action === "send") {
+        router.push("/send");
       } else if (action === "swap") {
         router.push("/(tabs)/swap");
       } else {
-        // Send / Buy arrive with the Turnkey wallet (Stage C).
-        Alert.alert("Coming soon", "Send and buy arrive with the Normal wallet.");
+        Alert.alert("Coming soon", "Buying arrives with the on-ramp integration.");
       }
     },
     [router]
