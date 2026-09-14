@@ -35,7 +35,7 @@ import { useAppearance, useColors, type AppearanceMode } from "@/lib/theme/appea
 import { space } from "@/lib/theme/tokens";
 import { shortenAddress } from "@/lib/utils/number-format.utils";
 import { describeTurnkeyError, isNoPasskeyError } from "@/lib/turnkey/client";
-import { runSignTest } from "@/lib/turnkey/sign-test";
+import { verifyDevicePasskey } from "@/lib/turnkey/device-check";
 import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
 
 const APPEARANCE: { key: AppearanceMode; label: string; Icon: typeof Sun }[] = [
@@ -61,7 +61,7 @@ export default function SettingsScreen() {
     }
     setTesting(true);
     try {
-      const r = await runSignTest(wallet.subOrgId, wallet.stellarAddress);
+      const r = await verifyDevicePasskey(wallet.subOrgId, wallet.stellarAddress);
       Alert.alert(r.ok ? "Signature valid ✓" : "Signature check failed", `${r.detail}\n\n${r.ms} ms`);
     } catch (e) {
       if (isNoPasskeyError(e)) {
@@ -186,7 +186,7 @@ export default function SettingsScreen() {
               <ListRow
                 icon={<ShieldCheck size={16} color={c.ink} strokeWidth={1.8} />}
                 label={testing ? "Testing…" : "Test signing"}
-                sub='Signs a harmless transaction with Face ID. Nothing is sent.'
+                sub='Signs a random digest with Face ID and verifies it. Nothing is sent.'
                 onPress={testing ? undefined : testSigning}
               />
             </Card>

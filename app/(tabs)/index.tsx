@@ -13,6 +13,8 @@ import { Inbox, Settings, Wallet } from "lucide-react-native";
 import { ActivityRow, ActivityRowSkeleton } from "@/components/home/ActivityRow";
 import { AssetRow, AssetRowSkeleton } from "@/components/home/AssetRow";
 import { BalanceCard, type HomeAction } from "@/components/home/BalanceCard";
+import { DeviceSetupCard } from "@/components/home/DeviceSetupCard";
+import { useDeviceReady } from "@/lib/turnkey/device-ready";
 import { HomeTabs, type HomeTab } from "@/components/home/HomeTabs";
 import {
   EmptyState,
@@ -35,6 +37,7 @@ export default function HomeScreen() {
   const { user } = useSupabaseAuth();
   const { wallet } = useTurnkeyWallet();
   const addresses = React.useMemo(() => walletAddresses(wallet), [wallet]);
+  const { ready: deviceReady } = useDeviceReady(wallet?.subOrgId);
   const { portfolioData, transactions, isLoading, hasError, errorMessage, refetch } =
     useBackendPortfolio();
 
@@ -122,6 +125,9 @@ export default function HomeScreen() {
             />
           ) : (
             <>
+              {deviceReady === false && wallet?.subOrgId && wallet.stellarAddress ? (
+                <DeviceSetupCard subOrgId={wallet.subOrgId} stellarAddress={wallet.stellarAddress} />
+              ) : null}
               <BalanceCard
                 totalUsd={portfolioData.totalValue}
                 assetsUsd={portfolioData.totalValue}

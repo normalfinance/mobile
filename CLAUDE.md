@@ -416,4 +416,10 @@ ids) and `assetlinks.json` (Android SHA-256 still the all-zero placeholder until
 - Android: generate the keystore (`eas credentials -p android`) and put its SHA-256 in `assetlinks.json`.
 - Account access: Apple Developer team `FA938A596N` ✅ (Admin). Still pending: Expo org
   `normalfi` (possibly orphaned), Google Play. CoinMarketCap is moot once prices move to the backend.
+- **Turnstile widget ownership (parked 2026-09-14):** the web's `NEXT_PUBLIC_TURNSTILE_SITE_KEY`
+  belongs to a Cloudflare account Niko cannot access (his account only has `normalapi.com`; Turnstile
+  is account-level under the sidebar item, no domain needs to be on Cloudflare). Until that widget's
+  hostnames include `normalfinance.io`, email sign-up from the app fails at the captcha sheet; Google
+  sign-in is unaffected. Fix = Justin adds the hostname in the company account, or a new widget +
+  rotate the site key (Vercel) and secret key (Supabase → Attack Protection) together.
 - Branching: `develop` is the trunk (`origin/HEAD`); `master` is one stale commit — sync or delete.

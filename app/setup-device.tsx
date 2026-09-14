@@ -19,6 +19,7 @@ import {
   UiText
 } from "@/components/home/primitives";
 import { useTurnkeyWallet } from "@/hooks/use-turnkey-wallet";
+import { markDeviceReady } from "@/lib/turnkey/device-ready";
 import { useColors } from "@/lib/theme/appearance";
 import { radius, space, tracking } from "@/lib/theme/tokens";
 import { describeTurnkeyError } from "@/lib/turnkey/client";
@@ -62,7 +63,7 @@ export default function SetupDeviceScreen() {
   const c = useColors();
   const router = useRouter();
   const { user } = useSupabaseAuth();
-  const { refetch } = useTurnkeyWallet();
+  const { refetch, wallet } = useTurnkeyWallet();
 
   const [enrollment, setEnrollment] = React.useState<Enrollment | null>(null);
   const [code, setCode] = React.useState("");
@@ -86,6 +87,7 @@ export default function SetupDeviceScreen() {
     setBusy(true);
     try {
       await completeEnrollment(enrollment, code, { id: user.id, email: user.email }, setStep);
+      if (wallet?.subOrgId) await markDeviceReady(wallet.subOrgId);
       await refetch();
       setDone(true);
     } catch (e) {

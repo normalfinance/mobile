@@ -24,6 +24,7 @@ import { useTurnkeyWallet } from "@/hooks/use-turnkey-wallet";
 import { supabase } from "@/lib/supabase";
 import { describeTurnkeyError } from "@/lib/turnkey/client";
 import { createWalletWithPasskey } from "@/lib/turnkey/create-wallet";
+import { markDeviceReady } from "@/lib/turnkey/device-ready";
 import { useColors } from "@/lib/theme/appearance";
 import { space, tracking } from "@/lib/theme/tokens";
 import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
@@ -40,7 +41,8 @@ export default function CreateWalletScreen() {
     try {
       // Face ID → passkey → POST turnkey/wallet { chain: 'stellar' } → link.
       await createWalletWithPasskey({ id: user.id, email: user.email });
-      await refetch(); // the tabs layout routes to Home once a wallet exists
+      const { data } = await refetch(); // the tabs layout routes to Home once a wallet exists
+      if (data?.subOrgId) await markDeviceReady(data.subOrgId); // the passkey was made right here
     } catch (e) {
       Alert.alert("Couldn’t create your wallet", describeTurnkeyError(e));
     } finally {
