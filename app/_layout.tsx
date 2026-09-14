@@ -89,7 +89,6 @@ function ThemedApp() {
           <Stack.Screen name='setup-device' />
           <Stack.Screen name='send' />
           <Stack.Screen name='savings-action' />
-          <Stack.Screen name='wallet-setup' />
           <Stack.Screen name='verify-magic-link' options={{ presentation: "modal" }} />
         </Stack>
         </CaptchaProvider>

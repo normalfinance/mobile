@@ -1,8 +1,9 @@
 # Normal Mobile — CLAUDE.md
 
 Context for Claude Code working in `normalfinance/mobile`.
-Last verified 2026-09-10 against `develop@3bc0217` plus the local deletions in §7, and the
-web repo at `../normal-v1-interface` (`master@6a403a8d`). Written by Niko's mobile session
+Last verified 2026-09-15 against the working tree (Send, QR scan, Savings deposit/withdraw
+and the legacy deletions in §7 all live on a device), and the web repo at
+`../normal-v1-interface` (`master@6a403a8d`). Written by Niko's mobile session
 from Niko's hand-off doc and `docs/web-agent-answers.md` (fifty code-verified answers from
 the web repo's agent). Answer numbers below (`Q7`, `Q33`, …) point into that file.
 
@@ -193,8 +194,10 @@ must debounce hard. Raise this with the web side before the swap screen ships.
   associated-domains entitlement, which needs Team `FA938A596N`. That team is available in Xcode;
   for Phase 2 switch the target to Team = Normal Finance, Inc., bundle id `io.normalfinance.app.dev`
   (Debug) / `io.normalfinance.app` (Release), add the Associated Domains capability
-  `webcredentials:normalfinance.io?mode=developer` (Developer Mode on the phone makes the
-  `?mode=developer` suffix bypass Apple's CDN cache), and let Xcode create the profile.
+  `webcredentials:normalfinance.io` (**no** `?mode=developer` — that form needs a per-device
+  opt-in in Settings → Developer and fails with "not associated with domain" without it;
+  Apple's CDN already serves our AASA), and let Xcode create the profile. ✅ Done in
+  `app.config.ts`.
 
 ## 6. Money flows (port the logic, rebuild the UI)
 
@@ -247,14 +250,26 @@ Verified at `develop@3bc0217` plus the deletions below. Treat as the starting po
 | Area | Target | On disk |
 |---|---|---|
 | Auth | Supabase | ✅ `lib/supabase.ts` (AsyncStorage adapter, `detectSessionInUrl:false`), `providers/supabase-auth-provider.tsx`, `services/auth.service.ts` (OTP, magic link, Google + Apple OAuth via `expo-auth-session`), `app/auth/callback.tsx`. **Sends no `captchaToken`.** |
-| Wallet | Turnkey sub-org, passkey-only | ✅ **Device enrolment verified live 2026-09-14** (Niko's iPhone added as a second authenticator to an existing web wallet; confirmed via Turnkey getUsers). Hard-won facts: OTP_LOGIN_V2 `clientSignature.signature` must be the RAW r‖s 64-byte P-256 signature (`ApiKeyStamper.sign(msg, SignatureFormat.Raw)`), not DER; the message uses the verification token's own `public_key` claim; polyfills must load from `index.js` before any route (`@noble/hashes` captures `globalThis.crypto` at module load); dev builds use the plain `webcredentials:normalfinance.io` entitlement (the `?mode=developer` form needs a per-device opt-in in Settings → Developer). Signing test and new-user creation still to be exercised. `lib/turnkey/`: `client.ts` (passkey-stamped TurnkeyClient with `allowCredentials` from `GET /api/turnkey/credentials`; session client for enrolment; error classifier), `stellar-signer.ts` (verbatim port of web, Q53, + local verify), `passkey.ts` (`createPasskey` with web's params, Q55), `create-wallet.ts` (passkey → `POST turnkey/wallet chain:'stellar'` → `wallets/link`), `enroll.ts` (email-OTP device enrolment: init → encrypt code → verify → login with clientSignature → `CREATE_AUTHENTICATORS_V2` → complete; backend routes being built in the web repo), `sign-test.ts` (signs a bumpSequence no-op, verifies locally, never submits). Screens: `app/create-wallet.tsx` (real ceremony), `app/setup-device.tsx`, Settings → Security. Packages: `@turnkey/http` 6.4, `@turnkey/crypto`, `@turnkey/api-key-stamper`, `@turnkey/react-native-passkey-stamper`, `react-native-passkey` (native → rebuild). Identity: `app.config.ts` → `io.normalfinance.app.dev` / `.app` (APP_VARIANT=production), Team `FA938A596N`, `webcredentials:normalfinance.io?mode=developer`. The BIP-39 files (`lib/utils/mnemonic.utils.ts`, `crypto.utils.ts`, `services/wallet.service.ts`, `app/wallet-setup.tsx`, `components/wallet/*`) are still on disk, unreachable — delete once signing is verified on a device. |
-| Chains | BTC, ETH, SOL, XLM | ❌ Stellar only. No registry. |
+| Wallet | Turnkey sub-org, passkey-only | ✅ **Device enrolment verified live 2026-09-14** (Niko's iPhone added as a second authenticator to an existing web wallet; confirmed via Turnkey getUsers). Hard-won facts: OTP_LOGIN_V2 `clientSignature.signature` must be the RAW r‖s 64-byte P-256 signature (`ApiKeyStamper.sign(msg, SignatureFormat.Raw)`), not DER; the message uses the verification token's own `public_key` claim; polyfills must load from `index.js` before any route (`@noble/hashes` captures `globalThis.crypto` at module load); dev builds use the plain `webcredentials:normalfinance.io` entitlement (the `?mode=developer` form needs a per-device opt-in in Settings → Developer). Signing is proven by real money flows (Send XLM/USDC 2026-09-15, Savings deposit + withdraw
+2026-09-15); new-user creation still to be exercised. `lib/turnkey/`: `client.ts` (passkey-stamped TurnkeyClient with `allowCredentials` from `GET /api/turnkey/credentials`; session client for enrolment; error classifier), `stellar-signer.ts` (verbatim port of web, Q53, + local verify), `passkey.ts` (`createPasskey` with web's params, Q55), `create-wallet.ts` (passkey → `POST turnkey/wallet chain:'stellar'` → `wallets/link`), `enroll.ts` (email-OTP device enrolment: init → encrypt code → verify → login with clientSignature → `CREATE_AUTHENTICATORS_V2` → complete; backend routes being built in the web repo), `sign-test.ts` (signs a bumpSequence no-op, verifies locally, never submits). Screens: `app/create-wallet.tsx` (real ceremony), `app/setup-device.tsx`, Settings → Security. Packages: `@turnkey/http` 6.4, `@turnkey/crypto`, `@turnkey/api-key-stamper`, `@turnkey/react-native-passkey-stamper`, `react-native-passkey` (native → rebuild). Identity: `app.config.ts` → `io.normalfinance.app.dev` / `.app` (APP_VARIANT=production), Team `FA938A596N`, `webcredentials:normalfinance.io`, `expo-camera` plugin (camera permission only). **The BIP-39 seed-phrase code is deleted** (2026-09-15, see below). |
+| Chains | BTC, ETH, SOL, XLM | ⚠️ Reads on all four (portfolio, receive addresses, activity). Writes Stellar only: **Send XLM/USDC** (`lib/stellar/send.ts`, `app/send.tsx`, QR scan via `components/send/QrScanner.tsx` + `lib/stellar/qr.ts` — bare address, `stellar:`, SEP-0007). No registry yet. |
 | Swap | Soroswap / LI.FI / CCTP | ☠️ deleted (was `normal_pool_router` AMM). UI shells in `components/swap/*` kept, unreferenced. |
-| Backend | Next.js API, Bearer | ✅ `lib/api.ts` — `apiFetch()`: Bearer, `Cookie: normal-network=mainnet`, 401 → refresh once → retry once → `onSessionExpired`; `ApiError` with `status` and the server's `error`. Reads `EXPO_PUBLIC_API_BASE_URL`. `hooks/use-transaction.ts` still posts to a hardcoded `http://localhost:8095` — dead, replace with `fees/execute-pair` / `swap/submit-single`. |
+| Backend | Next.js API, Bearer | ✅ `lib/api.ts` — `apiFetch()`: Bearer, `Cookie: normal-network=mainnet`, 401 → refresh once → retry once → `onSessionExpired`; `ApiError` with `status` and the server's `error`. Reads `EXPO_PUBLIC_API_BASE_URL`. Server-side submit funnel used: `fees/execute-pair` (`lib/savings/engine.ts`). |
 | Prices | backend `wallet/portfolio` + `prices/history` | ✅ Done. `hooks/use-backend-portfolio.ts` (portfolio + 24h change from `wallet/portfolio`, `usePriceHistory` from `prices/history`, Stellar txs from Horizon keyed by the Turnkey address). `lib/types/portfolio.types.ts` is a verbatim copy of web `src/types/portfolio.ts`. **CoinMarketCap and the Reflector oracle are deleted**; `EXPO_PUBLIC_CMC_API_KEY` is no longer read. |
 | Indexes / Invest | not a product | ☠️ deleted. |
-| Savings | DeFindex vault | ⚠️ `app/(tabs)/savings.tsx` shows live vault facts (`hooks/use-savings.ts` → public `savings/vault-info`: APY, asset); position + deposit/withdraw wait for the Turnkey wallet. |
+| Savings | DeFindex vault | ✅ **Deposit and withdraw live on a device (2026-09-15).** `lib/savings/engine.ts` (port of web `use-defindex-savings` + `fee-pair.ts`: sign-both-first pair → `fees/execute-pair`, 429 resubmit, `servicePending` Horizon poll, ledger-visible Done, USDC trustline, account probe), `lib/savings/normal-fees.ts` (verbatim web copy), `hooks/use-savings.ts` (position with 24h disk cache, #52 epoch guard, web reconciler; vault-info once per launch), `app/(tabs)/savings.tsx` (position, fee light, self-advancing Activate → Add USDC setup card), `app/savings-action.tsx` (always-visible step list, two passkey prompts explained, cancel = nothing charged). Savings composes into Home total and shows as a token row + "Saved/Withdrew" activity rows. |
 | Onboarding | — | ☠️ Removed (Niko, 2026-09-11): no pre-login carousel; unauthenticated users land on sign-in. Bring back later with new art if wanted. |
+
+**Deleted 2026-09-15 (legacy wallet, ~10,200 lines incl. lockfile)**: the seed-phrase wallet and everything
+only it used — `app/wallet-setup.tsx`, `services/{wallet,transaction}.service.ts`, `hooks/{use-transaction,use-trustline}.ts`,
+`lib/utils/{mnemonic,crypto,trustline,stellar,storage}.utils.ts`, `lib/constants/` (stellar + storage constants, the last
+`|| "TESTNET"` fallbacks), `lib/index.ts`, `components/wallet/*`, the template leftovers (`components/index/guage.tsx`,
+`components/portfolio/*`, `components/ui/skeleton*`, `parallax-scroll-view`, `collapsible`, `icon-symbol`, `themed-*`,
+`haptic-tab`, `hello-wave`, `external-link`), and the packages `@stellar/typescript-wallet-sdk-km` (the lockfile-drift
+culprit), `bip39`, `react-native-randombytes` and `react-native-crypto` (+ their `crypto` aliases in `package.json`;
+Metro still maps `crypto` → `crypto-browserify`). **`crypto` was also removed from the `rn-nodeify`
+`postinstall` list** — with it there, every `npm install` silently re-added both packages and the aliases.
+`EXPO_PUBLIC_NETWORK` is no longer read by anything.
 
 **Deleted 2026-09-11 (design pass)**: `app/onboarding.tsx` + `assets/images/splash-screens/`, `app/font-test.tsx`,
 `app/modal.tsx`, `app/(tabs)/{prices,wallet-settings,assets}.tsx`, `components/icons/navbar/`, `components/swap/`,
@@ -269,15 +284,27 @@ Verified at `develop@3bc0217` plus the deletions below. Treat as the starting po
 `app/(tabs)/{indexes,invest}.tsx`, `app/indexes/`, `services/indexes.service.ts`,
 `services/api.service.ts`, `lib/constants/tokens.constants.ts` (n-tokens; had zero importers).
 
-**Do NOT delete — adjacent but live:** `lib/utils/trustline.utils.ts` + `hooks/use-trustline.ts`
-(trustlines are required to hold USDC); the Reflector oracle files (generic price feed —
-re-source, don't delete); `components/swap/*` (presentational, reusable for Soroswap).
+**Trustlines now live in `lib/savings/engine.ts` (`addUsdcTrustline`)**; the old
+`trustline.utils` / `use-trustline` pair is gone with the seed-phrase code.
 
-**Still to remove**: the `|| "TESTNET"` fallbacks in `hooks/use-transaction.ts`,
-`lib/constants/stellar.constants.ts`, `lib/utils/transactions.utils.ts`,
-`lib/utils/trustline.utils.ts`; `lib/constants/api.constants.ts` if nothing else reads it;
-`@stellar/typescript-wallet-sdk-km` from `package.json` (unused; its Trezor peer deps are what
-rewrite the lockfile on every `npm install`).
+### Data cadence (agreed with the web side 2026-09-15 — do not add timers)
+
+No polling anywhere. Refetch on app foreground (`focusManager` ↔ `AppState` in `app/_layout.tsx`;
+fires only when a query is older than its `staleTime`), pull-to-refresh, and the user's own actions.
+`staleTime` = the route's server TTL: portfolio 15s, activity stellar 60s / bitcoin 45s /
+ethereum+solana 300s (Etherscan / ~100 Helius credits per miss), wallet/activity 10s, savings
+position 30s (DeFindex limit is per **second**), vault-info once per launch. The Horizon account
+probe is the only interval (4s) and only while the Savings tab is focused and setup/fee state is not green.
+
+**After an own Stellar action** (`lib/data/after-action.ts`, port of web `use-wallet-balances` +
+`refresh-retry` + `client-cache`): +800ms `wallet/portfolio?refresh=1` in a bounded loop (max 3; a
+`floored: true` answer is the 15s cache again and proves nothing — retry after `retryAfterMs`); every
+write via `pickNewerPayload` (age wins, never arrival order) + `fillErroredFromKnown` (a null balance
+keeps the known value marked stale); `activity/stellar?refresh=1` at +800ms and +45s; wallet/activity
+and the account probe plain. Savings position needs no bypass — `execute-pair`'s confirm deletes its
+server cache **and floor**; the 3s/15s/45s follow-ups are plain reads. Nothing invalidates the
+portfolio cache server-side (web is raising this with Niko); until it does, `refresh=1` is the only
+way to see post-action wallet balances.
 
 ### Design system (2026-09-11)
 
@@ -313,9 +340,11 @@ Tamagui UI. TanStack Query for server state. Aliases `@/*` → root, `@svgs/*` �
 | Variable | Behaviour if missing |
 |---|---|
 | `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY` | throws at startup (`lib/supabase.ts`) |
-| `EXPO_PUBLIC_NETWORK` | **must be `MAINNET`**; several files still default to `TESTNET` |
-| `EXPO_PUBLIC_RPC_API_KEY` | optional; switches Stellar RPC to validationcloud |
-| `EXPO_PUBLIC_MAINNET_{HORIZON_URL,RPC_URL}` | fall back to public SDF endpoints |
+| `EXPO_PUBLIC_API_BASE_URL` | throws at startup (`lib/api.ts`) |
+| `EXPO_PUBLIC_MAINNET_HORIZON_URL` | falls back to `https://horizon.stellar.org` (`lib/stellar/send.ts`) |
+| `EXPO_PUBLIC_TURNKEY_RP_ID` | falls back to `normalfinance.io` (`||`, blank must fall back) |
+| `EXPO_PUBLIC_CDN_URL` | token icons / logo fall back to initials |
+| `EXPO_PUBLIC_NETWORK`, `EXPO_PUBLIC_RPC_API_KEY`, `EXPO_PUBLIC_MAINNET_RPC_URL` | **no longer read** (legacy wallet deleted 2026-09-15) |
 
 ### Target `EXPO_PUBLIC_*` set (Q3 — everything web already ships in its public bundle)
 
@@ -347,7 +376,7 @@ ids) and `assetlinks.json` (Android SHA-256 still the all-zero placeholder until
 - **`export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8`** in the shell — CocoaPods crashes with
   `Unicode Normalization not appropriate for ASCII-8BIT` without it.
 - `brew install cocoapods watchman`. `npx expo prebuild --platform ios` then `cd ios && pod install`.
-- **Expo Go does not work** (`react-native-randombytes` ships native code, `expo-updates` configured).
+- **Expo Go does not work** (`react-native-passkey`, `expo-camera`, `react-native-webview` are native modules, `expo-updates` configured).
   Start JS with `npx expo start` (**not** `--dev-client`); build and install with Xcode or
   `npx expo run:ios`.
 - **Keychain needs real signing.** An ad-hoc or unsigned build fails every SecureStore call
@@ -356,8 +385,7 @@ ids) and `assetlinks.json` (Android SHA-256 still the all-zero placeholder until
 - Personal-team device builds: set the bundle id in Xcode's Signing tab (not `app.json`) to
   something unowned, e.g. `io.normalfinance.normalfi.niko`; expires after 7 days; no passkeys.
 - `expo prebuild` rewrites the `ios`/`android` npm scripts in `package.json` — revert that.
-- Debug console noise that is **not** a bug: `@noble/hashes` "not listed in exports" warnings
-  (from the seed-phrase code), `SafeAreaView` deprecation.
+- Debug console noise that is **not** a bug: `SafeAreaView` deprecation.
 
 ## 10. Hard rules
 
@@ -409,10 +437,17 @@ ids) and `assetlinks.json` (Android SHA-256 still the all-zero placeholder until
 - **Quote rate limit**: per-IP 30/10s on the two public quote routes will collide behind carrier
   NAT; ask for a per-user variant before the swap screen ships.
 - **Onboarding copy and art** still sell synthetics and indexes (§7).
-- Remove the testnet fallbacks, `api.constants.ts`, the CMC dependency and
-  `@stellar/typescript-wallet-sdk-km` (§7).
-- Decide the fate of `hooks/use-transaction.ts` / `services/transaction.service.ts` (dead
-  `localhost:8095` submit path) — replace with `fees/execute-pair` / `swap/submit-single`.
+- **Fee visibility in Activity (product call):** web hides Normal's fee payments (the
+  `activity/stellar` route drops payments to the fee wallet; the savings deposit row is NET). A
+  100 USDC deposit shows one "Saved 99.50" row. Decide whether mobile should surface fees; the data
+  is in the DB row, the response shape would need it added on web.
+- **Portfolio cache invalidation on confirm** (server, web side raising it): would let both clients
+  drop the `refresh=1` retry loop for a plain read.
+- **Next money flows:** Swap (Soroswap XLM↔USDC via `swap/quote` → one passkey → `swap/submit-single`;
+  409 `embedded_unavailable` → the fee-pair path already built) — settle the per-IP quote limit
+  first; then LI.FI / CCTP; ramps.
+- **Distribution:** EAS build + TestFlight so Justin can install without Xcode (blocked on Expo org
+  access); Apple Sign-In (App Store requires it when Google is offered); Android keystore.
 - Android: generate the keystore (`eas credentials -p android`) and put its SHA-256 in `assetlinks.json`.
 - Account access: Apple Developer team `FA938A596N` ✅ (Admin). Still pending: Expo org
   `normalfi` (possibly orphaned), Google Play. CoinMarketCap is moot once prices move to the backend.
