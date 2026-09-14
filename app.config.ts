@@ -7,9 +7,12 @@
 // Both are registered under Apple Team FA938A596N (Normal Finance, Inc.).
 //
 // The associated domain is what lets iOS offer normalfinance.io passkeys to
-// this app. `?mode=developer` makes iOS skip Apple's CDN cache of the AASA
-// file for dev builds (requires Developer Mode on the phone); production must
-// NOT carry that suffix.
+// this app. No `?mode=developer` suffix: Apple's CDN already serves our
+// apple-app-site-association (verified 2026-09-14), and developer mode only
+// bypasses the CDN for servers the public internet cannot reach — at the
+// price that "users must opt-in on any device they use" (Settings →
+// Developer → Associated Domains Development). Live failure without that
+// opt-in: "Application with identifier … is not associated with domain".
 
 import type { ConfigContext, ExpoConfig } from "expo/config";
 
@@ -29,9 +32,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     ...config.ios,
     bundleIdentifier: BUNDLE_ID,
     appleTeamId: APPLE_TEAM_ID,
-    associatedDomains: [
-      IS_PRODUCTION ? `webcredentials:${PASSKEY_RP_ID}` : `webcredentials:${PASSKEY_RP_ID}?mode=developer`
-    ]
+    associatedDomains: [`webcredentials:${PASSKEY_RP_ID}`]
   },
   android: {
     ...config.android,
