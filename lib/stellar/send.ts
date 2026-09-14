@@ -65,6 +65,16 @@ export const MIN_XLM_FOR_SOROBAN_TX = 0.5;
 export const xlmAvailableForFees = (xlmBalance: number, subentryCount = 1): number =>
   Math.max(xlmBalance - stellarMinReserve(subentryCount), 0);
 
+/** Can the account still pay a Soroban fee AFTER this swap? `xlmSpent` is the
+ *  XLM the swap itself sends (0 for a USDC source). Web: swaps failed
+ *  on-chain AFTER two signatures when nothing checked this. */
+export const canPaySorobanFee = (xlmBalance: number, subentryCount: number, xlmSpent = 0): boolean =>
+  xlmAvailableForFees(xlmBalance - xlmSpent, subentryCount) >= MIN_XLM_FOR_SOROBAN_TX;
+
+/** The most XLM a swap may send: spendable minus the Soroban fee it must pay. */
+export const maxXlmForSorobanSwap = (spendable: number): number =>
+  Math.max(spendable - MIN_XLM_FOR_SOROBAN_TX, 0);
+
 export type XlmFeeStatus = "ok" | "low" | "blocked";
 
 export const xlmFeeStatus = (xlmBalance: number, subentryCount = 1): XlmFeeStatus => {

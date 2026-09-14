@@ -110,13 +110,20 @@ const refreshStellarActivityFresh = async (queryClient: QueryClient, address: st
 };
 
 /**
- * Call once the action is CONFIRMED (hash returned / execute-pair 200). Fire
- * and forget; every write goes through the no-clobber rules above.
+ * Call once the action is CONFIRMED (hash returned / execute-pair 200).
+ * Resolves when the portfolio has converged (or given up after 3 attempts)
+ * and the first activity refresh landed — a "Done" screen may await it
+ * (web gates Done on this, capped at 15s). The late +45s activity bypass
+ * runs on after resolution. Every write goes through the rules above.
  */
 export const refreshAfterStellarAction = (
   queryClient: QueryClient,
   { userId, stellarAddress }: { userId: string | undefined; stellarAddress: string | null | undefined }
-): void => {
+): Promise<void> => {
+  let resolveConverged: () => void = () => undefined;
+  const converged = new Promise<void>((r) => {
+    resolveConverged = r;
+  });
   void (async () => {
     await sleep(SETTLE_DELAY_MS);
     await Promise.all([
@@ -129,6 +136,7 @@ export const refreshAfterStellarAction = (
       // XLM / trustline state for the setup card and fee light (Horizon, cheap).
       stellarAddress ? queryClient.invalidateQueries({ queryKey: accountProbeQueryKey(stellarAddress) }) : Promise.resolve()
     ]);
+    resolveConverged();
     // Indexers lag (Horizon ~5s): one late bypass for the chain feed, past its
     // 30s floor. Portfolio converged above; position confirms on its own.
     if (stellarAddress) {
@@ -136,4 +144,5 @@ export const refreshAfterStellarAction = (
       await refreshStellarActivityFresh(queryClient, stellarAddress);
     }
   })();
+  return converged;
 };

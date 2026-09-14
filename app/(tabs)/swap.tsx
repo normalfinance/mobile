@@ -1,88 +1,378 @@
-// Swap tab — shell only until the Turnkey wallet lands. Deliberately NOT the
-// web swap card's density or inline asset picker (D12: the team is unhappy
-// with those); this is the shape the real screen will keep.
+// Swap tab — Stellar-native XLM ↔ USDC via Soroswap (lib/swap/soroswap.ts).
+// Deliberately NOT the web swap card's density (D12); same step-list pattern
+// as Savings: the steps are visible before the first passkey prompt, light
+// up in place, and Done is gated on the ledger + a converged portfolio read.
+// Gates mirror web use-soroswap-engine.tsx in the same order: activation →
+// trustline → amount → balance → Soroban fee → quote.
 
 import React from "react";
-import { ScrollView } from "react-native";
-import { XStack, YStack } from "tamagui";
-import { ArrowDownUp, ChevronDown } from "lucide-react-native";
+import { Alert, Linking, ScrollView } from "react-native";
+import { useIsFocused } from "@react-navigation/native";
+import { useQueryClient } from "@tanstack/react-query";
+import * as Haptics from "expo-haptics";
+import { Input, XStack, YStack } from "tamagui";
+import { ArrowDownUp, Check } from "lucide-react-native";
 
 import { AssetIcon } from "@/components/ui/AssetIcon";
 import {
   Card,
+  Divider,
   IconBox,
   Mono,
+  PillButton,
   PrimaryButton,
   Screen,
   ScreenTitle,
+  SecondaryButton,
+  Skeleton,
   UiText
 } from "@/components/home/primitives";
+import { ReceiveSheet } from "@/components/home/ReceiveSheet";
+import { StepList, type Step } from "@/components/savings/StepList";
+import { useBackendPortfolio } from "@/hooks/use-backend-portfolio";
+import { useSavingsPosition, useStellarAccountProbe } from "@/hooks/use-savings";
+import { useTurnkeyWallet, walletAddresses } from "@/hooks/use-turnkey-wallet";
+import { refreshAfterStellarAction } from "@/lib/data/after-action";
+import { addUsdcTrustline } from "@/lib/savings/engine";
+import { canPaySorobanFee, maxXlmForSorobanSwap, spendableXlmForOutflow } from "@/lib/stellar/send";
+import { executeSoroswap, getSwapQuote, type SwapQuote, type SwapStage, type SwapSymbol } from "@/lib/swap/soroswap";
 import { useColors } from "@/lib/theme/appearance";
 import { radius, space, tracking } from "@/lib/theme/tokens";
+import { describeTurnkeyError, isUserCancelledError } from "@/lib/turnkey/client";
+import { ensureDeviceReady } from "@/lib/turnkey/device-check";
+import { useDeviceReady } from "@/lib/turnkey/device-ready";
+import { fCurrency, fNumber, shortenAddress } from "@/lib/utils/number-format.utils";
+import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
 
-const AmountBox = ({ label, symbol }: { label: string; symbol: string }) => {
+type UiStage = SwapStage | "refetch" | "done" | null;
+
+const truncate7 = (v: number) => (Math.floor(v * 1e7) / 1e7).toFixed(7).replace(/\.?0+$/, "");
+
+export default function SwapScreen() {
   const c = useColors();
-  return (
+  const isFocused = useIsFocused();
+  const queryClient = useQueryClient();
+  const { user } = useSupabaseAuth();
+  const { wallet } = useTurnkeyWallet();
+  const address = wallet?.stellarAddress ?? null;
+  const { ready: deviceReady } = useDeviceReady(wallet?.subOrgId);
+  const { portfolioData } = useBackendPortfolio();
+  const { hasActiveSavings } = useSavingsPosition(address);
+
+  const [from, setFrom] = React.useState<SwapSymbol>("XLM");
+  const to: SwapSymbol = from === "XLM" ? "USDC" : "XLM";
+  const [amount, setAmount] = React.useState("");
+  const [quote, setQuote] = React.useState<SwapQuote | null>(null);
+  const [quoteError, setQuoteError] = React.useState<string | null>(null);
+  const [quoting, setQuoting] = React.useState(false);
+  const [stage, setStage] = React.useState<UiStage>(null);
+  const [embedded, setEmbedded] = React.useState(false);
+  const [doneHash, setDoneHash] = React.useState<string | null>(null);
+  const [busy, setBusy] = React.useState(false);
+  const [receiveOpen, setReceiveOpen] = React.useState(false);
+  const [addingTrustline, setAddingTrustline] = React.useState(false);
+
+  // Account state (Horizon): activation, trustline, XLM for the Soroban fee.
+  // Watched only while a gate is open and this tab is on screen.
+  const [watch, setWatch] = React.useState(false);
+  const probe = useStellarAccountProbe(address, watch && isFocused);
+  const accountExists = probe.data?.exists ?? null;
+  const hasTrustline = probe.data?.hasUsdcTrustline ?? false;
+  const xlmBalance = probe.data?.xlmBalance ?? 0;
+  const subentries = probe.data?.subentryCount ?? 1;
+  const needsActivation = to === "USDC" && accountExists === false;
+  const needsTrustline = to === "USDC" && accountExists === true && !hasTrustline;
+  React.useEffect(() => {
+    setWatch(needsActivation || needsTrustline);
+  }, [needsActivation, needsTrustline]);
+
+  const amountNum = Number(amount.replace(",", "."));
+  const amountOk = Number.isFinite(amountNum) && amountNum > 0;
+  const price = (sym: SwapSymbol) => portfolioData.assets.find((a) => a.asset_code === sym)?.usdPrice ?? 0;
+  // XLM's spendable already holds back the reserve, the classic fee and the
+  // savings buffer (#67); the Soroban fee this swap pays comes off in MAX.
+  const spendableXlm = spendableXlmForOutflow(xlmBalance, subentries, hasActiveSavings);
+  const fromBalance = from === "XLM" ? spendableXlm : probe.data?.usdcBalance ?? Number(portfolioData.assets.find((a) => a.asset_code === "USDC")?.balance ?? 0);
+  const insufficient = amountOk && amountNum > fromBalance + 1e-7;
+  const cannotPayFee = amountOk && accountExists === true && !canPaySorobanFee(xlmBalance, subentries, from === "XLM" ? amountNum : 0);
+
+  // Quote: 500ms debounce (web), one in flight, stale responses dropped, and
+  // only while the tab is on screen — the public quote route is 30/10s per IP
+  // and phones behind carrier NAT share one.
+  const requestRef = React.useRef(0);
+  React.useEffect(() => {
+    if (!isFocused || busy) return;
+    if (!amountOk) {
+      setQuote(null);
+      setQuoteError(null);
+      return;
+    }
+    const id = ++requestRef.current;
+    const t = setTimeout(async () => {
+      setQuoting(true);
+      try {
+        const q = await getSwapQuote(from, to, amountNum);
+        if (requestRef.current !== id) return;
+        setQuote(q);
+        setQuoteError(null);
+      } catch (e) {
+        if (requestRef.current !== id) return;
+        setQuote(null);
+        setQuoteError(e instanceof Error ? e.message : "Failed to get quote");
+      } finally {
+        if (requestRef.current === id) setQuoting(false);
+      }
+    }, 500);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [amountNum, amountOk, from, to, isFocused, busy]);
+
+  const flip = () => {
+    if (busy) return;
+    setFrom(to);
+    setAmount("");
+    setQuote(null);
+  };
+  const useMax = () => setAmount(truncate7(from === "XLM" ? maxXlmForSorobanSwap(spendableXlm) : fromBalance));
+
+  const rate = quote && parseFloat(quote.amountIn) > 0 ? (parseFloat(quote.amountOut) / (parseFloat(quote.amountIn) - parseFloat(quote.fee))).toFixed(6) : null;
+
+  const gate = async (): Promise<boolean> => {
+    if (!wallet?.subOrgId || !address) return false;
+    const g = await ensureDeviceReady(wallet.subOrgId, address, deviceReady);
+    if (g.outcome === "needs-setup") {
+      Alert.alert("Set up this phone", "Add this phone's passkey in Settings → Security first.");
+      return false;
+    }
+    if (g.outcome === "cancelled") return false;
+    if (g.outcome === "failed") {
+      Alert.alert("Couldn’t verify this phone", describeTurnkeyError(g.error));
+      return false;
+    }
+    return true;
+  };
+
+  const handleAddTrustline = async () => {
+    if (!wallet?.subOrgId || !address) return;
+    setAddingTrustline(true);
+    try {
+      if (!(await gate())) return;
+      await addUsdcTrustline({ subOrgId: wallet.subOrgId, address });
+      await probe.refetch();
+      void refreshAfterStellarAction(queryClient, { userId: user?.id, stellarAddress: address });
+    } catch (e) {
+      if (!isUserCancelledError(e)) Alert.alert("Couldn’t add the trustline", e instanceof Error ? e.message : describeTurnkeyError(e));
+    } finally {
+      setAddingTrustline(false);
+    }
+  };
+
+  const tick = (s: UiStage) => {
+    setStage(s);
+    if (s && s !== "degraded") void Haptics.selectionAsync().catch(() => undefined);
+  };
+
+  const run = async () => {
+    if (!quote || !wallet?.subOrgId || !address) return;
+    setBusy(true);
+    setDoneHash(null);
+    setEmbedded(quote.embedded);
+    try {
+      if (!(await gate())) return;
+      const hash = await executeSoroswap({
+        quote,
+        subOrgId: wallet.subOrgId,
+        address,
+        onStage: (s) => {
+          if (s === "degraded" || s === "sign-fee") setEmbedded(false);
+          tick(s);
+        }
+      });
+      // Feed row exists already; balances are gated: Done only after the
+      // portfolio converged (refresh=1 loop), capped at 15s (web #62/#66).
+      tick("refetch");
+      await Promise.race([
+        refreshAfterStellarAction(queryClient, { userId: user?.id, stellarAddress: address }),
+        new Promise((r) => setTimeout(r, 15_000))
+      ]);
+      setDoneHash(hash);
+      tick("done");
+      setAmount("");
+      setQuote(null);
+    } catch (e) {
+      setStage(null);
+      if (isUserCancelledError(e)) Alert.alert("Cancelled", "Nothing was submitted and nothing was charged.");
+      else Alert.alert("Swap failed", e instanceof Error ? e.message : describeTurnkeyError(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const twoSignatures = quote ? !quote.embedded || !embedded : false;
+  const steps: Step[] = [
+    { id: "build", label: "Preparing the swap", sub: "Building your transaction" },
+    {
+      id: "sign",
+      label: "Confirm with passkey",
+      sub: stage === "sign-fee" ? "Now the Normal fee · 2 of 2" : twoSignatures ? "Two confirmations: the swap, then the Normal fee" : "One confirmation — the fee is inside the swap"
+    },
+    { id: "submit", label: "Submitting to Stellar", sub: "Broadcasting — usually a few seconds" },
+    { id: "refetch", label: "Updating balances", sub: "Waiting until your wallet shows the result" }
+  ];
+  const activeId = stage === "sign-swap" || stage === "sign-fee" ? "sign" : stage === "degraded" ? "build" : stage === "done" ? null : stage;
+
+  // Button (web order).
+  let button: { label: string; onPress?: () => void; disabled?: boolean; loading?: boolean };
+  if (!address) button = { label: "Stellar wallet required", disabled: true };
+  else if (needsActivation) button = { label: "Add XLM to activate", onPress: () => setReceiveOpen(true) };
+  else if (needsTrustline) button = { label: addingTrustline ? "Adding trustline…" : "Add USDC trustline", onPress: handleAddTrustline, loading: addingTrustline };
+  else if (!amountOk) button = { label: "Enter an amount", disabled: true };
+  else if (insufficient) button = { label: "Insufficient balance", disabled: true };
+  else if (cannotPayFee) button = { label: "Add XLM to cover the network fee", onPress: () => setReceiveOpen(true) };
+  else if (busy) button = { label: (steps.find((s) => s.id === activeId)?.label ?? "Swapping") + "…", loading: true };
+  else if (quoting || !quote) button = { label: quoteError ? "Quote unavailable" : "Fetching quote…", disabled: true };
+  else button = { label: "Swap with passkey", onPress: run };
+
+  const amountBox = ({ label, symbol, children, right }: { label: string; symbol: SwapSymbol; children: React.ReactNode; right?: React.ReactNode }) => (
     <YStack backgroundColor={c.inputBg} borderRadius={radius.input} padding={14} gap={10}>
-      <UiText fontSize={12} color={c.muted}>
-        {label}
-      </UiText>
-      <XStack alignItems='center' justifyContent='space-between'>
-        <Mono fontSize={28} letterSpacing={tracking(28)} color={c.faint}>
-          0.00
-        </Mono>
-        <XStack
-          alignItems='center'
-          gap={8}
-          paddingVertical={6}
-          paddingLeft={6}
-          paddingRight={10}
-          borderRadius={radius.pill}
-          backgroundColor={c.surface}
-          borderWidth={1}
-          borderColor={c.border}
-        >
+      <XStack justifyContent='space-between' alignItems='center'>
+        <UiText fontSize={12} color={c.muted}>{label}</UiText>
+        {right}
+      </XStack>
+      <XStack alignItems='center' justifyContent='space-between' gap={10}>
+        {children}
+        <XStack alignItems='center' gap={8} paddingVertical={6} paddingLeft={6} paddingRight={12} borderRadius={radius.pill} backgroundColor={c.surface} borderWidth={1} borderColor={c.border}>
           <AssetIcon symbol={symbol} size={24} fontSize='$2' />
-          <UiText fontSize={14} fontWeight='600'>
-            {symbol}
-          </UiText>
-          <ChevronDown size={16} color={c.muted} strokeWidth={2} />
+          <UiText fontSize={14} fontWeight='600'>{symbol}</UiText>
         </XStack>
       </XStack>
     </YStack>
   );
-};
 
-export default function SwapScreen() {
-  const c = useColors();
+  if (stage === "done" && doneHash) {
+    return (
+      <Screen>
+        <ScrollView contentContainerStyle={{ paddingBottom: 96 }}>
+          <YStack paddingHorizontal={space.gutter} paddingTop={8} gap={16}>
+            <ScreenTitle title='Swap' />
+            <YStack alignItems='center' gap={10} paddingTop={24}>
+              <IconBox size={56}><Check size={28} color={c.positive} strokeWidth={2} /></IconBox>
+              <UiText fontSize={16} fontWeight='500'>Swapped</UiText>
+              <UiText fontSize={13} color={c.muted}>{from} → {to}</UiText>
+            </YStack>
+            <Card padding={14}>
+              <StepList title='Swap complete' timing='' steps={[...steps, { id: "done", label: "Done", sub: `${to} received` }]} activeId={null} allDone />
+            </Card>
+            <Card paddingTop={4} paddingHorizontal={4} paddingBottom={4}>
+              <XStack paddingHorizontal={space.rowX} paddingVertical={space.rowY} justifyContent='space-between' alignItems='center'>
+                <UiText fontSize={13.5} color={c.muted}>Transaction</UiText>
+                <Mono fontSize={12}>{shortenAddress(doneHash, 8, 8)}</Mono>
+              </XStack>
+            </Card>
+            <YStack gap={8}>
+              <PrimaryButton label='Swap again' onPress={() => { setStage(null); setDoneHash(null); }} />
+              <SecondaryButton label='View on stellar.expert' onPress={() => Linking.openURL(`https://stellar.expert/explorer/public/tx/${doneHash}`)} />
+            </YStack>
+          </YStack>
+        </ScrollView>
+      </Screen>
+    );
+  }
+
   return (
     <Screen>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 96 }}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 96 }} keyboardShouldPersistTaps='handled'>
         <YStack paddingHorizontal={space.gutter} paddingTop={8} gap={space.section}>
           <ScreenTitle title='Swap' />
 
           <Card padding={12} gap={8}>
-            <AmountBox label='You pay' symbol='XLM' />
+            {amountBox({
+              label: "You pay",
+              symbol: from,
+              right: (
+                <XStack alignItems='center' gap={8}>
+                  <Mono fontSize={11} color={insufficient ? c.failed : c.muted}>
+                    {probe.data || from === "USDC" ? `${fNumber(fromBalance, { maximumFractionDigits: from === "XLM" ? 4 : 2 })} ${from}` : "…"}
+                  </Mono>
+                  <PillButton label='Max' onPress={useMax} />
+                </XStack>
+              ),
+              children: (
+              <Input
+                flex={1}
+                unstyled
+                backgroundColor='transparent'
+                borderWidth={0}
+                color={c.ink}
+                placeholderTextColor={c.faint}
+                fontFamily='$mono'
+                fontSize={28}
+                letterSpacing={tracking(28)}
+                placeholder='0.00'
+                keyboardType='decimal-pad'
+                value={amount}
+                onChangeText={setAmount}
+                editable={!busy}
+              />
+              )
+            })}
             <XStack justifyContent='center' marginVertical={-14} zIndex={1}>
-              <IconBox size={32} borderWidth={1} borderColor={c.border} backgroundColor={c.surface}>
+              <IconBox size={32} borderWidth={1} borderColor={c.border} backgroundColor={c.surface} onPress={flip} pressStyle={{ backgroundColor: c.pressTint }}>
                 <ArrowDownUp size={16} color={c.ink} strokeWidth={2} />
               </IconBox>
             </XStack>
-            <AmountBox label='You receive' symbol='USDC' />
-            <YStack marginTop={6} gap={8}>
-              <PrimaryButton label='Swap' disabled />
-              <UiText fontSize={11} color={c.faint} textAlign='center' fontFamily='$mono'>
-                Swaps arrive with the Normal wallet
-              </UiText>
+            {amountBox({
+              label: "You receive",
+              symbol: to,
+              children: quoting && !quote ? (
+                <Skeleton width={120} height={30} />
+              ) : (
+                <Mono fontSize={28} letterSpacing={tracking(28)} color={quote ? c.ink : c.faint} flex={1} numberOfLines={1}>
+                  {quote ? fNumber(parseFloat(quote.amountOut), { maximumFractionDigits: to === "XLM" ? 4 : 2 }) : "0.00"}
+                </Mono>
+              )
+            })}
+
+            {quote ? (
+              <YStack paddingHorizontal={4} paddingTop={6} gap={6}>
+                {rate ? (
+                  <XStack justifyContent='space-between'><UiText fontSize={12} color={c.muted}>Rate</UiText><Mono fontSize={12}>1 {from} = {rate} {to}</Mono></XStack>
+                ) : null}
+                <XStack justifyContent='space-between'>
+                  <UiText fontSize={12} color={c.muted}>Normal fee (0.5%)</UiText>
+                  <Mono fontSize={12}>−{parseFloat(quote.fee).toFixed(4)} {from}{price(from) ? ` (${fCurrency(parseFloat(quote.fee) * price(from))})` : ""}</Mono>
+                </XStack>
+                <XStack justifyContent='space-between'><UiText fontSize={12} color={c.muted}>Minimum received (1% slippage)</UiText><Mono fontSize={12}>{fNumber(parseFloat(quote.minAmountOut), { maximumFractionDigits: 4 })} {to}</Mono></XStack>
+              </YStack>
+            ) : quoteError && amountOk ? (
+              <UiText fontSize={12} color={c.failed} paddingHorizontal={4}>{quoteError}</UiText>
+            ) : null}
+
+            {needsActivation || needsTrustline ? (
+              <YStack padding={12} borderRadius={radius.input} backgroundColor={c.chips.blue.bg} marginTop={6}>
+                <UiText fontSize={13} color={c.ink2} lineHeight={19}>
+                  {needsActivation
+                    ? "Your Stellar account activates once it receives at least 1 XLM — then the USDC trustline can be added."
+                    : "A USDC trustline is required before swapping to USDC. One passkey confirmation, a tiny network fee."}
+                </UiText>
+              </YStack>
+            ) : null}
+
+            <YStack marginTop={6}>
+              <PrimaryButton label={button.label} onPress={button.onPress} disabled={button.disabled} loading={button.loading} />
             </YStack>
           </Card>
 
-          <UiText fontSize={13} color={c.muted} lineHeight={18}>
-            Stellar swaps route through Soroswap. Bitcoin, Ethereum and Solana follow via LI.FI
-            and Circle CCTP.
-          </UiText>
+          <Card padding={14} gap={12}>
+            <StepList title='What happens when you swap' timing='~30s' steps={steps} activeId={activeId} />
+            <UiText fontSize={12} color={c.muted} lineHeight={17}>
+              Runs on Stellar via Soroswap. Nothing is sent until every confirmation is done — cancelling a prompt charges nothing.
+            </UiText>
+          </Card>
         </YStack>
       </ScrollView>
+
+      <ReceiveSheet open={receiveOpen} addresses={walletAddresses(wallet)} initialChain='stellar' onClose={() => setReceiveOpen(false)} />
     </Screen>
   );
 }

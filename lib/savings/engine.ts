@@ -212,7 +212,23 @@ export const addUsdcTrustline = async ({
 // Fee pair (web lib/stellar/fee-pair.ts)
 // ---------------------------------------------------------------------------
 
-export type FeePairKind = "savings_deposit" | "savings_withdraw";
+export type FeePairKind = "savings_deposit" | "savings_withdraw" | "swap";
+
+export interface SavingsRecord {
+  vaultAddress: string;
+  amount: string;
+  feeAmount: string | null;
+}
+/** web server/tx-records SwapRecordInput — amountIn is the NET amount routed. */
+export interface SwapRecord {
+  tokenInAddress: string;
+  tokenOutAddress: string;
+  tokenInSymbol?: string;
+  tokenOutSymbol?: string;
+  amountIn: string;
+  amountOut: string;
+  feeAmount: string;
+}
 
 export interface FeePairResult {
   serviceHash: string;
@@ -264,11 +280,11 @@ interface ExecutePairResponse {
 
 /** Retrying after ANY throw from here is safe: a fresh pair reuses the same
  *  sequence numbers, so at most one pair can ever apply on-chain. */
-const submitFeePair = async (params: {
+export const submitFeePair = async (params: {
   signedServiceXdr: string;
   signedFeeXdr: string | null;
   kind: FeePairKind;
-  record: { vaultAddress: string; amount: string; feeAmount: string | null };
+  record: SavingsRecord | SwapRecord;
 }): Promise<FeePairResult> => {
   const { signedServiceXdr, signedFeeXdr, kind, record } = params;
   const server = horizon();
@@ -341,7 +357,7 @@ const submitFeePair = async (params: {
 /** Sign, retrying once if the OS passkey sheet fails to open right after the
  *  previous one (web: intermittent "timed out or was not allowed" on the
  *  second ceremony). A user cancel is never retried. */
-const signWithRetry = async (params: Parameters<typeof signStellarXdrWithTurnkey>[0]): Promise<string> => {
+export const signWithRetry = async (params: Parameters<typeof signStellarXdrWithTurnkey>[0]): Promise<string> => {
   try {
     return await signStellarXdrWithTurnkey(params);
   } catch (e) {
@@ -356,18 +372,25 @@ const signWithRetry = async (params: Parameters<typeof signStellarXdrWithTurnkey
 export type DepositStep = "checking" | "deposit_sign" | "fee_sign" | "deposit_broadcast";
 export type WithdrawStep = "withdraw_sign" | "commission_sign" | "withdraw_broadcast";
 
-const buildRoute = async (path: string, body: unknown): Promise<string> => {
+export const buildRoute = async (path: string, body: unknown): Promise<string> => {
   const data = await apiFetch<{ success?: boolean; xdr?: string; error?: string }>(path, { body });
   if (!data?.xdr) throw new Error(data?.error || "The server did not return a transaction.");
   return data.xdr;
 };
 
-const buildFeeXdr = (caller: string, amount: number, serviceXdr: string) =>
+/** Fee payment chained one sequence behind `serviceXdr`. USDC defaults to the
+ *  canonical issuer server-side; XLM needs none. */
+export const buildFeeXdr = (
+  caller: string,
+  amount: number,
+  serviceXdr: string,
+  assetCode: "USDC" | "XLM" = "USDC"
+) =>
   buildRoute("/api/fees/build-payment", {
     caller,
     amount: amount.toFixed(7),
-    assetCode: "USDC",
-    assetIssuer: MAINNET_USDC.issuer,
+    assetCode,
+    ...(assetCode === "USDC" ? { assetIssuer: MAINNET_USDC.issuer } : {}),
     sourceSequence: getTransactionSequence(serviceXdr),
     timeoutSeconds: FEE_PAIR_TIMEOUT_SECONDS
   });
