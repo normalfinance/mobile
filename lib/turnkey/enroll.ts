@@ -94,25 +94,33 @@ export const completeEnrollment = async (
   if (!verificationToken) throw new Error("Verification did not return a token.");
 
   // 3. Log in: prove we hold the private key for the public key being registered.
+  //    tkhq/sdk getClientSignatureMessageForLogin reads the token's `id` and
+  //    `public_key` claims and uses the token's OWN public-key string (the key
+  //    bound at verify) for both the message and clientSignature.publicKey —
+  //    never its local copy — so an encoding difference can't break the
+  //    byte-exact compare on Turnkey's side. We do the same.
   onStep?.("logging-in");
-  const tokenId = String(jwtClaims(verificationToken).id ?? "");
+  const claims = jwtClaims(verificationToken);
+  const tokenId = String(claims.id ?? "");
   if (!tokenId) throw new Error("Verification token has no id.");
+  const boundPublicKey = typeof claims.public_key === "string" ? claims.public_key : keyPair.publicKey;
   const message = JSON.stringify({
-    login: { publicKey: keyPair.publicKey },
+    login: { publicKey: boundPublicKey },
     tokenId,
     type: "USAGE_TYPE_LOGIN"
   });
-  const signature = await signWithApiKey({
-    content: message,
-    publicKey: keyPair.publicKey,
-    privateKey: keyPair.privateKey
-  });
+  const signature = await signWithApiKey(
+    { content: message, publicKey: keyPair.publicKey, privateKey: keyPair.privateKey },
+    // React Native has neither WebCrypto nor node:crypto; the pure-JS signer is the
+    // only correct runtime here (auto-detection can pick "browser" because `window` exists).
+    "purejs"
+  );
   const login = await apiFetch<LoginResponse>("/api/turnkey/enroll/login", {
     body: {
       verificationToken,
-      publicKey: keyPair.publicKey,
+      publicKey: boundPublicKey,
       clientSignature: {
-        publicKey: keyPair.publicKey,
+        publicKey: boundPublicKey,
         scheme: "CLIENT_SIGNATURE_SCHEME_API_P256",
         message,
         signature

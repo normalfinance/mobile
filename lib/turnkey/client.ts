@@ -38,7 +38,12 @@ export const createSessionClient = (keyPair: {
 }): TurnkeyClient =>
   new TurnkeyClient(
     { baseUrl: TURNKEY_BASE_URL },
-    new ApiKeyStamper({ apiPublicKey: keyPair.publicKey, apiPrivateKey: keyPair.privateKey })
+    new ApiKeyStamper({
+      apiPublicKey: keyPair.publicKey,
+      apiPrivateKey: keyPair.privateKey,
+      // No WebCrypto / node:crypto in React Native — force the pure-JS signer.
+      runtimeOverride: "purejs"
+    })
   );
 
 // ---------------------------------------------------------------------------
