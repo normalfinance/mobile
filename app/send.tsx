@@ -29,6 +29,8 @@ import {
 } from "@/components/home/primitives";
 import { useBackendPortfolio } from "@/hooks/use-backend-portfolio";
 import { useSavingsPosition } from "@/hooks/use-savings";
+import { refreshAfterStellarAction } from "@/lib/data/after-action";
+import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
 import { useTurnkeyWallet } from "@/hooks/use-turnkey-wallet";
 import { useColors } from "@/lib/theme/appearance";
 import { radius, space, tracking } from "@/lib/theme/tokens";
@@ -63,6 +65,7 @@ export default function SendScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const params = useLocalSearchParams<{ symbol?: string }>();
+  const { user } = useSupabaseAuth();
   const { wallet } = useTurnkeyWallet();
   const { ready: deviceReady } = useDeviceReady(wallet?.subOrgId);
   const { portfolioData } = useBackendPortfolio();
@@ -182,9 +185,8 @@ export default function SendScreen() {
       });
       setResult({ hash: r.hash });
       setConfirming(false);
-      // Balances and activity changed; drop caches so Home refreshes.
-      void queryClient.invalidateQueries({ queryKey: ["backend-portfolio"] });
-      void queryClient.invalidateQueries({ queryKey: ["activity"] });
+      // Balances and activity changed: bypass the server caches (lib/data/after-action.ts).
+      refreshAfterStellarAction(queryClient, { userId: user?.id, stellarAddress: from });
     } catch (e) {
       Alert.alert("Send failed", e instanceof Error ? e.message : describeTurnkeyError(e));
     } finally {

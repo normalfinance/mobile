@@ -6,6 +6,8 @@
 import React from "react";
 import { Alert, ScrollView } from "react-native";
 import { useRouter } from "expo-router";
+import { useQueryClient } from "@tanstack/react-query";
+import { useIsFocused } from "@react-navigation/native";
 import { XStack, YStack } from "tamagui";
 import { Landmark, PiggyBank, ShieldCheck, TrendingUp } from "lucide-react-native";
 
@@ -27,7 +29,9 @@ import { FeeLight } from "@/components/savings/FeeLight";
 import { SetupCard } from "@/components/savings/SetupCard";
 import { useSavingsPosition, useStellarAccountProbe, useVaultInfo } from "@/hooks/use-savings";
 import { useTurnkeyWallet, walletAddresses } from "@/hooks/use-turnkey-wallet";
+import { refreshAfterStellarAction } from "@/lib/data/after-action";
 import { addUsdcTrustline, deriveSetupStep } from "@/lib/savings/engine";
+import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
 import { xlmAvailableForFees } from "@/lib/stellar/send";
 import { useColors } from "@/lib/theme/appearance";
 import { space, tracking } from "@/lib/theme/tokens";
@@ -46,6 +50,8 @@ export default function SavingsScreen() {
   const c = useColors();
   const router = useRouter();
   const vault = useVaultInfo();
+  const queryClient = useQueryClient();
+  const { user } = useSupabaseAuth();
   const { wallet } = useTurnkeyWallet();
   const address = wallet?.stellarAddress ?? null;
   const { ready: deviceReady } = useDeviceReady(wallet?.subOrgId);
@@ -53,8 +59,9 @@ export default function SavingsScreen() {
 
   // Poll the account while setup is incomplete or the fee light isn't green,
   // so activation / top-ups are noticed without a manual refresh.
+  const isFocused = useIsFocused(); // the tab stays mounted; never poll from behind another tab
   const [watch, setWatch] = React.useState(true);
-  const probe = useStellarAccountProbe(address, watch);
+  const probe = useStellarAccountProbe(address, watch && isFocused);
   const step = deriveSetupStep(probe.data ?? null);
   React.useEffect(() => {
     setWatch(!probe.data || step !== "ready" || probe.data.feeStatus !== "ok");
@@ -79,6 +86,7 @@ export default function SavingsScreen() {
       }
       await addUsdcTrustline({ subOrgId: wallet.subOrgId, address });
       await probe.refetch();
+      refreshAfterStellarAction(queryClient, { userId: user?.id, stellarAddress: address });
     } catch (e) {
       Alert.alert("Couldn’t add the trustline", e instanceof Error ? e.message : describeTurnkeyError(e));
     } finally {

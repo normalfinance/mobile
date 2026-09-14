@@ -45,7 +45,11 @@ export const useVaultInfo = () =>
       });
       return data.vault;
     },
-    staleTime: 5 * 60_000,
+    // Vault facts barely move; server caches 120s with a 1h stale copy and
+    // there is no refresh param. Once per app launch is enough — DeFindex's
+    // per-second limit must never see a timer from a phone.
+    staleTime: 60 * 60_000,
+    refetchOnWindowFocus: false,
     retry: 1
   });
 
@@ -121,7 +125,9 @@ export const useSavingsPosition = (address: string | null | undefined) => {
       return result;
     },
     placeholderData: keepPreviousData,
-    staleTime: 20_000, // shorter than the route's 30s cache (web finding #22)
+    // Never on a timer (DeFindex per-second limit; a cold read is a 15–25s
+    // Soroban call). Foreground refetch only fires once the value is >30s old.
+    staleTime: 30_000,
     retry: 3
   });
 
@@ -188,8 +194,11 @@ export const useSavingsPosition = (address: string | null | undefined) => {
 export const accountProbeQueryKey = (address: string | null | undefined) =>
   ["stellar", "account-probe", address ?? "none"] as const;
 
-/** Polls while `watch` is true (setup incomplete / fee light not green), so
- *  activation and top-ups are detected without a manual refresh. */
+/** Polls Horizon (the one cheap upstream) while `watch` is true — setup
+ *  incomplete or the fee light not green — so activation and top-ups are
+ *  detected without a manual refresh. Callers pass `watch` only while their
+ *  screen is actually focused; TanStack already pauses intervals in the
+ *  background (`refetchIntervalInBackground` is false). */
 export const useStellarAccountProbe = (address: string | null | undefined, watch: boolean) =>
   useQuery<StellarAccountProbe>({
     queryKey: accountProbeQueryKey(address),

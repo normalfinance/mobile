@@ -39,6 +39,17 @@ interface ChainActivityResponse {
 export const chainActivityQueryKey = (chain: WalletChain, address: string) =>
   ["activity", chain, address] as const;
 
+// Server TTL per route (web agent, 2026-09-15). A refetch inside the window is
+// a guaranteed cache hit that still costs a round trip; a miss on ethereum is
+// two Etherscan calls and on solana ~100 Helius credits — so staleTime = TTL
+// and there is no interval: foreground, pull-to-refresh and own actions only.
+const ACTIVITY_STALE_MS: Record<WalletChain, number> = {
+  stellar: 60_000,
+  bitcoin: 45_000,
+  ethereum: 300_000,
+  solana: 300_000
+};
+
 // --- wallet/activity (web types/wallet-activity.ts, copied shape) ---------
 type WalletActivityItem =
   | { kind: "vault_deposit" | "vault_withdraw"; id: string; createdAt: string; txHash: string | null; amount: string; vaultAddress: string }
@@ -123,8 +134,7 @@ export const useActivityFeed = (priceOf: (symbol: string) => number = () => 0) =
     queries: addresses.map(({ chain, address }) => ({
       queryKey: chainActivityQueryKey(chain, address),
       queryFn: () => fetchChainActivity(chain, address),
-      staleTime: 45_000, // shortest server TTL among the four routes
-      refetchInterval: 60_000,
+      staleTime: ACTIVITY_STALE_MS[chain],
       retry: 1
     }))
   });
@@ -153,7 +163,8 @@ export const useActivityFeed = (priceOf: (symbol: string) => number = () => 0) =
         rows.push(toTransaction(chain, item, priceOf));
       }
     });
-    return rows.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+    const ts = (t: Transaction) => t.timestamp.getTime() || 0; // NaN-safe (web 2026-08-19)
+    return rows.sort((a, b) => ts(b) - ts(a));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [addresses, dataKey, priceOf]);
 

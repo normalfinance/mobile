@@ -25,6 +25,8 @@ import {
 } from "@/components/home/primitives";
 import { StepList, type Step } from "@/components/savings/StepList";
 import { useSavingsPosition, useStellarAccountProbe, useVaultInfo } from "@/hooks/use-savings";
+import { refreshAfterStellarAction } from "@/lib/data/after-action";
+import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
 import { useTurnkeyWallet } from "@/hooks/use-turnkey-wallet";
 import {
   depositToSavings,
@@ -54,6 +56,7 @@ export default function SavingsActionScreen() {
   const mode: Mode = params.mode === "withdraw" ? "withdraw" : "deposit";
 
   const vault = useVaultInfo();
+  const { user } = useSupabaseAuth();
   const { wallet } = useTurnkeyWallet();
   const address = wallet?.stellarAddress ?? null;
   const { ready: deviceReady } = useDeviceReady(wallet?.subOrgId);
@@ -145,10 +148,8 @@ export default function SavingsActionScreen() {
         savings.settle(positionAfterWithdraw(before, amountNum));
         setResult({ hash: r.serviceHash, feeSubmitted: r.feeSubmitted || r.commissionAmount === 0, net: amountNum });
       }
-      // Wallet USDC / XLM moved too.
-      void queryClient.invalidateQueries({ queryKey: ["backend-portfolio"] });
-      void queryClient.invalidateQueries({ queryKey: ["stellar", "account-probe"] });
-      void queryClient.invalidateQueries({ queryKey: ["activity"] });
+      // Wallet USDC / XLM moved too: bypass the server caches (lib/data/after-action.ts).
+      refreshAfterStellarAction(queryClient, { userId: user?.id, stellarAddress: address });
     } catch (e) {
       if (isUserCancelledError(e)) {
         // Literally true with sign-both-first: no signature → nothing submitted.

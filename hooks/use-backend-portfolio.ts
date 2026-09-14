@@ -195,8 +195,11 @@ export const useBackendPortfolio = () => {
     queryKey: portfolioQueryKey(user?.id),
     queryFn: fetchPortfolio,
     enabled: !!user,
+    // Cadence agreed with the web side 2026-09-15: NO interval on a phone
+    // (web's 30s poll exists for tabs left open for hours). A miss costs five
+    // upstream calls; refreshes come from app foreground (focusManager in
+    // _layout.tsx), pull-to-refresh, and the user's own actions.
     staleTime: 15_000, // server caches for 15s (Q18)
-    refetchInterval: 30_000, // web SWR refreshInterval (Q18)
     retry: 1
   });
 
