@@ -129,5 +129,11 @@ export const refreshAfterStellarAction = (
       // XLM / trustline state for the setup card and fee light (Horizon, cheap).
       stellarAddress ? queryClient.invalidateQueries({ queryKey: accountProbeQueryKey(stellarAddress) }) : Promise.resolve()
     ]);
+    // Indexers lag (Horizon ~5s): one late bypass for the chain feed, past its
+    // 30s floor. Portfolio converged above; position confirms on its own.
+    if (stellarAddress) {
+      await sleep(45_000);
+      await refreshStellarActivityFresh(queryClient, stellarAddress);
+    }
   })();
 };

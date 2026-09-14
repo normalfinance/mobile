@@ -267,6 +267,24 @@ export const probeDestination = async (
   }
 };
 
+/** Poll Horizon /transactions/{hash} (700ms, 8s budget) until the ledger has
+ *  it. A 404 is "not ingested yet", not an error; never throws (web
+ *  lib/stellar/await-tx-visible.ts). Direct Horizon read on purpose: no
+ *  server cache, no floor in the way. */
+export const awaitTxVisible = async (hash: string, budgetMs = 8_000): Promise<boolean> => {
+  const deadline = Date.now() + budgetMs;
+  while (Date.now() < deadline) {
+    try {
+      await horizon().transactions().transaction(hash).call();
+      return true;
+    } catch {
+      /* 404 or hiccup — keep polling */
+    }
+    await new Promise((r) => setTimeout(r, 700));
+  }
+  return false;
+};
+
 /** Horizon result codes → something a person can act on (web friendlyAppError subset). */
 export const friendlyHorizonError = (err: unknown): string => {
   const codes = (err as { response?: { data?: { extras?: { result_codes?: { transaction?: string; operations?: string[] } } } } })

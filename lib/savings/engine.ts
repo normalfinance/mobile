@@ -24,6 +24,7 @@ import { ApiError, apiFetch } from "@/lib/api";
 import {
   HORIZON_URL,
   MAINNET_USDC,
+  awaitTxVisible,
   friendlyHorizonError,
   horizon,
   xlmFeeStatus,
@@ -321,6 +322,10 @@ const submitFeePair = async (params: {
       );
     }
   }
+
+  // Ledger-based "Done" (web recipe step 2): the success screen must not
+  // appear before Horizon can show the transaction. Budget-bounded, never throws.
+  await awaitTxVisible(data.serviceHash ?? serviceHash);
 
   return {
     serviceHash: data.serviceHash ?? serviceHash,

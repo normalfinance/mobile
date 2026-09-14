@@ -146,7 +146,9 @@ export const useSavingsPosition = (address: string | null | undefined) => {
   }, [address]);
 
   /** After a deposit/withdraw: show the optimistic number now, then confirm
-   *  against the chain (bypassing the server cache) at 3s / 15s / 45s. */
+   *  at 3s / 15s / 45s with PLAIN reads — the server deletes the position
+   *  cache and its refresh floor on a confirmed action, so the next read is
+   *  live by construction; refresh=1 would only re-arm a 30s floor. */
   const settle = React.useCallback(
     (next: SavingsPosition) => {
       if (!address) return;
@@ -155,7 +157,7 @@ export const useSavingsPosition = (address: string | null | undefined) => {
       void writeCache(address, next);
       const confirm = async () => {
         try {
-          const api = await fetchSavingsPosition(address, true);
+          const api = await fetchSavingsPosition(address);
           const prev = queryClient.getQueryData<SavingsPosition>(key) ?? null;
           if (api) {
             const merged = reconcileSavingsPosition(api, prev);
