@@ -23,7 +23,7 @@
 //     the API-key stamper's signWithApiKey (same routine that signs X-Stamp).
 
 import { Platform } from "react-native";
-import { signWithApiKey } from "@turnkey/api-key-stamper";
+import { ApiKeyStamper, SignatureFormat } from "@turnkey/api-key-stamper";
 import { compressRawPublicKey, encryptOtpCodeToBundle, generateP256KeyPair } from "@turnkey/crypto";
 
 import { apiFetch } from "@/lib/api";
@@ -121,12 +121,14 @@ export const completeEnrollment = async (
     tokenId,
     type: "USAGE_TYPE_LOGIN"
   });
-  const signature = await signWithApiKey(
-    { content: message, publicKey: keyPair.publicKey, privateKey: keyPair.privateKey },
-    // React Native has neither WebCrypto nor node:crypto; the pure-JS signer is the
-    // only correct runtime here (auto-detection can pick "browser" because `window` exists).
-    "purejs"
-  );
+  // Turnkey verifies the login proof as a RAW r||s P-256 signature (64 bytes),
+  // not the DER form the X-Stamp header uses — live rejection 2026-09-14:
+  // "invalid signature length: must be even, got 71 bytes".
+  const signature = await new ApiKeyStamper({
+    apiPublicKey: keyPair.publicKey,
+    apiPrivateKey: keyPair.privateKey,
+    runtimeOverride: "purejs" // no WebCrypto / node:crypto in React Native
+  }).sign(message, SignatureFormat.Raw);
   const login = await apiFetch<LoginResponse>("/api/turnkey/enroll/login", {
     body: {
       verificationToken,
