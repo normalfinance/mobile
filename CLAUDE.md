@@ -246,7 +246,7 @@ Verified at `develop@3bc0217` plus the deletions below. Treat as the starting po
 | Area | Target | On disk |
 |---|---|---|
 | Auth | Supabase | ✅ `lib/supabase.ts` (AsyncStorage adapter, `detectSessionInUrl:false`), `providers/supabase-auth-provider.tsx`, `services/auth.service.ts` (OTP, magic link, Google + Apple OAuth via `expo-auth-session`), `app/auth/callback.tsx`. **Sends no `captchaToken`.** |
-| Wallet | Turnkey sub-org, passkey-only | ⚠️ **Gate done, creation not.** `hooks/use-turnkey-wallet.ts` asks `GET /api/turnkey/wallet`; `app/(tabs)/_layout.tsx` routes `wallet === null` → `app/create-wallet.tsx` (placeholder until the passkey ceremony lands). The BIP-39 files (`lib/utils/mnemonic.utils.ts`, `crypto.utils.ts`, `services/wallet.service.ts`, `app/wallet-setup.tsx`) are still on disk but **nothing routes to them** — delete in a later commit. |
+| Wallet | Turnkey sub-org, passkey-only | ✅ **Built 2026-09-14, awaiting device test.** `lib/turnkey/`: `client.ts` (passkey-stamped TurnkeyClient with `allowCredentials` from `GET /api/turnkey/credentials`; session client for enrolment; error classifier), `stellar-signer.ts` (verbatim port of web, Q53, + local verify), `passkey.ts` (`createPasskey` with web's params, Q55), `create-wallet.ts` (passkey → `POST turnkey/wallet chain:'stellar'` → `wallets/link`), `enroll.ts` (email-OTP device enrolment: init → encrypt code → verify → login with clientSignature → `CREATE_AUTHENTICATORS_V2` → complete; backend routes being built in the web repo), `sign-test.ts` (signs a bumpSequence no-op, verifies locally, never submits). Screens: `app/create-wallet.tsx` (real ceremony), `app/setup-device.tsx`, Settings → Security. Packages: `@turnkey/http` 6.4, `@turnkey/crypto`, `@turnkey/api-key-stamper`, `@turnkey/react-native-passkey-stamper`, `react-native-passkey` (native → rebuild). Identity: `app.config.ts` → `io.normalfinance.app.dev` / `.app` (APP_VARIANT=production), Team `FA938A596N`, `webcredentials:normalfinance.io?mode=developer`. The BIP-39 files (`lib/utils/mnemonic.utils.ts`, `crypto.utils.ts`, `services/wallet.service.ts`, `app/wallet-setup.tsx`, `components/wallet/*`) are still on disk, unreachable — delete once signing is verified on a device. |
 | Chains | BTC, ETH, SOL, XLM | ❌ Stellar only. No registry. |
 | Swap | Soroswap / LI.FI / CCTP | ☠️ deleted (was `normal_pool_router` AMM). UI shells in `components/swap/*` kept, unreferenced. |
 | Backend | Next.js API, Bearer | ✅ `lib/api.ts` — `apiFetch()`: Bearer, `Cookie: normal-network=mainnet`, 401 → refresh once → retry once → `onSessionExpired`; `ApiError` with `status` and the server's `error`. Reads `EXPO_PUBLIC_API_BASE_URL`. `hooks/use-transaction.ts` still posts to a hardcoded `http://localhost:8095` — dead, replace with `fees/execute-pair` / `swap/submit-single`. |
@@ -391,8 +391,12 @@ ids) and `assetlinks.json` (Android SHA-256 still the all-zero placeholder until
 - **Change `app.json` `ios.bundleIdentifier` to `io.normalfinance.app`** (+ an `.app.dev` variant
   for dev builds) and add `android.package: io.normalfinance.app`. Both must match the live
   association files. The `FA938A596N` team is available in Xcode; do this at the start of Phase 2.
-- **Existing-user sign-in** (Q33): decide whether v1 ships without it (synced-passkey users
-  only) or whether web builds `CREATE_AUTHENTICATORS_V2` first.
+- **Existing-user sign-in — decided 2026-09-14 (Justin):** email-OTP device enrolment (Turnkey
+  INIT_OTP_V3 → VERIFY_OTP_V2 → OTP_LOGIN_V2 → CREATE_AUTHENTICATORS_V2). Custody stance: inbox +
+  Supabase login can add a passkey; guardrails = exact-email match, per-user rate limit,
+  invalidateExisting, ≤5 authenticators, audit table, "new device added" email (TODO on web).
+  Platform-synced passkeys (iCloud Keychain, Google Password Manager via iOS AutoFill) work
+  without enrolment. The QR "add device from old device" flow is optional, later.
 - **Captcha**: confirm whether Supabase captcha protection is on; if so, choose WebView Turnstile
   or a mobile exemption.
 - **Supabase dashboard**: add **`normalapp://wallet-setup`** (the exact `redirectTo` the app sends,

@@ -5,7 +5,19 @@ import { Alert, ScrollView } from "react-native";
 import Constants from "expo-constants";
 import * as Clipboard from "expo-clipboard";
 import { XStack, YStack } from "tamagui";
-import { Check, Copy, LogOut, Mail, Moon, Smartphone, Sun, Wallet } from "lucide-react-native";
+import { useRouter } from "expo-router";
+import {
+  Check,
+  Copy,
+  Fingerprint,
+  LogOut,
+  Mail,
+  Moon,
+  ShieldCheck,
+  Smartphone,
+  Sun,
+  Wallet
+} from "lucide-react-native";
 
 import {
   Card,
@@ -22,6 +34,8 @@ import { supabase } from "@/lib/supabase";
 import { useAppearance, useColors, type AppearanceMode } from "@/lib/theme/appearance";
 import { space } from "@/lib/theme/tokens";
 import { shortenAddress } from "@/lib/utils/number-format.utils";
+import { describeTurnkeyError, isNoPasskeyError } from "@/lib/turnkey/client";
+import { runSignTest } from "@/lib/turnkey/sign-test";
 import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
 
 const APPEARANCE: { key: AppearanceMode; label: string; Icon: typeof Sun }[] = [
@@ -34,7 +48,38 @@ export default function SettingsScreen() {
   const c = useColors();
   const { mode, setMode } = useAppearance();
   const { user } = useSupabaseAuth();
-  const { addresses } = useTurnkeyWallet();
+  const { addresses, wallet } = useTurnkeyWallet();
+  const router = useRouter();
+  const [testing, setTesting] = React.useState(false);
+
+  // Proves passkey → Turnkey → ed25519 end to end. Signs a no-op Stellar
+  // transaction and verifies the signature locally; nothing is submitted.
+  const testSigning = async () => {
+    if (!wallet?.subOrgId || !wallet.stellarAddress) {
+      Alert.alert("No Stellar wallet", "This account has no Stellar address to sign with.");
+      return;
+    }
+    setTesting(true);
+    try {
+      const r = await runSignTest(wallet.subOrgId, wallet.stellarAddress);
+      Alert.alert(r.ok ? "Signature valid ✓" : "Signature check failed", `${r.detail}\n\n${r.ms} ms`);
+    } catch (e) {
+      if (isNoPasskeyError(e)) {
+        Alert.alert(
+          "No passkey on this phone",
+          "Your wallet’s passkey lives on another device. Set up this phone with an email code.",
+          [
+            { text: "Not now", style: "cancel" },
+            { text: "Set up this phone", onPress: () => router.push("/setup-device") }
+          ]
+        );
+      } else {
+        Alert.alert("Signing failed", describeTurnkeyError(e));
+      }
+    } finally {
+      setTesting(false);
+    }
+  };
   const [copiedChain, setCopiedChain] = React.useState<WalletChain | null>(null);
 
   const copyAddress = async (chain: WalletChain, address: string) => {
@@ -123,6 +168,27 @@ export default function SettingsScreen() {
                   </React.Fragment>
                 ))
               )}
+            </Card>
+          </YStack>
+
+          <YStack gap={10}>
+            <UiText fontSize={13} color={c.muted}>
+              Security
+            </UiText>
+            <Card>
+              <ListRow
+                icon={<Fingerprint size={16} color={c.ink} strokeWidth={1.8} />}
+                label='Set up this phone'
+                sub='Add a passkey for this device to your wallet'
+                onPress={() => router.push("/setup-device")}
+              />
+              <Divider />
+              <ListRow
+                icon={<ShieldCheck size={16} color={c.ink} strokeWidth={1.8} />}
+                label={testing ? "Testing…" : "Test signing"}
+                sub='Signs a harmless transaction with Face ID. Nothing is sent.'
+                onPress={testing ? undefined : testSigning}
+              />
             </Card>
           </YStack>
 

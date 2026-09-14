@@ -22,6 +22,8 @@ import {
 } from "@/components/home/primitives";
 import { useTurnkeyWallet } from "@/hooks/use-turnkey-wallet";
 import { supabase } from "@/lib/supabase";
+import { describeTurnkeyError } from "@/lib/turnkey/client";
+import { createWalletWithPasskey } from "@/lib/turnkey/create-wallet";
 import { useColors } from "@/lib/theme/appearance";
 import { space, tracking } from "@/lib/theme/tokens";
 import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
@@ -30,6 +32,21 @@ export default function CreateWalletScreen() {
   const c = useColors();
   const { user } = useSupabaseAuth();
   const { refetch, isLoading } = useTurnkeyWallet();
+  const [creating, setCreating] = React.useState(false);
+
+  const handleCreate = async () => {
+    if (!user) return;
+    setCreating(true);
+    try {
+      // Face ID → passkey → POST turnkey/wallet { chain: 'stellar' } → link.
+      await createWalletWithPasskey({ id: user.id, email: user.email });
+      await refetch(); // the tabs layout routes to Home once a wallet exists
+    } catch (e) {
+      Alert.alert("Couldn’t create your wallet", describeTurnkeyError(e));
+    } finally {
+      setCreating(false);
+    }
+  };
 
   const handleSignOut = async () => {
     const { error } = await supabase.auth.signOut();
@@ -62,9 +79,9 @@ export default function CreateWalletScreen() {
               down, nothing to lose.
             </UiText>
             <YStack width='100%' gap={8} marginTop={4}>
-              <PrimaryButton label='Create wallet' disabled />
+              <PrimaryButton label='Create wallet' onPress={handleCreate} loading={creating} />
               <UiText fontSize={11} color={c.faint} textAlign='center' fontFamily='$mono'>
-                Passkey wallet creation is the next build step
+                One Face ID prompt · nothing to write down
               </UiText>
             </YStack>
           </Card>
