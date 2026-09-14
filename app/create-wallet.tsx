@@ -74,7 +74,7 @@ export default function CreateWalletScreen() {
               <Fingerprint size={28} color={c.ink} strokeWidth={1.6} />
             </IconBox>
             <UiText fontSize={16} fontWeight='500' textAlign='center'>
-              Secured by Face ID
+              Secured by a passkey
             </UiText>
             <UiText fontSize={14} color={c.body50} textAlign='center' lineHeight={20}>
               Your wallet is protected by a passkey on this phone — no seed phrase to write
@@ -83,7 +83,7 @@ export default function CreateWalletScreen() {
             <YStack width='100%' gap={8} marginTop={4}>
               <PrimaryButton label='Create wallet' onPress={handleCreate} loading={creating} />
               <UiText fontSize={11} color={c.faint} textAlign='center' fontFamily='$mono'>
-                One Face ID prompt · nothing to write down
+                One passkey prompt · nothing to write down
               </UiText>
             </YStack>
           </Card>

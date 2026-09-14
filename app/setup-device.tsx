@@ -121,7 +121,7 @@ export default function SetupDeviceScreen() {
                   This phone can now sign for your wallet
                 </UiText>
                 <UiText fontSize={14} color={c.body50} textAlign='center'>
-                  Every send, deposit and swap will ask for Face ID.
+                  Every send, deposit and swap will ask for your passkey.
                 </UiText>
                 <YStack width='100%' marginTop={4}>
                   <PrimaryButton label='Done' onPress={() => router.replace("/(tabs)")} />
@@ -179,8 +179,8 @@ export default function SetupDeviceScreen() {
                       <Fingerprint size={16} color={c.ink} strokeWidth={1.8} />
                     </IconBox>
                     <UiText fontSize={13} color={c.muted} flex={1} lineHeight={18}>
-                      After the code, Face ID creates a passkey for this phone and adds it
-                      to your wallet. Your other devices keep working.
+                      After the code, this phone creates its own passkey and adds it to
+                      your wallet. Your other devices keep working.
                     </UiText>
                   </XStack>
                 </Card>

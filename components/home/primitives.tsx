@@ -195,19 +195,21 @@ export const SecondaryButton = ({
   label,
   onPress,
   icon,
-  disabled
+  disabled,
+  borderRadius = radius.smallButton
 }: {
   label: string;
   onPress?: () => void;
   icon?: React.ReactNode;
   disabled?: boolean;
+  borderRadius?: number;
 }) => {
   const c = useColors();
   return (
     <XStack
       onPress={disabled ? undefined : onPress}
       height={44}
-      borderRadius={radius.smallButton}
+      borderRadius={borderRadius}
       borderWidth={1}
       borderColor={c.border}
       backgroundColor={c.surface}

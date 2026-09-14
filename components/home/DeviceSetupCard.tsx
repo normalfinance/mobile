@@ -9,10 +9,10 @@ import { XStack, YStack } from "tamagui";
 import { Fingerprint } from "lucide-react-native";
 
 import { useColors } from "@/lib/theme/appearance";
-import { space } from "@/lib/theme/tokens";
+import { radius, space } from "@/lib/theme/tokens";
 import { describeTurnkeyError } from "@/lib/turnkey/client";
 import { ensureDeviceReady } from "@/lib/turnkey/device-check";
-import { Card, IconBox, PillButton, PrimaryButton, UiText } from "./primitives";
+import { Card, IconBox, PrimaryButton, SecondaryButton, UiText } from "./primitives";
 
 export const DeviceSetupCard = ({
   subOrgId,
@@ -54,15 +54,21 @@ export const DeviceSetupCard = ({
             Set up this phone
           </UiText>
           <UiText fontSize={13} color={c.muted} lineHeight={18}>
-            One Face ID check lets this phone send, save and swap. Takes about a minute.
+            One passkey check lets this phone send, save and swap. Takes about a minute.
           </UiText>
         </YStack>
       </XStack>
       <XStack gap={8}>
         <YStack flex={1}>
-          <PrimaryButton label='Verify with Face ID' onPress={verify} loading={busy} />
+          <PrimaryButton label='Verify with passkey' onPress={verify} loading={busy} />
         </YStack>
-        <PillButton label='Not now' onPress={() => setHidden(true)} />
+        <YStack flex={1}>
+          <SecondaryButton
+            label='Not now'
+            onPress={() => setHidden(true)}
+            borderRadius={radius.cta}
+          />
+        </YStack>
       </XStack>
     </Card>
   );

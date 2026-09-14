@@ -186,7 +186,7 @@ export default function SettingsScreen() {
               <ListRow
                 icon={<ShieldCheck size={16} color={c.ink} strokeWidth={1.8} />}
                 label={testing ? "Testing…" : "Test signing"}
-                sub='Signs a random digest with Face ID and verifies it. Nothing is sent.'
+                sub='Signs a random digest with your passkey and verifies it. Nothing is sent.'
                 onPress={testing ? undefined : testSigning}
               />
             </Card>

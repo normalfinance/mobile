@@ -73,7 +73,7 @@ export const isForeignPasskeyError = (e: unknown): boolean =>
 /** Something a person can act on (web: passkey-stamper.ts error mapper). */
 export const describeTurnkeyError = (e: unknown): string => {
   if (isNoPasskeyError(e)) return "No passkey for your wallet is available on this phone.";
-  if (isUserCancelledError(e)) return "Face ID was cancelled.";
+  if (isUserCancelledError(e)) return "The passkey prompt was cancelled.";
   if (isForeignPasskeyError(e))
     return "That passkey belongs to a different Normal account. Choose the one for this login.";
   const name = errorName(e);
