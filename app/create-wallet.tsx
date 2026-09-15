@@ -23,6 +23,8 @@ import {
 import { useTurnkeyWallet } from "@/hooks/use-turnkey-wallet";
 import { supabase } from "@/lib/supabase";
 import { describeTurnkeyError } from "@/lib/turnkey/client";
+import { apiFetch } from "@/lib/api";
+import { ensureChainAddress } from "@/lib/turnkey/accounts";
 import { createWalletWithPasskey } from "@/lib/turnkey/create-wallet";
 import { markDeviceReady } from "@/lib/turnkey/device-ready";
 import { useColors } from "@/lib/theme/appearance";
@@ -32,19 +34,37 @@ import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
 export default function CreateWalletScreen() {
   const c = useColors();
   const { user } = useSupabaseAuth();
-  const { refetch, isLoading } = useTurnkeyWallet();
+  const { wallet, status, refetch, isLoading } = useTurnkeyWallet();
   const [creating, setCreating] = React.useState(false);
+  // A sub-org that exists but has no Stellar account (web BTC/ETH-first user):
+  // derive Stellar on the same seed — one passkey, no new wallet (CLAUDE.md §5).
+  const addStellarOnly = status === "no-stellar" && !!wallet;
 
   const handleCreate = async () => {
     if (!user) return;
     setCreating(true);
     try {
-      // Face ID → passkey → POST turnkey/wallet { chain: 'stellar' } → link.
+      if (addStellarOnly && wallet) {
+        await ensureChainAddress(wallet, "stellar");
+        await refetch();
+        return;
+      }
+      // Hard rule 15: check the wallet-link quota BEFORE the passkey ceremony —
+      // the ceremony is irreversible (a passkey is minted on the device).
+      const limit = await apiFetch<{ allowed: boolean; remaining: number; reset: number }>("/api/wallets/check-limit").catch(
+        () => null
+      );
+      if (limit && limit.allowed === false) {
+        const when = limit.reset ? new Date(limit.reset).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }) : "later";
+        Alert.alert("Please try again later", `Wallet creation is limited to a few attempts per day. Try again after ${when}.`);
+        return;
+      }
+      // Passkey → POST turnkey/wallet { chain: 'stellar' } → link.
       await createWalletWithPasskey({ id: user.id, email: user.email });
       const { data } = await refetch(); // the tabs layout routes to Home once a wallet exists
       if (data?.subOrgId) await markDeviceReady(data.subOrgId); // the passkey was made right here
     } catch (e) {
-      Alert.alert("Couldn’t create your wallet", describeTurnkeyError(e));
+      Alert.alert(addStellarOnly ? "Couldn’t add Stellar" : "Couldn’t create your wallet", describeTurnkeyError(e));
     } finally {
       setCreating(false);
     }
@@ -61,11 +81,13 @@ export default function CreateWalletScreen() {
         <YStack flex={1} paddingHorizontal={space.gutter} justifyContent='center' gap={20}>
           <YStack gap={6}>
             <UiText fontSize={22} fontWeight='600' letterSpacing={tracking(22)}>
-              Create your wallet
+              {addStellarOnly ? "Add Stellar to your wallet" : "Create your wallet"}
             </UiText>
             <UiText fontSize={14} color={c.muted}>
               {user?.email ? `Signed in as ${user.email}. ` : ""}
-              This account has no Normal wallet yet.
+              {addStellarOnly
+                ? "Your Normal wallet exists but has no Stellar account yet — savings and USDC live there."
+                : "This account has no Normal wallet yet."}
             </UiText>
           </YStack>
 
@@ -81,7 +103,7 @@ export default function CreateWalletScreen() {
               down, nothing to lose.
             </UiText>
             <YStack width='100%' gap={8} marginTop={4}>
-              <PrimaryButton label='Create wallet' onPress={handleCreate} loading={creating} />
+              <PrimaryButton label={addStellarOnly ? "Add Stellar" : "Create wallet"} onPress={handleCreate} loading={creating} />
               <UiText fontSize={11} color={c.faint} textAlign='center' fontFamily='$mono'>
                 One passkey prompt · nothing to write down
               </UiText>

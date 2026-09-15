@@ -45,7 +45,10 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     ...config.ios,
     bundleIdentifier: BUNDLE_ID,
     appleTeamId: APPLE_TEAM_ID,
-    associatedDomains: [`webcredentials:${PASSKEY_RP_ID}`]
+    associatedDomains: [`webcredentials:${PASSKEY_RP_ID}`],
+    // Sign in with Apple entitlement (App Store guideline 4.8: required when
+    // Google sign-in is offered). Provider config lives in Supabase.
+    usesAppleSignIn: true
   },
   android: {
     ...config.android,

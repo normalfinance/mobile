@@ -74,14 +74,16 @@ export default function HomeScreen() {
       } else if (action === "swap") {
         router.push("/(tabs)/swap");
       } else {
-        Alert.alert("Coming soon", "Buying arrives with the on-ramp integration.");
+        router.push("/buy");
       }
     },
     [router]
   );
 
-  // Like the web drawer: every asset the user has an address for, zero balances included.
-  const heldAssets = portfolioData.assets.filter((a) => !!a.address);
+  // Like the web drawer (account-drawer.tsx allTokens): only assets actually
+  // held. The aggregator always emits five rows; without this a new user sees
+  // five phantom "$0.00" lines instead of the empty state.
+  const heldAssets = portfolioData.assets.filter((a) => !!a.address && Number(a.balance) > 0);
   const email = user?.email ?? "";
   const displayName = email ? email.split("@")[0] : "Your wallet";
 
@@ -164,10 +166,13 @@ export default function HomeScreen() {
                       <YStack paddingTop={12}>
                         <EmptyState
                           icon={<Wallet size={24} color={c.ink} strokeWidth={1.8} />}
-                          title='No assets yet'
-                          body='Receive XLM or USDC to get started.'
+                          title='Nothing here yet'
+                          body='Buy with a card or receive crypto from another wallet to get started.'
                           action={
-                            <PillButton label='Receive' onPress={() => setReceiveOpen(true)} />
+                            <XStack gap={8}>
+                              <PillButton label='Buy' onPress={() => router.push("/buy")} />
+                              <PillButton label='Receive' onPress={() => setReceiveOpen(true)} />
+                            </XStack>
                           }
                         />
                       </YStack>

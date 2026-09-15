@@ -12,7 +12,7 @@ import { useColors } from "@/lib/theme/appearance";
 import { radius, space, tracking } from "@/lib/theme/tokens";
 import { BRAND_ASSETS } from "@/lib/utils/cdn.utils";
 import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
-import { signInWithGoogle } from "@/services";
+import { signInWithApple, signInWithGoogle } from "@/services";
 
 export default function SignInScreen() {
   const c = useColors();
@@ -33,8 +33,19 @@ export default function SignInScreen() {
     }
   }, []);
 
-  const handleAppleSignIn = React.useCallback(() => {
-    Alert.alert("Coming soon", "Apple sign-in is not available yet. Use email or Google.");
+  const [isAppleLoading, setIsAppleLoading] = React.useState(false);
+  const handleAppleSignIn = React.useCallback(async () => {
+    setIsAppleLoading(true);
+    try {
+      await signInWithApple();
+    } catch (error) {
+      // ERR_REQUEST_CANCELED = the user dismissed the sheet; say nothing.
+      const code = (error as { code?: string })?.code;
+      if (code === "ERR_REQUEST_CANCELED") return;
+      Alert.alert("Apple sign-in failed", error instanceof Error ? error.message : "We couldn’t complete Apple sign-in.");
+    } finally {
+      setIsAppleLoading(false);
+    }
   }, []);
 
   return (
@@ -102,8 +113,10 @@ export default function SignInScreen() {
                   />
                 }
               />
+              {Platform.OS === "ios" ? (
               <XStack
-                onPress={handleAppleSignIn}
+                onPress={isAppleLoading ? undefined : handleAppleSignIn}
+                opacity={isAppleLoading ? 0.6 : 1}
                 height={44}
                 borderRadius={radius.smallButton}
                 backgroundColor={c.cta}
@@ -118,9 +131,10 @@ export default function SignInScreen() {
                   style={{ width: 18, height: 18, tintColor: c.ctaText }}
                 />
                 <UiText fontSize={13} fontWeight='500' color={c.ctaText}>
-                  Continue with Apple
+                  {isAppleLoading ? "Signing in…" : "Continue with Apple"}
                 </UiText>
               </XStack>
+              ) : null}
             </YStack>
 
             <UiText fontSize={11} color={c.faint} textAlign='center' lineHeight={16}>

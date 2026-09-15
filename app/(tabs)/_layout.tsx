@@ -108,7 +108,9 @@ export default function TabLayout() {
     );
   }
 
-  if (walletStatus === "none") {
+  if (walletStatus === "none" || walletStatus === "no-stellar") {
+    // No wallet at all, or a wallet without a Stellar account yet (e.g. a
+    // BTC-first web user) — create-wallet handles both (one passkey each).
     return <Redirect href='/create-wallet' />;
   }
 

@@ -35,7 +35,15 @@ import { useTurnkeyWallet, walletAddresses } from "@/hooks/use-turnkey-wallet";
 import { refreshAfterStellarAction } from "@/lib/data/after-action";
 import { addUsdcTrustline } from "@/lib/savings/engine";
 import { canPaySorobanFee, maxXlmForSorobanSwap, spendableXlmForOutflow } from "@/lib/stellar/send";
-import { executeSoroswap, getSwapQuote, type SwapQuote, type SwapStage, type SwapSymbol } from "@/lib/swap/soroswap";
+import {
+  QUOTE_DRIFT_TOLERANCE,
+  QUOTE_MAX_AGE_MS,
+  executeSoroswap,
+  getSwapQuote,
+  type SwapQuote,
+  type SwapStage,
+  type SwapSymbol
+} from "@/lib/swap/soroswap";
 import { useColors } from "@/lib/theme/appearance";
 import { radius, space, tracking } from "@/lib/theme/tokens";
 import { describeTurnkeyError, isUserCancelledError } from "@/lib/turnkey/client";
@@ -47,6 +55,8 @@ import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
 type UiStage = SwapStage | "refetch" | "done" | null;
 
 const truncate7 = (v: number) => (Math.floor(v * 1e7) / 1e7).toFixed(7).replace(/\.?0+$/, "");
+// Web allows dust swaps where the Soroban fee dwarfs the trade; a small floor.
+const MIN_SWAP_USD = 1;
 
 export default function SwapScreen() {
   const c = useColors();
@@ -71,6 +81,8 @@ export default function SwapScreen() {
   const [busy, setBusy] = React.useState(false);
   const [receiveOpen, setReceiveOpen] = React.useState(false);
   const [addingTrustline, setAddingTrustline] = React.useState(false);
+  const [priceMoved, setPriceMoved] = React.useState(false);
+  const [degradedAfterSign, setDegradedAfterSign] = React.useState(false);
 
   // Account state (Horizon): activation, trustline, XLM for the Soroban fee.
   // Watched only while a gate is open and this tab is on screen.
@@ -94,7 +106,13 @@ export default function SwapScreen() {
   const spendableXlm = spendableXlmForOutflow(xlmBalance, subentries, hasActiveSavings);
   const fromBalance = from === "XLM" ? spendableXlm : probe.data?.usdcBalance ?? Number(portfolioData.assets.find((a) => a.asset_code === "USDC")?.balance ?? 0);
   const insufficient = amountOk && amountNum > fromBalance + 1e-7;
-  const cannotPayFee = amountOk && accountExists === true && !canPaySorobanFee(xlmBalance, subentries, from === "XLM" ? amountNum : 0);
+  const xlmSpent = from === "XLM" ? amountNum : 0;
+  const cannotPayFee = amountOk && accountExists === true && !canPaySorobanFee(xlmBalance, subentries, xlmSpent);
+  // Name the shortfall: a gate must offer the action that clears it.
+  const feeShortfall = Math.max(0.5 + (2 + subentries) * 0.5 - (xlmBalance - xlmSpent), 0);
+  const tooSmall = amountOk && price(from) > 0 && amountNum * price(from) < MIN_SWAP_USD;
+  // What MAX holds back on an XLM source (reserve, fees, savings buffer).
+  const xlmHoldback = Math.max(xlmBalance - maxXlmForSorobanSwap(spendableXlm), 0);
 
   // Quote: 500ms debounce (web), one in flight, stale responses dropped, and
   // only while the tab is on screen — the public quote route is 30/10s per IP
@@ -115,6 +133,7 @@ export default function SwapScreen() {
         if (requestRef.current !== id) return;
         setQuote(q);
         setQuoteError(null);
+        setPriceMoved(false);
       } catch (e) {
         if (requestRef.current !== id) return;
         setQuote(null);
@@ -176,23 +195,46 @@ export default function SwapScreen() {
     if (!quote || !wallet?.subOrgId || !address) return;
     setBusy(true);
     setDoneHash(null);
-    setEmbedded(quote.embedded);
+    setPriceMoved(false);
+    setDegradedAfterSign(false);
     try {
+      // A quote older than 45s is re-fetched; if the price moved >1% against
+      // the user, show the new number and ask for a second press (web's LI.FI
+      // engine does this; its Soroswap path signs a rebuilt quote unchecked).
+      let live = quote;
+      if (Date.now() - quote.fetchedAt > QUOTE_MAX_AGE_MS) {
+        live = await getSwapQuote(from, to, amountNum);
+        setQuote(live);
+        if (parseFloat(live.amountOut) < parseFloat(quote.amountOut) * (1 - QUOTE_DRIFT_TOLERANCE)) {
+          setPriceMoved(true);
+          return;
+        }
+      }
+      setEmbedded(live.embedded);
       if (!(await gate())) return;
+      let signedOnce = false;
       const hash = await executeSoroswap({
-        quote,
+        quote: live,
         subOrgId: wallet.subOrgId,
         address,
         onStage: (s) => {
-          if (s === "degraded" || s === "sign-fee") setEmbedded(false);
+          if (s === "sign-swap") signedOnce = true;
+          if (s === "degraded") {
+            setEmbedded(false);
+            // The server refused the one-signature build AFTER a signature:
+            // that signature is discarded; two more confirmations follow.
+            if (signedOnce) setDegradedAfterSign(true);
+          }
+          if (s === "sign-fee") setEmbedded(false);
           tick(s);
         }
       });
-      // Feed row exists already; balances are gated: Done only after the
-      // portfolio converged (refresh=1 loop), capped at 15s (web #62/#66).
+      // Feed row exists already (written before broadcast); balances are
+      // gated: Done only after the portfolio converged on BOTH sides of the
+      // pair (refresh=1 loop), capped at 15s (web #62/#66).
       tick("refetch");
       await Promise.race([
-        refreshAfterStellarAction(queryClient, { userId: user?.id, stellarAddress: address }),
+        refreshAfterStellarAction(queryClient, { userId: user?.id, stellarAddress: address, expectMove: [from, to] }),
         new Promise((r) => setTimeout(r, 15_000))
       ]);
       setDoneHash(hash);
@@ -214,7 +256,13 @@ export default function SwapScreen() {
     {
       id: "sign",
       label: "Confirm with passkey",
-      sub: stage === "sign-fee" ? "Now the Normal fee · 2 of 2" : twoSignatures ? "Two confirmations: the swap, then the Normal fee" : "One confirmation — the fee is inside the swap"
+      sub: degradedAfterSign
+        ? "The one-signature route was refused — two more confirmations: the swap, then the fee"
+        : stage === "sign-fee"
+          ? "Now the Normal fee · 2 of 2"
+          : twoSignatures
+            ? "Two confirmations: the swap, then the Normal fee"
+            : "One confirmation — the fee is inside the swap"
     },
     { id: "submit", label: "Submitting to Stellar", sub: "Broadcasting — usually a few seconds" },
     { id: "refetch", label: "Updating balances", sub: "Waiting until your wallet shows the result" }
@@ -228,7 +276,9 @@ export default function SwapScreen() {
   else if (needsTrustline) button = { label: addingTrustline ? "Adding trustline…" : "Add USDC trustline", onPress: handleAddTrustline, loading: addingTrustline };
   else if (!amountOk) button = { label: "Enter an amount", disabled: true };
   else if (insufficient) button = { label: "Insufficient balance", disabled: true };
-  else if (cannotPayFee) button = { label: "Add XLM to cover the network fee", onPress: () => setReceiveOpen(true) };
+  else if (cannotPayFee) button = { label: "Receive XLM for the network fee", onPress: () => setReceiveOpen(true) };
+  else if (tooSmall) button = { label: `Minimum swap is about $${MIN_SWAP_USD}`, disabled: true };
+  else if (priceMoved) button = { label: "Price moved — press to continue", onPress: run };
   else if (busy) button = { label: (steps.find((s) => s.id === activeId)?.label ?? "Swapping") + "…", loading: true };
   else if (quoting || !quote) button = { label: quoteError ? "Quote unavailable" : "Fetching quote…", disabled: true };
   else button = { label: "Swap with passkey", onPress: run };
@@ -348,12 +398,22 @@ export default function SwapScreen() {
               <UiText fontSize={12} color={c.failed} paddingHorizontal={4}>{quoteError}</UiText>
             ) : null}
 
-            {needsActivation || needsTrustline ? (
-              <YStack padding={12} borderRadius={radius.input} backgroundColor={c.chips.blue.bg} marginTop={6}>
-                <UiText fontSize={13} color={c.ink2} lineHeight={19}>
-                  {needsActivation
-                    ? "Your Stellar account activates once it receives at least 1 XLM — then the USDC trustline can be added."
-                    : "A USDC trustline is required before swapping to USDC. One passkey confirmation, a tiny network fee."}
+            {from === "XLM" && probe.data?.exists && xlmHoldback > 0 ? (
+              <UiText fontSize={11} color={c.faint} paddingHorizontal={4} fontFamily='$mono'>
+                Keeps {fNumber(xlmHoldback, { maximumFractionDigits: 2 })} XLM for the network reserve{hasActiveSavings ? " & savings fees" : ""}
+              </UiText>
+            ) : null}
+
+            {needsActivation || needsTrustline || (cannotPayFee && !needsActivation) || priceMoved ? (
+              <YStack padding={12} borderRadius={radius.input} backgroundColor={priceMoved ? c.chips.amber.bg : c.chips.blue.bg} marginTop={6}>
+                <UiText fontSize={13} color={priceMoved ? c.chips.amber.color : c.ink2} lineHeight={19}>
+                  {priceMoved
+                    ? "The price moved while this quote was open — the amount shown is updated. Press again to continue."
+                    : needsActivation
+                      ? "Your Stellar account activates once it receives at least 1 XLM — then the USDC trustline can be added."
+                      : needsTrustline
+                        ? "A USDC trustline is required before swapping to USDC. One passkey confirmation, a tiny network fee."
+                        : `Swaps pay their network fee in XLM. Receive about ${fNumber(feeShortfall + 0.1, { maximumFractionDigits: 2 })} more XLM to cover it.`}
                 </UiText>
               </YStack>
             ) : null}

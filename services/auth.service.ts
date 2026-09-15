@@ -103,6 +103,37 @@ export const useAuthStatus = (): AuthStatus => {
   };
 };
 
+/**
+ * Sign in with Apple (iOS): the OS returns an identity token bound to a nonce
+ * we generated; Supabase verifies it against Apple and creates/links the user.
+ * Requires the Apple provider in Supabase → Authentication → Providers with
+ * the bundle ids (io.normalfinance.app, io.normalfinance.app.dev) as client IDs.
+ */
+export const signInWithApple = async (): Promise<boolean> => {
+  const AppleAuthentication = await import("expo-apple-authentication");
+  const Crypto = await import("expo-crypto");
+  if (!(await AppleAuthentication.isAvailableAsync())) {
+    throw new Error("Sign in with Apple isn’t available on this device.");
+  }
+  const rawNonce = Crypto.randomUUID();
+  const hashedNonce = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, rawNonce);
+  const credential = await AppleAuthentication.signInAsync({
+    requestedScopes: [
+      AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+      AppleAuthentication.AppleAuthenticationScope.EMAIL
+    ],
+    nonce: hashedNonce
+  });
+  if (!credential.identityToken) throw new Error("Apple returned no identity token.");
+  const { error } = await supabase.auth.signInWithIdToken({
+    provider: "apple",
+    token: credential.identityToken,
+    nonce: rawNonce
+  });
+  if (error) throw error;
+  return true;
+};
+
 export const signInWithGoogle = async (): Promise<boolean> => {
   const redirectTo = AuthSession.makeRedirectUri({
     scheme: "normalapp",

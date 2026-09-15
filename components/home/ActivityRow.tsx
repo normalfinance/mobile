@@ -89,8 +89,7 @@ export const ActivityRow = ({
       </XStack>
       <YStack alignItems='flex-end' gap={2}>
         <Mono fontSize={t.assetUsd.size} color={amountColor}>
-          {prefix}
-          {fAssetQuantity(tx.amount, tx.asset)} {tx.asset}
+          {tx.amount > 0 ? `${prefix}${fAssetQuantity(tx.amount, tx.asset)} ${tx.asset}` : tx.counterparty ?? "—"}
         </Mono>
         {tx.usdValue ? (
           <Mono fontSize={t.assetQty.size} color={c.muted}>

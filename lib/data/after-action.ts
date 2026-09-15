@@ -66,10 +66,18 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 // floored copies fighting over the same cache (web activityRefreshInFlight).
 const inFlight = new Set<string>();
 
-const refreshPortfolioFresh = async (queryClient: QueryClient, userId: string) => {
+/** Balances of the symbols an action is expected to move, for the
+ *  convergence check (web: a non-floored read can still be a lagging replica;
+ *  build the signature over BOTH sides of a swap, not just the destination). */
+const signatureOf = (payload: PortfolioPayload | undefined, symbols: string[]) =>
+  symbols.map((s) => `${s}:${payload?.assets.find((a) => a.symbol === s)?.balance ?? ""}`).join("|");
+
+const refreshPortfolioFresh = async (queryClient: QueryClient, userId: string, expectMove: string[]) => {
   const key = portfolioQueryKey(userId);
   if (inFlight.has(userId)) return;
   inFlight.add(userId);
+  const before = signatureOf(queryClient.getQueryData<PortfolioPayload>(key), expectMove);
+  let extraAttemptUsed = false;
   try {
     for (let attempt = 1; attempt <= MAX_REFRESH_ATTEMPTS; attempt += 1) {
       let got: PortfolioRead | null = null;
@@ -86,7 +94,15 @@ const refreshPortfolioFresh = async (queryClient: QueryClient, userId: string) =
           const fresh = pickNewerPayload(current, payload as PortfolioPayload);
           return fillErroredFromKnown(fresh, current);
         });
-        if (!floored) return; // a real read IS the answer
+        if (!floored) {
+          // A real read that still shows the old numbers is a lagging read
+          // replica — exactly one more try, then stop (web recipe step 5).
+          const moved = expectMove.length === 0 || signatureOf(payload as PortfolioPayload, expectMove) !== before;
+          if (moved || extraAttemptUsed) return;
+          extraAttemptUsed = true;
+          await sleep(FLOOR_WAIT_MS);
+          continue;
+        }
         if (attempt < MAX_REFRESH_ATTEMPTS) await sleep(nextReadDelayMs(true, retryAfterMs));
       } else if (attempt < MAX_REFRESH_ATTEMPTS) {
         await sleep(nextReadDelayMs(false));
@@ -97,17 +113,21 @@ const refreshPortfolioFresh = async (queryClient: QueryClient, userId: string) =
   }
 };
 
-const refreshStellarActivityFresh = async (queryClient: QueryClient, address: string) => {
+type Chain = "stellar" | "bitcoin" | "ethereum" | "solana";
+
+const refreshChainActivityFresh = async (queryClient: QueryClient, chain: Chain, address: string) => {
   try {
-    const data = await apiFetch("/api/activity/stellar", {
+    const data = await apiFetch(`/api/activity/${chain}`, {
       anonymous: true,
       query: { address, refresh: 1 } // server floor 30s; a floored copy is still the latest cache
     });
-    queryClient.setQueryData(chainActivityQueryKey("stellar", address), data);
+    queryClient.setQueryData(chainActivityQueryKey(chain, address), data);
   } catch {
     /* the next foreground refetch covers it */
   }
 };
+const refreshStellarActivityFresh = (queryClient: QueryClient, address: string) =>
+  refreshChainActivityFresh(queryClient, "stellar", address);
 
 /**
  * Call once the action is CONFIRMED (hash returned / execute-pair 200).
@@ -118,7 +138,20 @@ const refreshStellarActivityFresh = async (queryClient: QueryClient, address: st
  */
 export const refreshAfterStellarAction = (
   queryClient: QueryClient,
-  { userId, stellarAddress }: { userId: string | undefined; stellarAddress: string | null | undefined }
+  {
+    userId,
+    stellarAddress,
+    expectMove = [],
+    chain = "stellar",
+    chainAddress
+  }: {
+    userId: string | undefined;
+    stellarAddress: string | null | undefined;
+    expectMove?: string[];
+    /** Non-Stellar sends: which chain feed to bypass, and its address. */
+    chain?: Chain;
+    chainAddress?: string | null;
+  }
 ): Promise<void> => {
   let resolveConverged: () => void = () => undefined;
   const converged = new Promise<void>((r) => {
@@ -127,8 +160,14 @@ export const refreshAfterStellarAction = (
   void (async () => {
     await sleep(SETTLE_DELAY_MS);
     await Promise.all([
-      userId ? refreshPortfolioFresh(queryClient, userId) : Promise.resolve(),
-      stellarAddress ? refreshStellarActivityFresh(queryClient, stellarAddress) : Promise.resolve(),
+      userId ? refreshPortfolioFresh(queryClient, userId, expectMove) : Promise.resolve(),
+      chain === "stellar"
+        ? stellarAddress
+          ? refreshStellarActivityFresh(queryClient, stellarAddress)
+          : Promise.resolve()
+        : chainAddress
+          ? refreshChainActivityFresh(queryClient, chain, chainAddress)
+          : Promise.resolve(),
       // Our own DB rows (savings) are written before broadcast — a plain refetch is fresh.
       stellarAddress
         ? queryClient.invalidateQueries({ queryKey: walletActivityQueryKey(stellarAddress) })
@@ -139,9 +178,13 @@ export const refreshAfterStellarAction = (
     resolveConverged();
     // Indexers lag (Horizon ~5s): one late bypass for the chain feed, past its
     // 30s floor. Portfolio converged above; position confirms on its own.
-    if (stellarAddress) {
+    if (chain === "stellar" && stellarAddress) {
       await sleep(45_000);
       await refreshStellarActivityFresh(queryClient, stellarAddress);
+    } else if (chain !== "stellar" && chainAddress) {
+      // ETH/SOL/BTC indexers lag minutes; one late bypass past the floor.
+      await sleep(60_000);
+      await refreshChainActivityFresh(queryClient, chain, chainAddress);
     }
   })();
   return converged;

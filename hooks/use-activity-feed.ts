@@ -16,6 +16,7 @@ import { useMemo } from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
 
 import { apiFetch } from "@/lib/api";
+import { fetchActiveRamps, type RampTransfer } from "@/lib/ramp/coinbase";
 import type { Transaction } from "@/services/portfolio.service";
 import { useTurnkeyWallet, type WalletChain } from "@/hooks/use-turnkey-wallet";
 
@@ -139,6 +140,17 @@ export const useActivityFeed = (priceOf: (symbol: string) => number = () => 0) =
     }))
   });
 
+  // In-flight ramps (authed, our DB). Polled every 15s ONLY while a row is
+  // still in flight — the server flips it to 'arrived' from the chain balance.
+  const rampsQuery = useQuery({
+    queryKey: ["activity", "ramps", stellarAddress ?? "none"],
+    enabled: !!stellarAddress,
+    queryFn: fetchActiveRamps,
+    staleTime: 15_000,
+    refetchInterval: (q) => ((q.state.data ?? []).some((r) => !["arrived", "paid_out", "abandoned", "failed"].includes(r.status)) ? 15_000 : false),
+    retry: 1
+  });
+
   const walletQuery = useQuery({
     queryKey: walletActivityQueryKey(stellarAddress ?? "none"),
     enabled: !!stellarAddress,
@@ -148,13 +160,27 @@ export const useActivityFeed = (priceOf: (symbol: string) => number = () => 0) =
   });
 
   // Fixed-length memo key: the number of queries changes with the wallet.
-  const dataKey = queries.map((q) => q.dataUpdatedAt).join(",") + "|" + walletQuery.dataUpdatedAt;
+  const dataKey = queries.map((q) => q.dataUpdatedAt).join(",") + "|" + walletQuery.dataUpdatedAt + "|" + rampsQuery.dataUpdatedAt;
   const transactions = useMemo(() => {
+    const rampRows: Transaction[] = (rampsQuery.data ?? [])
+      .filter((r: RampTransfer) => !["arrived", "paid_out", "abandoned"].includes(r.status))
+      .map((r) => ({
+        id: `ramp:${r.id}`,
+        type: r.direction === "onramp" ? "buy" : "sell",
+        asset: r.asset,
+        amount: r.amountExpected ? parseFloat(r.amountExpected) || 0 : 0,
+        usdValue: 0,
+        timestamp: new Date(r.createdAt),
+        status: r.status === "failed" ? "failed" : "pending",
+        chain: r.chain,
+        txHash: null,
+        counterparty: r.provider === "coinbase" ? "Coinbase" : r.provider
+      }));
     const walletRows = (walletQuery.data?.items ?? [])
       .map(walletItemToTransaction)
       .filter((t): t is Transaction => !!t);
     const ownHashes = new Set(walletRows.map((t) => t.txHash).filter((h): h is string => !!h));
-    const rows: Transaction[] = [...walletRows];
+    const rows: Transaction[] = [...rampRows, ...walletRows];
     addresses.forEach(({ chain }, i) => {
       const items = queries[i]?.data?.items ?? [];
       for (const item of items) {
@@ -174,7 +200,7 @@ export const useActivityFeed = (priceOf: (symbol: string) => number = () => 0) =
   const isFetching = queries.some((q) => q.isFetching) || walletQuery.isFetching;
   const error = (queries.find((q) => q.error)?.error as Error | undefined) ?? null;
 
-  const refetch = () => Promise.all([...queries.map((q) => q.refetch()), walletQuery.refetch()]);
+  const refetch = () => Promise.all([...queries.map((q) => q.refetch()), walletQuery.refetch(), rampsQuery.refetch()]);
 
   return { transactions, isLoading, isFetching, error, refetch };
 };

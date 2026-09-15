@@ -180,6 +180,7 @@ export default function SavingsScreen() {
               step={step}
               probe={probe.data ?? null}
               onReceiveXlm={() => setReceiveOpen(true)}
+              onBuyXlm={() => router.push("/buy?asset=XLM")}
               onAddTrustline={handleAddTrustline}
               addingTrustline={addingTrustline}
               checking={probe.isFetching}

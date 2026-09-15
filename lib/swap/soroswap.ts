@@ -47,7 +47,15 @@ export interface SwapQuote {
   path: string[];
   /** Server will try the one-signature (embedded fee) build. */
   embedded: boolean;
+  /** When this quote was fetched — re-quote past QUOTE_MAX_AGE_MS before signing. */
+  fetchedAt: number;
 }
+
+/** Web has no quote expiry (its weakest area); the built XDR's min-out makes a
+ *  late broadcast fail rather than fill badly, but the user must still consent
+ *  to a moved price. Re-quote past this age and re-ask if >1% worse. */
+export const QUOTE_MAX_AGE_MS = 45_000;
+export const QUOTE_DRIFT_TOLERANCE = 0.01;
 
 interface QuoteResponse {
   success: boolean;
@@ -61,8 +69,19 @@ interface QuoteResponse {
   embedded_fee?: { feeBps: number; feeAmount: string };
 }
 
-const postQuote = (body: Record<string, unknown>) =>
-  apiFetch<QuoteResponse>("/api/swap/quote", { body });
+const postQuote = async (body: Record<string, unknown>): Promise<QuoteResponse> => {
+  try {
+    return await apiFetch<QuoteResponse>("/api/swap/quote", { body });
+  } catch (e) {
+    // 429 = the public per-IP limiter (30/10s, shared behind carrier NAT):
+    // "wait and retry once", not a quote failure.
+    if (e instanceof ApiError && e.status === 429) {
+      await new Promise((r) => setTimeout(r, 2500));
+      return apiFetch<QuoteResponse>("/api/swap/quote", { body });
+    }
+    throw e;
+  }
+};
 
 /** Display quote (no sender → no XDR). Public route, 30 req / 10s per IP. */
 export const getSwapQuote = async (from: SwapSymbol, to: SwapSymbol, amount: number): Promise<SwapQuote> => {
@@ -86,7 +105,8 @@ export const getSwapQuote = async (from: SwapSymbol, to: SwapSymbol, amount: num
     minAmountOut: fromStroops(data.min_amount_out),
     fee: embedded ? fromStroops(data.embedded_fee?.feeAmount) : feeAmount.toFixed(7),
     path: data.path ?? [],
-    embedded
+    embedded,
+    fetchedAt: Date.now()
   };
 };
 

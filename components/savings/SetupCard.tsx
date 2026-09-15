@@ -25,6 +25,7 @@ export const SetupCard = ({
   step,
   probe,
   onReceiveXlm,
+  onBuyXlm,
   onAddTrustline,
   addingTrustline,
   checking
@@ -32,6 +33,7 @@ export const SetupCard = ({
   step: SetupStep;
   probe: StellarAccountProbe | null;
   onReceiveXlm: () => void;
+  onBuyXlm: () => void;
   onAddTrustline: () => void;
   addingTrustline: boolean;
   checking: boolean;
@@ -91,7 +93,8 @@ export const SetupCard = ({
                 : "Your Stellar account needs a little XLM before it can hold USDC. Receive about 3 XLM to your Stellar address: 1 activates it, 0.5 is reserved for the USDC trustline, and the rest pays network fees. It activates automatically the moment funds arrive."}
             </UiText>
           </YStack>
-          <PrimaryButton label='Show my XLM address' onPress={onReceiveXlm} />
+          <PrimaryButton label='Buy XLM with a card' onPress={onBuyXlm} />
+          <SecondaryButton label='Show my XLM address' onPress={onReceiveXlm} />
           <XStack alignItems='center' justifyContent='center' gap={8}>
             <ActivityIndicator size='small' color={c.faint} />
             <Mono fontSize={11} color={c.faint}>

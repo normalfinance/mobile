@@ -3,7 +3,7 @@
 // primitives and tokens as the drawer; no CoinMarketCap, no oracle.
 
 import React from "react";
-import { Alert, Dimensions, ScrollView } from "react-native";
+import { Dimensions, ScrollView } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { LineChart } from "react-native-gifted-charts";
 import { XStack, YStack } from "tamagui";
@@ -236,11 +236,7 @@ export default function AssetDetailScreen() {
                 <SecondaryButton
                   label='Send'
                   icon={<ArrowUp size={16} color={c.ink} strokeWidth={2} />}
-                  onPress={() =>
-                    symbol === "XLM" || symbol === "USDC"
-                      ? router.push(`/send?symbol=${symbol}`)
-                      : Alert.alert("Coming soon", `Sending ${symbol} arrives with the ${symbol} chain integration.`)
-                  }
+                  onPress={() => router.push(`/send?symbol=${symbol}`)}
                 />
               </YStack>
             </XStack>

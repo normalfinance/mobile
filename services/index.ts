@@ -11,7 +11,8 @@ export {
   useAuthCredentials,
   useAuthStatus,
   useRequireAuth,
-  signInWithGoogle
+  signInWithGoogle,
+  signInWithApple
 } from "./auth.service";
 
 export type { AuthCredentials, AuthStatus } from "./auth.service";
