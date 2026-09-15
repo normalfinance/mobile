@@ -17,6 +17,7 @@ import { useQueries, useQuery } from "@tanstack/react-query";
 
 import { apiFetch } from "@/lib/api";
 import { fetchActiveRamps, type RampTransfer } from "@/lib/ramp/coinbase";
+import { fetchLifiStatuses, getLifiStatusOverride } from "@/lib/lifi/tracker";
 import { reconcilePendingSends, usePendingSends } from "@/lib/send/pending-sends";
 import { fetchCctpTransfers, type CctpTransfer } from "@/lib/cctp/engine";
 import type { Transaction } from "@/services/portfolio.service";
@@ -110,10 +111,25 @@ const walletItemToTransaction = (item: WalletActivityItem): Transaction | null =
     usdValue: 0,
     timestamp,
     status: "completed",
-    chain: "stellar",
+    chain: isLifiSwap(swap) ? NATIVE_CHAIN_OF[symIn] ?? "stellar" : "stellar",
     txHash: item.txHash,
     counterparty: symIn ? `${amountIn} ${symIn}` : undefined
   };
+};
+
+// Cross-chain (LI.FI) swaps are recorded under `lifi:` token refs (web
+// use-user-activity.ts). They stay pending until the bridge delivers.
+const isLifiSwap = (s: Extract<WalletActivityItem, { kind: "swap" }>) =>
+  s.tokenInAddress?.startsWith("lifi:") || s.tokenOutAddress?.startsWith("lifi:");
+const NATIVE_CHAIN_OF: Record<string, WalletChain> = { BTC: "bitcoin", ETH: "ethereum", SOL: "solana" };
+/** web enrich(): pending unless DONE; NOTFOUND dead after 10 min; PENDING dead after 6 h. */
+const lifiRowStatus = (txHash: string, ageMs: number, statuses: Record<string, string> | undefined): { status: Transaction["status"]; refunded: boolean } => {
+  const status = getLifiStatusOverride(txHash) ?? statuses?.[txHash];
+  if (status === "DONE") return { status: "completed", refunded: false };
+  if (status === "REFUNDED") return { status: "failed", refunded: true };
+  if (status === "FAILED") return { status: "failed", refunded: false };
+  if (status === "NOTFOUND") return { status: ageMs > 600_000 ? "failed" : "pending", refunded: false };
+  return { status: ageMs > 6 * 3_600_000 ? "failed" : "pending", refunded: false };
 };
 
 const fetchChainActivity = (chain: WalletChain, address: string) =>
@@ -189,8 +205,20 @@ export const useActivityFeed = (priceOf: (symbol: string) => number = () => 0) =
     retry: 1
   });
 
+  // LI.FI swap rows: live statuses in one batch (web: 30s while any is pending).
+  const lifiSwaps = (walletQuery.data?.items ?? []).filter((i): i is Extract<WalletActivityItem, { kind: "swap" }> => i.kind === "swap" && !!i.txHash && !!isLifiSwap(i));
+  const lifiKey = lifiSwaps.map((s) => s.txHash).join(",");
+  const lifiStatusQuery = useQuery({
+    queryKey: ["activity", "lifi-statuses", lifiKey],
+    enabled: lifiSwaps.length > 0,
+    queryFn: () => fetchLifiStatuses(lifiSwaps.map((s) => ({ txHash: s.txHash!, fromSymbol: s.tokenInSymbol ?? "", toSymbol: s.tokenOutSymbol ?? "" }))),
+    staleTime: 20_000,
+    refetchInterval: (q) => (lifiSwaps.some((s) => (getLifiStatusOverride(s.txHash!) ?? q.state.data?.[s.txHash!]) !== "DONE" && Date.now() - new Date(s.createdAt).getTime() < 6 * 3_600_000) ? 30_000 : false),
+    retry: 1
+  });
+
   // Fixed-length memo key: the number of queries changes with the wallet.
-  const dataKey = queries.map((q) => q.dataUpdatedAt).join(",") + "|" + walletQuery.dataUpdatedAt + "|" + rampsQuery.dataUpdatedAt + "|" + pendingSends.length + "|" + cctpQuery.dataUpdatedAt;
+  const dataKey = queries.map((q) => q.dataUpdatedAt).join(",") + "|" + walletQuery.dataUpdatedAt + "|" + rampsQuery.dataUpdatedAt + "|" + pendingSends.length + "|" + cctpQuery.dataUpdatedAt + "|" + lifiStatusQuery.dataUpdatedAt;
   const transactions = useMemo(() => {
     // Every hash the feeds know this render — a pending send it covers is retired.
     const known = new Set<string>();
@@ -226,7 +254,12 @@ export const useActivityFeed = (priceOf: (symbol: string) => number = () => 0) =
         counterparty: r.provider === "coinbase" ? "Coinbase" : r.provider
       }));
     const walletRows = (walletQuery.data?.items ?? [])
-      .map(walletItemToTransaction)
+      .map((item) => {
+        const t = walletItemToTransaction(item);
+        if (!t || item.kind !== "swap" || !item.txHash || !isLifiSwap(item)) return t;
+        const { status, refunded } = lifiRowStatus(item.txHash, Date.now() - t.timestamp.getTime(), lifiStatusQuery.data);
+        return { ...t, status, counterparty: refunded ? `${t.counterparty ?? ""} · refunded` : t.counterparty };
+      })
       .filter((t): t is Transaction => !!t);
     const ownHashes = new Set(walletRows.map((t) => t.txHash).filter((h): h is string => !!h));
     // CCTP: outbound is done only once the pivot delivered (dstSwapTxHash);

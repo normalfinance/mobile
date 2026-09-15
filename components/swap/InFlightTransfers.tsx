@@ -19,6 +19,7 @@ import { bannerPhase, fetchCctpTransfers, recoverInbound, recoverOutbound, refun
 import type { CrosschainSymbol } from "@/lib/cctp/config";
 import { useColors } from "@/lib/theme/appearance";
 import { space } from "@/lib/theme/tokens";
+import { useLiveRuns } from "@/lib/swap/run-store";
 import { describeTurnkeyError, isUserCancelledError } from "@/lib/turnkey/client";
 
 export const inFlightQueryKey = ["cctp", "in-flight"] as const;
@@ -74,7 +75,11 @@ export const InFlightTransfers = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q.dataUpdatedAt, isFocused]);
 
-  if (!rows.length) return null;
+  // LI.FI native ⇄ native runs have no server row: while this session is
+  // tracking one, it is listed here so a user who left the run page can get back.
+  const liveLifi = useLiveRuns().filter((r) => r.spec.kind === "lifi");
+
+  if (!rows.length && !liveLifi.length) return null;
 
   const finishInbound = async (tr: CctpTransfer) => {
     if (!wallet?.subOrgId) return;
@@ -142,6 +147,27 @@ export const InFlightTransfers = () => {
     <YStack gap={8}>
       <UiText fontSize={14} fontWeight='500' color={c.ink2}>In flight</UiText>
       <Card>
+        {liveLifi.map((r, i) => {
+          const spec = r.spec as Extract<typeof r.spec, { kind: "lifi" }>;
+          const sub = r.stage === "confirming" ? `Confirming on ${spec.from === "BTC" ? "Bitcoin" : spec.from === "ETH" ? "Ethereum" : "Solana"}` : `Bridging to ${spec.to === "BTC" ? "Bitcoin" : spec.to === "ETH" ? "Ethereum" : "Solana"} — arrives automatically`;
+          return (
+            <YStack key={r.id} padding={space.rowX} gap={8} borderTopWidth={i ? 1 : 0} borderTopColor={c.divider} onPress={() => router.push({ pathname: "/swap-run", params: { runId: r.id } })} pressStyle={{ backgroundColor: c.pressTint }} accessibilityRole='button'>
+              <XStack alignItems='center' gap={space.rowGap}>
+                <YStack width={32} height={32} borderRadius={8} backgroundColor={c.chips.blue.bg} alignItems='center' justifyContent='center'>
+                  <ArrowLeftRight size={16} color={c.chips.blue.color} strokeWidth={2} />
+                </YStack>
+                <YStack flex={1} gap={2}>
+                  <XStack alignItems='center' gap={8} flexWrap='wrap'>
+                    <UiText fontSize={14} fontWeight='500'>Swap {spec.from} → {spec.to}</UiText>
+                    <Chip tone='blue' label='In progress' />
+                  </XStack>
+                  <UiText fontSize={12} color={c.muted}>{sub}</UiText>
+                  <Mono fontSize={11} color={c.faint}>{spec.amount} {spec.from}</Mono>
+                </YStack>
+              </XStack>
+            </YStack>
+          );
+        })}
         {rows.map((tr, i) => {
           const phase = bannerPhase(tr);
           const copy = copyFor(tr, phase);
@@ -151,7 +177,7 @@ export const InFlightTransfers = () => {
               key={tr.id}
               padding={space.rowX}
               gap={8}
-              borderTopWidth={i ? 1 : 0}
+              borderTopWidth={i || liveLifi.length ? 1 : 0}
               borderTopColor={c.divider}
               onPress={() => router.push({ pathname: "/swap-run", params: { transferId: tr.id } })}
               pressStyle={{ backgroundColor: c.pressTint }}

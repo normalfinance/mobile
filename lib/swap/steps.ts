@@ -24,6 +24,14 @@ export const stepsFor = (spec: RunSpec, flags: RunState["flags"], stage: string 
       { id: "refetch", label: "Updating balances", sub: "Waiting until your wallet shows the result" }
     ];
   }
+  if (spec.kind === "lifi") {
+    const chainOf = (s: string) => (s === "BTC" ? "Bitcoin" : s === "ETH" ? "Ethereum" : "Solana");
+    return [
+      { id: "sign", label: "Confirm with passkey", sub: spec.from === "BTC" ? "One confirmation — signs every input at once" : "One confirmation on " + chainOf(spec.from) },
+      { id: "confirming", label: `Confirming on ${chainOf(spec.from)}`, sub: spec.from === "BTC" ? "Broadcast accepted — the bridge watches the mempool" : spec.from === "ETH" ? "Waiting for the receipt — usually under a minute" : "Waiting for confirmation — a few seconds" },
+      { id: "bridging", label: `Bridging to ${chainOf(spec.to)}`, sub: `${spec.tool ? `Via ${spec.tool} · ` : ""}${spec.etaMin ? `~${spec.etaMin} min` : "a few minutes"} — automatic, safe to close` }
+    ];
+  }
   if (spec.kind === "cctp-out") {
     return [
       { id: "burn-prepare", label: "Preparing the bridge transaction", sub: "A few seconds — no action needed yet" },
@@ -52,5 +60,12 @@ export const activeStepFor = (spec: RunSpec, stage: string | null): string | nul
 
 export const timingFor = (spec: RunSpec): string => (spec.kind === "soroswap" ? "~30s" : spec.etaMin ? `~${spec.etaMin} min` : "");
 
+const NATIVE_EXPLORER: Record<string, (h: string) => string> = {
+  BTC: (h) => `https://mempool.space/tx/${h}`,
+  ETH: (h) => `https://etherscan.io/tx/${h}`,
+  SOL: (h) => `https://solscan.io/tx/${h}`
+};
+
+/** Explorer for the hash a run ends with: Stellar (Soroswap), Base (CCTP legs), or the LI.FI source chain. */
 export const explorerFor = (spec: RunSpec, hash: string): string =>
-  spec.kind === "soroswap" ? `https://stellar.expert/explorer/public/tx/${hash}` : `https://basescan.org/tx/${hash}`;
+  spec.kind === "soroswap" ? `https://stellar.expert/explorer/public/tx/${hash}` : spec.kind === "lifi" ? NATIVE_EXPLORER[spec.from](hash) : `https://basescan.org/tx/${hash}`;

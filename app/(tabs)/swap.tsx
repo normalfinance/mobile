@@ -1,7 +1,7 @@
 // Swap tab — one shell, two pickers, the engine chosen by the pair (web
 // swap-card.tsx + engines/types.ts): XLM ⇄ USDC → Soroswap panel; USDC → BTC/
-// ETH/SOL → CCTP outbound panel; the two pairs web routes but mobile hasn't
-// built yet (native → USDC, native ⇄ native) show an honest "not yet" card.
+// ETH/SOL → CCTP outbound panel; BTC/ETH/SOL → USDC → CCTP inbound panel;
+// BTC/ETH/SOL ⇄ each other → LI.FI panel.
 // The destination picker is pair-filtered like web; picking a source that
 // can't pair with the current destination moves the destination to its
 // in-group counterpart.
@@ -17,6 +17,7 @@ import { AssetPicker } from "@/components/swap/AssetPicker";
 import { CctpInboundPanel } from "@/components/swap/CctpInboundPanel";
 import { CctpOutboundPanel } from "@/components/swap/CctpOutboundPanel";
 import { InFlightTransfers } from "@/components/swap/InFlightTransfers";
+import { LifiPanel } from "@/components/swap/LifiPanel";
 import { SoroswapPanel } from "@/components/swap/SoroswapPanel";
 import { SWAP_ASSETS, canPair, counterpartOf, routeOf, type CrosschainSymbol, type StellarSymbol, type SwapSymbol } from "@/lib/swap/registry";
 import { useColors } from "@/lib/theme/appearance";
@@ -86,6 +87,8 @@ export default function SwapScreen() {
               <CctpOutboundPanel to={to as CrosschainSymbol} amount={amount} setAmount={setAmount} fromPill={pill(from, "from")} toPill={pill(to, "to")} />
             ) : route === "cctp-in" ? (
               <CctpInboundPanel from={from as CrosschainSymbol} amount={amount} setAmount={setAmount} fromPill={pill(from, "from")} toPill={pill(to, "to")} />
+            ) : route === "lifi" ? (
+              <LifiPanel from={from as CrosschainSymbol} to={to as CrosschainSymbol} amount={amount} setAmount={setAmount} fromPill={pill(from, "from")} toPill={pill(to, "to")} onFlip={flip} />
             ) : (
               <Card padding={12} gap={12}>
                 <YStack backgroundColor={c.inputBg} borderRadius={radius.input} padding={14} gap={10}>
@@ -98,9 +101,7 @@ export default function SwapScreen() {
                 </YStack>
                 <YStack padding={12} borderRadius={radius.input} backgroundColor={c.chips.blue.bg}>
                   <UiText fontSize={13} color={c.ink2} lineHeight={19}>
-                    {route === "lifi"
-                      ? `${from} → ${to} arrives on mobile soon (LI.FI cross-chain). Available on the web app today.`
-                      : "That pair isn’t available. Pick another asset."}
+                    That pair isn’t available. Pick another asset.
                   </UiText>
                 </YStack>
                 <PrimaryButton label='Not available yet' disabled />

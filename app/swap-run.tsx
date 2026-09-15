@@ -157,7 +157,7 @@ export default function SwapRunScreen() {
       Alert.alert("Couldn’t verify this phone", describeTurnkeyError(gate.error));
       return;
     }
-    if (run.spec.kind !== "soroswap") await offerConsent();
+    if (run.spec.kind === "cctp-out" || run.spec.kind === "cctp-in") await offerConsent();
     void Haptics.selectionAsync().catch(() => undefined);
     void startRun(run.id, { queryClient, userId: user?.id, wallet, autopilotHint: () => grantedRef.current || autopilotQ.data?.active === true });
   };
@@ -249,7 +249,12 @@ export default function SwapRunScreen() {
     const steps = stepsFor(spec, run.flags, run.stage);
     const active = activeStepFor(spec, run.stage);
     const done = run.status === "done";
-    const receiveText = spec.kind === "soroswap" ? `≈ ${fNumber(parseFloat(spec.quote.amountOut), { maximumFractionDigits: 4 })}` : spec.kind === "cctp-out" ? `≥ ${fNumber(spec.toAmount, { maximumFractionDigits: 6 })}` : `≥ ${fNumber(spec.usdcOut, { maximumFractionDigits: 2 })}`;
+    const isCctp = spec.kind === "cctp-out" || spec.kind === "cctp-in";
+    const receiveText =
+      spec.kind === "soroswap" ? `≈ ${fNumber(parseFloat(spec.quote.amountOut), { maximumFractionDigits: 4 })}`
+        : spec.kind === "cctp-out" ? `≥ ${fNumber(spec.toAmount, { maximumFractionDigits: 6 })}`
+          : spec.kind === "lifi" ? `≈ ${fNumber(spec.toAmount, { maximumFractionDigits: spec.to === "BTC" ? 8 : 6 })}`
+            : `≥ ${fNumber(spec.usdcOut, { maximumFractionDigits: 2 })}`;
     return (
       <Screen>
         <ScrollView contentContainerStyle={{ paddingBottom: 48 }}>
@@ -259,7 +264,7 @@ export default function SwapRunScreen() {
             {done ? (
               <YStack alignItems='center' gap={10} paddingTop={8}>
                 <IconBox size={56}><Check size={28} color={c.positive} strokeWidth={2} /></IconBox>
-                <UiText fontSize={16} fontWeight='500'>{spec.kind === "cctp-out" && run.result?.verdict !== "DONE" ? `${spec.to} is on its way` : "Swapped"}</UiText>
+                <UiText fontSize={16} fontWeight='500'>{spec.kind === "cctp-out" && run.result?.verdict !== "DONE" ? `${spec.to} is on its way` : spec.kind === "lifi" ? `${spec.to} delivered to your wallet` : "Swapped"}</UiText>
               </YStack>
             ) : null}
 
@@ -269,6 +274,8 @@ export default function SwapRunScreen() {
                 <UiText fontSize={12} color={c.muted} lineHeight={17}>
                   {spec.kind === "soroswap"
                     ? "Runs on Stellar via Soroswap. Nothing is sent until every confirmation is done — cancelling a prompt charges nothing."
+                    : spec.kind === "lifi"
+                      ? "One passkey confirmation. After that the bridge delivers by itself, even if you close the app — Activity keeps tracking it."
                     : run.flags.autopilot || autopilotOn
                       ? "One signing step — everything after the bridge completes automatically, even if you close the app."
                       : "Two signing steps: one now, one after the bridge — stay in the app until then, or enable automatic completion."}
@@ -283,7 +290,7 @@ export default function SwapRunScreen() {
               </Card>
             ) : null}
 
-            {run.status === "running" && spec.kind !== "soroswap" && !autopilotOn && autopilotAvailable() && autopilotQ.data?.active === false && run.stage && ["burn-prepare", "burn", "bridging", "topup", "lifi", "arriving"].includes(run.stage) ? (
+            {run.status === "running" && isCctp && !autopilotOn && autopilotAvailable() && autopilotQ.data?.active === false && run.stage && ["burn-prepare", "burn", "bridging", "topup", "lifi", "arriving"].includes(run.stage) ? (
               <Card padding={14} gap={10} backgroundColor={c.chips.blue.bg} borderColor='transparent'>
                 <UiText fontSize={13} color={c.ink2} lineHeight={19}>Don’t want to wait around for the next confirmation? Enable automatic completion and this swap finishes by itself.</UiText>
                 <PrimaryButton label={consentBusy ? "Confirming…" : "Enable auto-finish"} onPress={() => void enableAutopilot()} loading={consentBusy} />
@@ -300,8 +307,9 @@ export default function SwapRunScreen() {
                 </>
               ) : null}
               {run.status === "error" || run.status === "calm" ? <PrimaryButton label={run.broadcastStarted ? "Back to Swap" : "Back"} onPress={() => router.back()} /> : null}
+              {(run.status === "error" || run.status === "calm") && run.sourceTxHash ? <SecondaryButton label='View on explorer' onPress={() => Linking.openURL(explorerFor(spec, run.sourceTxHash!))} /> : null}
               {run.status === "running" && spec.kind !== "soroswap" && run.broadcastStarted ? (
-                <UiText fontSize={12} color={c.faint} textAlign='center'>This step runs on our servers — you can safely leave this screen.</UiText>
+                <UiText fontSize={12} color={c.faint} textAlign='center'>{spec.kind === "lifi" ? "The bridge finishes by itself — you can safely leave this screen." : "This step runs on our servers — you can safely leave this screen."}</UiText>
               ) : null}
             </YStack>
           </YStack>

@@ -1,18 +1,18 @@
-// Cross-chain panel, INBOUND: BTC / ETH / SOL → USDC on Stellar via LI.FI +
-// Circle CCTP (lib/cctp/engine.ts runInboundSwap). One passkey for the source
-// swap (BTC: the local-sighash signer, lib/lifi/btc-sign.ts); the Base burn
-// is autopilot (0) or passkey (1–2); the relayer mints on Stellar.
+// Cross-chain panel, native ⇄ native (BTC / ETH / SOL) via LI.FI — port of
+// web sections/swap/engines/use-lifi-engine.tsx. One passkey on the source
+// chain; the bridge (THORChain / Chainflip / Relay …) delivers to the user's
+// OWN address on the destination chain. The run itself lives on /swap-run.
 
 import React from "react";
 import { Alert } from "react-native";
 import { useRouter } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { Input, XStack, YStack } from "tamagui";
+import { ArrowDownUp } from "lucide-react-native";
 
-import { Card, Mono, PillButton, PrimaryButton, Skeleton, UiText } from "@/components/home/primitives";
+import { Card, IconButton, Mono, PillButton, PrimaryButton, Skeleton, UiText } from "@/components/home/primitives";
 import { setPendingRun } from "@/lib/swap/run-store";
 import { useBackendPortfolio } from "@/hooks/use-backend-portfolio";
-import { useStellarAccountProbe } from "@/hooks/use-savings";
 import { turnkeyWalletQueryKey, useTurnkeyWallet, type WalletChain } from "@/hooks/use-turnkey-wallet";
 import { NATIVE_CHAIN, NATIVE_DECIMALS, type CrosschainSymbol } from "@/lib/cctp/config";
 import { ethGasReserve, fetchLifiQuote, type LifiQuote } from "@/lib/lifi/execute";
@@ -24,11 +24,14 @@ import { describeTurnkeyError, isUserCancelledError } from "@/lib/turnkey/client
 import { fCurrency, fNumber } from "@/lib/utils/number-format.utils";
 import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
 
-const MIN_USD = 10;
-const QUOTE_STALE_MS = 10 * 60_000; // a built LI.FI quote carries deadlines (web quote-freshness.ts)
+// Cross-chain swaps below this USD value have poor route coverage and a high
+// stuck/refund rate (LI.FI's own guidance: ~$5+). Web MIN_SWAP_USD.
+const MIN_SWAP_USD = 5;
+const QUOTE_STALE_MS = 10 * 60_000; // a built quote carries deadlines (web quote-freshness.ts)
 const MATERIAL_DRIFT = 0.01;
-const SOL_RESERVE = 0.01; // fees + ATA rent (web)
-const BTC_RESERVE = 0.00002; // miner fee for the deposit tx (web feeReserve)
+// Kept back so the source chain can pay the bridge deposit's costs (web CHAIN_ASSETS.feeReserve).
+// ETH is live gas (gas-reserve.ts); BTC ~2k sat miner fee; SOL rent + ATA + fees.
+const STATIC_RESERVE: Record<CrosschainSymbol, number> = { BTC: 0.00002, ETH: 0.003, SOL: 0.01 };
 const ADDRESS_OF: Record<WalletChain, "stellarAddress" | "bitcoinAddress" | "ethereumAddress" | "solanaAddress"> = {
   stellar: "stellarAddress",
   bitcoin: "bitcoinAddress",
@@ -36,40 +39,37 @@ const ADDRESS_OF: Record<WalletChain, "stellarAddress" | "bitcoinAddress" | "eth
   solana: "solanaAddress"
 };
 
-// MAX must round DOWN (web: toFixed(min(decimals, 8), ROUND_DOWN)) — toFixed
-// rounds to nearest, so a max that landed above spendable read "insufficient".
+// MAX rounds DOWN (web: toFixed(min(decimals, 8), ROUND_DOWN)).
 const floorTo = (v: number, decimals: number): string => {
   const f = 10 ** decimals;
   return (Math.floor(v * f) / f).toFixed(decimals).replace(/\.?0+$/, "") || "0";
 };
-
 const toBaseUnits = (amount: number, decimals: number): string => {
   const [w, f = ""] = amount.toFixed(decimals).split(".");
   return (BigInt(w) * BigInt(10) ** BigInt(decimals) + BigInt(f.padEnd(decimals, "0"))).toString();
 };
+const fromBase = (v: string, decimals: number) => Number(v) / 10 ** decimals;
 
-export function CctpInboundPanel({ from, amount, setAmount, fromPill, toPill }: { from: CrosschainSymbol; amount: string; setAmount: (v: string) => void; fromPill: React.ReactNode; toPill: React.ReactNode }) {
+export function LifiPanel({ from, to, amount, setAmount, fromPill, toPill, onFlip }: { from: CrosschainSymbol; to: CrosschainSymbol; amount: string; setAmount: (v: string) => void; fromPill: React.ReactNode; toPill: React.ReactNode; onFlip: () => void }) {
   const c = useColors();
   const router = useRouter();
   const queryClient = useQueryClient();
   const { user } = useSupabaseAuth();
   const { wallet, refetch: refetchWallet } = useTurnkeyWallet();
   const { portfolioData } = useBackendPortfolio();
-  const probe = useStellarAccountProbe(wallet?.stellarAddress, false);
 
   const [quote, setQuote] = React.useState<{ q: LifiQuote; feePercent: number; fetchedAt: number } | null>(null);
   const [quoting, setQuoting] = React.useState(false);
   const [quoteError, setQuoteError] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [addingChain, setAddingChain] = React.useState<WalletChain | null>(null);
-  const [notice, setNotice] = React.useState<{ text: string; tone: "amber" | "blue"; affordable?: string } | null>(null);
   const [priceMoved, setPriceMoved] = React.useState(false);
-  const [reserve, setReserve] = React.useState<number>(from === "ETH" ? 0.003 : from === "BTC" ? BTC_RESERVE : SOL_RESERVE);
+  const [reserve, setReserve] = React.useState<number>(STATIC_RESERVE[from]);
 
-  const stellarAddress = wallet?.stellarAddress ?? null;
-  const evmAddress = wallet?.ethereumAddress ?? null;
   const fromChain = NATIVE_CHAIN[from];
+  const toChain = NATIVE_CHAIN[to];
   const fromAddress = wallet ? wallet[ADDRESS_OF[fromChain]] : null;
+  const toAddress = wallet ? wallet[ADDRESS_OF[toChain]] : null;
   const asset = portfolioData.assets.find((a) => a.asset_code === from);
   const balance = Number(asset?.balance ?? 0);
   const price = asset?.usdPrice ?? 0;
@@ -77,24 +77,28 @@ export function CctpInboundPanel({ from, amount, setAmount, fromPill, toPill }: 
   const amountNum = Number(amount.replace(",", "."));
   const amountOk = Number.isFinite(amountNum) && amountNum > 0;
   const insufficient = amountOk && amountNum > spendable + 1e-12;
-  const needsActivation = probe.data?.exists === false;
-  const needsTrustline = probe.data?.exists === true && !probe.data.hasUsdcTrustline;
+  const inUsd = amountOk ? amountNum * price : 0;
+  const belowMinimum = amountOk && price > 0 && inUsd < MIN_SWAP_USD;
+
   React.useEffect(() => {
     if (from === "ETH") void ethGasReserve().then(setReserve);
-    else setReserve(from === "BTC" ? BTC_RESERVE : SOL_RESERVE);
+    else setReserve(STATIC_RESERVE[from]);
   }, [from]);
 
-  // Quote: LI.FI native → USDC on Base, delivered to the user's OWN Base address.
+  // Quote: 600ms debounce (web), only while the form is valid — lifi/quote is
+  // 30 per 10s per IP and carrier NAT shares one IP across many users.
   const reqRef = React.useRef(0);
   const getQuote = React.useCallback(async () => {
-    if (!fromAddress || !evmAddress) return null;
-    const res = await fetchLifiQuote({ fromSymbol: from, toSymbol: "USDC_BASE", fromAmount: toBaseUnits(amountNum, NATIVE_DECIMALS[from]), fromAddress, toAddress: evmAddress });
-    if (!res.success || !res.quote?.estimate?.toAmountMin) throw new Error(res.error ?? "No route right now");
+    if (!fromAddress || !toAddress) return null;
+    // ROUND_DOWN: rounding a typed amount UP can ask for one wire unit more than the wallet holds.
+    const res = await fetchLifiQuote({ fromSymbol: from, toSymbol: to, fromAmount: toBaseUnits(amountNum, NATIVE_DECIMALS[from]), fromAddress, toAddress });
+    if (!res.success || !res.quote?.estimate?.toAmount) throw new Error(res.error ?? "No route right now");
     return { q: res.quote, feePercent: typeof res.feePercent === "number" ? res.feePercent : 0, fetchedAt: Date.now() };
-  }, [from, amountNum, fromAddress, evmAddress]);
+  }, [from, to, amountNum, fromAddress, toAddress]);
   React.useEffect(() => {
-    if (busy || !amountOk || insufficient || !fromAddress || !evmAddress) {
+    if (busy || !amountOk || insufficient || belowMinimum || !fromAddress || !toAddress) {
       setQuote(null);
+      setQuoteError(null);
       return;
     }
     const id = ++reqRef.current;
@@ -117,14 +121,15 @@ export function CctpInboundPanel({ from, amount, setAmount, fromPill, toPill }: 
     }, 600);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [amountNum, amountOk, insufficient, from, fromAddress, evmAddress, busy]);
+  }, [amountNum, amountOk, insufficient, belowMinimum, from, to, fromAddress, toAddress, busy]);
 
-  const usdcOut = quote ? Number(quote.q.estimate.toAmountMin) / 1e6 : null;
+  const toAmount = quote ? fromBase(quote.q.estimate.toAmount, NATIVE_DECIMALS[to]) : null;
+  const toAmountMin = quote ? fromBase(quote.q.estimate.toAmountMin, NATIVE_DECIMALS[to]) : null;
+  const rate = quote && toAmount && amountOk ? toAmount / amountNum : null;
   const gasUsd = quote ? (quote.q.estimate.gasCosts ?? []).reduce((s, g) => s + (parseFloat(g.amountUSD ?? "0") || 0), 0) : 0;
-  const inUsd = amountOk ? amountNum * price : 0;
-  const gasShare = inUsd > 0 ? gasUsd / inUsd : 0;
-  const tooSmall = usdcOut !== null && usdcOut < MIN_USD;
-  const etaMin = quote ? Math.max(1, Math.round(quote.q.estimate.executionDuration / 60)) + 20 : null; // + Base finality
+  const gasShare = inUsd > 0 && gasUsd > 0 ? gasUsd / inUsd : 0;
+  const etaMin = quote ? Math.max(1, Math.round(quote.q.estimate.executionDuration / 60)) : null;
+  const feeToken = quote && quote.feePercent > 0 && amountOk ? amountNum * quote.feePercent : null;
 
   const addChain = async (chain: WalletChain) => {
     if (!wallet) return;
@@ -141,48 +146,57 @@ export function CctpInboundPanel({ from, amount, setAmount, fromPill, toPill }: 
   };
 
   const run = async () => {
-    if (!wallet?.subOrgId || !stellarAddress || !evmAddress || !fromAddress || !quote) return;
+    if (!wallet?.subOrgId || !fromAddress || !toAddress || !quote) return;
     setBusy(true);
     setPriceMoved(false);
     try {
-      // A built quote carries deadlines: re-quote past 10 min; a materially
-      // worse output needs a second press (web quote-freshness.ts).
+      // A built quote carries deadlines (a Bitcoin one is a Chainflip deposit
+      // CHANNEL that expires): re-quote past 10 min; a materially worse output
+      // needs a second press (web quote-freshness.ts).
       let live = quote;
       if (Date.now() - quote.fetchedAt >= QUOTE_STALE_MS) {
         const fresh = await getQuote();
-        if (!fresh) throw new Error("No route right now");
+        if (!fresh) throw new Error("This quote expired and a new one could not be fetched — nothing was sent. Please try again.");
         setQuote(fresh);
         live = fresh;
-        const shown = Number(quote.q.estimate.toAmountMin);
-        const now = Number(fresh.q.estimate.toAmountMin);
+        const shown = Number(quote.q.estimate.toAmount);
+        const now = Number(fresh.q.estimate.toAmount);
         if (now < shown && (shown - now) / shown > MATERIAL_DRIFT) {
           setPriceMoved(true);
           return;
         }
       }
-      const runId = setPendingRun({ kind: "cctp-in", from, to: "USDC", amount: amountNum.toString(), quote: live.q, feePercent: live.feePercent, etaMin, usdcOut: Number(live.q.estimate.toAmountMin) / 1e6 });
+      const runId = setPendingRun({
+        kind: "lifi",
+        from,
+        to,
+        amount: amountNum.toString(),
+        quote: live.q,
+        feePercent: live.feePercent,
+        etaMin: Math.max(1, Math.round(live.q.estimate.executionDuration / 60)),
+        toAmount: fromBase(live.q.estimate.toAmount, NATIVE_DECIMALS[to]),
+        tool: live.q.tool ?? null
+      });
       setAmount("");
       setQuote(null);
       router.push({ pathname: "/swap-run", params: { runId } });
     } catch (e) {
-      setNotice({ text: e instanceof Error ? e.message : String(e), tone: "amber" });
+      Alert.alert("Couldn’t start the swap", e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
     }
   };
 
+  // Button state machine — the gates implement lazy wallet setup explicitly (web order).
   let button: { label: string; onPress?: () => void; disabled?: boolean; loading?: boolean };
-  if (!stellarAddress) button = { label: "Stellar wallet required", disabled: true };
-  else if (needsActivation) button = { label: "Activate your Stellar account first", onPress: () => router.push("/(tabs)/savings") };
-  else if (needsTrustline) button = { label: "Add USDC trustline first", onPress: () => router.push("/(tabs)/savings") };
-  else if (!fromAddress) button = { label: addingChain === fromChain ? "Adding…" : `Add ${SEND_ASSETS[from].name} to your wallet`, onPress: () => void addChain(fromChain), loading: addingChain === fromChain };
-  else if (!evmAddress) button = { label: addingChain === "ethereum" ? "Adding…" : "Add Ethereum to your wallet", onPress: () => void addChain("ethereum"), loading: addingChain === "ethereum" };
+  if (!fromAddress) button = { label: addingChain === fromChain ? "Adding…" : `Add ${SEND_ASSETS[from].name} to your wallet`, onPress: () => void addChain(fromChain), loading: addingChain === fromChain };
+  else if (!toAddress) button = { label: addingChain === toChain ? "Adding…" : `Add ${SEND_ASSETS[to].name} to your wallet`, onPress: () => void addChain(toChain), loading: addingChain === toChain };
   else if (!amountOk) button = { label: "Enter an amount", disabled: true };
   else if (insufficient) button = { label: `Insufficient ${from} balance`, disabled: true };
+  else if (gasShare > 0.5) button = { label: "Network fees exceed half this swap — try a larger amount", disabled: true };
+  else if (belowMinimum) button = { label: `Minimum swap is $${MIN_SWAP_USD}`, disabled: true };
   else if (busy) button = { label: "Checking the price…", loading: true };
   else if (quoting || !quote) button = { label: quoteError ? "No route right now" : "Fetching quote…", disabled: true };
-  else if (gasShare > 0.5) button = { label: "Network fees exceed half this swap — try a larger amount", disabled: true };
-  else if (tooSmall) button = { label: `Minimum swap is $${MIN_USD}`, disabled: true };
   else if (priceMoved) button = { label: "Price moved — press to continue", onPress: run };
   else button = { label: "Swap with passkey", onPress: run };
 
@@ -193,7 +207,7 @@ export function CctpInboundPanel({ from, amount, setAmount, fromPill, toPill }: 
           <XStack justifyContent='space-between' alignItems='center'>
             <UiText fontSize={12} color={c.muted}>You pay</UiText>
             <XStack alignItems='center' gap={8}>
-              <Mono fontSize={11} color={insufficient ? c.failed : c.muted}>{fNumber(spendable, { maximumFractionDigits: from === "ETH" ? 5 : from === "BTC" ? 8 : 4 })} {from}</Mono>
+              <Mono fontSize={11} color={insufficient ? c.failed : c.muted}>{fNumber(spendable, { maximumFractionDigits: from === "SOL" ? 4 : from === "ETH" ? 5 : 8 })} {from}</Mono>
               <PillButton label='Max' onPress={() => setAmount(floorTo(spendable, Math.min(NATIVE_DECIMALS[from], 8)))} />
             </XStack>
           </XStack>
@@ -205,12 +219,17 @@ export function CctpInboundPanel({ from, amount, setAmount, fromPill, toPill }: 
             <UiText fontSize={11} color={c.faint} fontFamily='$mono'>Keeps {fNumber(reserve, { maximumFractionDigits: from === "BTC" ? 8 : 5 })} {from} for network fees</UiText>
           ) : null}
         </YStack>
+        <XStack justifyContent='center' marginVertical={-14} zIndex={1}>
+          <YStack backgroundColor={c.surface} borderRadius={999} borderWidth={1} borderColor={c.border}>
+            <IconButton onPress={onFlip} label='Flip assets'><ArrowDownUp size={16} color={c.ink} strokeWidth={2} /></IconButton>
+          </YStack>
+        </XStack>
         <YStack backgroundColor={c.inputBg} borderRadius={radius.input} padding={14} gap={10}>
-          <UiText fontSize={12} color={c.muted}>You receive (minimum)</UiText>
+          <UiText fontSize={12} color={c.muted}>You receive (estimated)</UiText>
           <XStack alignItems='center' justifyContent='space-between' gap={10}>
             {quoting && !quote ? <Skeleton width={120} height={30} /> : (
-              <Mono fontSize={28} letterSpacing={tracking(28)} color={usdcOut !== null ? c.ink : c.faint} flex={1} numberOfLines={1}>
-                {usdcOut !== null ? fNumber(usdcOut, { maximumFractionDigits: 2 }) : "0.00"}
+              <Mono fontSize={28} letterSpacing={tracking(28)} color={toAmount !== null ? c.ink : c.faint} flex={1} numberOfLines={1}>
+                {toAmount !== null ? fNumber(toAmount, { maximumFractionDigits: to === "BTC" ? 8 : to === "ETH" ? 6 : 4 }) : "0.00"}
               </Mono>
             )}
             {toPill}
@@ -219,39 +238,29 @@ export function CctpInboundPanel({ from, amount, setAmount, fromPill, toPill }: 
 
         {quote ? (
           <YStack paddingHorizontal={4} paddingTop={6} gap={6}>
-            <XStack justifyContent='space-between'><UiText fontSize={12} color={c.muted}>Route</UiText><Mono fontSize={12}>{from} → USDC (Base) → Stellar</Mono></XStack>
-            <XStack justifyContent='space-between'><UiText fontSize={12} color={c.muted}>Bridge (Circle CCTP)</UiText><Mono fontSize={12}>Free</Mono></XStack>
-            <XStack justifyContent='space-between'><UiText fontSize={12} color={c.muted}>Network gas</UiText><Mono fontSize={12} color={gasShare > 0.2 ? c.chips.amber.color : c.ink}>≈{fCurrency(gasUsd)}{inUsd > 0 ? ` (${Math.round(gasShare * 100)}%)` : ""}</Mono></XStack>
+            {rate ? <XStack justifyContent='space-between'><UiText fontSize={12} color={c.muted}>Rate</UiText><Mono fontSize={12}>1 {from} ≈ {fNumber(rate, { maximumFractionDigits: 6 })} {to}</Mono></XStack> : null}
+            {gasUsd > 0 ? <XStack justifyContent='space-between'><UiText fontSize={12} color={c.muted}>Network gas</UiText><Mono fontSize={12} color={gasShare > 0.2 ? c.chips.amber.color : c.ink}>≈{fCurrency(gasUsd)}{inUsd > 0 ? ` (${Math.round(gasShare * 100)}%)` : ""}</Mono></XStack> : null}
             {gasShare > 0.2 && gasShare <= 0.5 ? <UiText fontSize={12} color={c.chips.amber.color}>Network fees eat {Math.round(gasShare * 100)}% of this swap — a larger amount gets a better deal.</UiText> : null}
-            <XStack justifyContent='space-between'><UiText fontSize={12} color={c.muted}>Normal fee ({+(quote.feePercent * 100).toFixed(2)}%)</UiText><Mono fontSize={12}>−{(amountNum * quote.feePercent).toFixed(6)} {from}</Mono></XStack>
-            <XStack justifyContent='space-between'><UiText fontSize={12} color={c.muted}>Estimated time</UiText><Mono fontSize={12}>~{etaMin} min</Mono></XStack>
+            {toAmountMin !== null ? <XStack justifyContent='space-between'><UiText fontSize={12} color={c.muted}>Minimum received</UiText><Mono fontSize={12}>{fNumber(toAmountMin, { maximumFractionDigits: 6 })} {to}</Mono></XStack> : null}
+            {feeToken !== null ? <XStack justifyContent='space-between'><UiText fontSize={12} color={c.muted}>Normal fee ({+(quote.feePercent * 100).toFixed(2)}%)</UiText><Mono fontSize={12}>−{fNumber(feeToken, { maximumFractionDigits: 6 })} {from}{price > 0 ? ` (${fCurrency(feeToken * price)})` : ""}</Mono></XStack> : null}
+            {quote.q.tool ? <XStack justifyContent='space-between'><UiText fontSize={12} color={c.muted}>Route</UiText><Mono fontSize={12}>{quote.q.tool}</Mono></XStack> : null}
+            {etaMin !== null ? <XStack justifyContent='space-between'><UiText fontSize={12} color={c.muted}>Estimated time</UiText><Mono fontSize={12}>~{etaMin} min</Mono></XStack> : null}
           </YStack>
-        ) : quoteError && amountOk && !insufficient ? (
+        ) : quoteError && amountOk && !insufficient && !belowMinimum ? (
           <UiText fontSize={12} color={c.failed} paddingHorizontal={4}>{quoteError}</UiText>
         ) : null}
 
-        {needsActivation || needsTrustline ? (
-          <YStack padding={12} borderRadius={radius.input} backgroundColor={c.chips.blue.bg} marginTop={6}>
-            <UiText fontSize={13} color={c.ink2} lineHeight={19}>{needsActivation ? "USDC is delivered to your Stellar account — it needs a little XLM to activate first (Savings → setup)." : "USDC is delivered to your Stellar account — add the USDC trustline first (Savings → setup)."}</UiText>
-          </YStack>
-        ) : null}
         {priceMoved ? (
           <YStack padding={12} borderRadius={radius.input} backgroundColor={c.chips.amber.bg} marginTop={6}>
             <UiText fontSize={13} color={c.chips.amber.color} lineHeight={19}>The price moved while this quote was open — the amount shown is updated. Press again to continue.</UiText>
           </YStack>
         ) : null}
-        {notice ? (
-          <YStack padding={12} borderRadius={radius.input} backgroundColor={notice.tone === "amber" ? c.chips.amber.bg : c.chips.blue.bg} marginTop={6} gap={8}>
-            <UiText fontSize={13} color={notice.tone === "amber" ? c.chips.amber.color : c.ink2} lineHeight={19}>{notice.text}</UiText>
-            {notice.affordable ? <PillButton label={`Use ${notice.affordable} ${from}`} onPress={() => { setAmount(notice.affordable!); setNotice(null); }} /> : null}
-          </YStack>
-        ) : null}
 
-        <YStack marginTop={6}>
+        <YStack marginTop={6} gap={8}>
           <PrimaryButton label={button.label} onPress={button.onPress} disabled={button.disabled} loading={button.loading} />
+          <UiText fontSize={12} color={c.faint} textAlign='center'>{to} is delivered to your own Normal wallet address.</UiText>
         </YStack>
       </Card>
-
     </YStack>
   );
 }

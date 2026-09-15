@@ -1,7 +1,8 @@
 # LI.FI + CCTP on mobile — implementation map (2026-09-16)
 
-Written from the web source (`../normal-v1-interface/packages/web/src`) and the web agent's
-map; nothing here is built yet. Scope is the last two swap families:
+**Status 2026-09-16: all four families are built** (CCTP outbound + inbound tested on a device;
+LI.FI native ⇄ native and BTC as a source built from source, untested). Kept as the reference map.
+Written from the web source (`../normal-v1-interface/packages/web/src`) and the web agent's map. Scope is the last two swap families:
 BTC/ETH/SOL ⇄ each other via **LI.FI**, and Stellar ⇄ BTC/ETH/SOL via the
 **CCTP composite** (Soroswap → Circle CCTP → LI.FI). Estimated effort: LI.FI 2–3 days,
 CCTP 4–6 days, both dominated by testing with real funds.

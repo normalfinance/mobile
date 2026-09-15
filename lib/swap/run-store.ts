@@ -14,7 +14,9 @@ import type { StellarSymbol } from "@/lib/swap/registry";
 export type RunSpec =
   | { kind: "soroswap"; from: StellarSymbol; to: StellarSymbol; quote: SwapQuote; amount: string }
   | { kind: "cctp-out"; from: "USDC"; to: CrosschainSymbol; amount: string; feePercent: number; lifiTool: string | null; toAddress: string; etaMin: number | null; toAmount: number }
-  | { kind: "cctp-in"; from: CrosschainSymbol; to: "USDC"; amount: string; quote: LifiQuote; feePercent: number; etaMin: number | null; usdcOut: number };
+  | { kind: "cctp-in"; from: CrosschainSymbol; to: "USDC"; amount: string; quote: LifiQuote; feePercent: number; etaMin: number | null; usdcOut: number }
+  /** LI.FI native ⇄ native (BTC / ETH / SOL), delivered to the user's own address. */
+  | { kind: "lifi"; from: CrosschainSymbol; to: CrosschainSymbol; amount: string; quote: LifiQuote; feePercent: number; etaMin: number | null; toAmount: number; tool: string | null };
 
 export interface RunNotice {
   text: string;
@@ -31,6 +33,8 @@ export interface RunState {
   flags: { embedded?: boolean; degradedAfterSign?: boolean; autopilot?: boolean; priceMoved?: boolean };
   transferId?: string;
   result?: { hash: string; verdict?: string | null; dstAmount?: string };
+  /** LI.FI: the source tx hash the moment it is broadcast (for explorer / In flight). */
+  sourceTxHash?: string;
   notice?: RunNotice;
   /** true once money reached a chain — recovery is via In flight, not "try again". */
   broadcastStarted: boolean;
@@ -81,6 +85,15 @@ export const useRun = (id: string | undefined): RunState | undefined =>
     () => (id ? runs.get(id) : undefined),
     () => (id ? runs.get(id) : undefined)
   );
+
+/** Runs still working in this session (In flight card for LI.FI, which has no server row). */
+let liveSnapshot: RunState[] = [];
+const computeLive = () => {
+  const next = [...runs.values()].filter((r) => r.status === "running" && r.broadcastStarted);
+  if (next.length !== liveSnapshot.length || next.some((r, i) => r !== liveSnapshot[i])) liveSnapshot = next;
+  return liveSnapshot;
+};
+export const useLiveRuns = (): RunState[] => React.useSyncExternalStore(subscribe, computeLive, computeLive);
 
 export const useRunByTransfer = (transferId: string | undefined): RunState | undefined =>
   React.useSyncExternalStore(

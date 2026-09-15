@@ -9,7 +9,8 @@ import type { TurnkeyWallet } from "@/hooks/use-turnkey-wallet";
 import { NATIVE_CHAIN } from "@/lib/cctp/config";
 import { CalmEndError, OutboundError, runInboundSwap, runOutboundSwap } from "@/lib/cctp/engine";
 import { refreshAfterStellarAction } from "@/lib/data/after-action";
-import { GasShortfallError, maxAffordableEth } from "@/lib/lifi/execute";
+import { GasShortfallError, LIFI_CHAIN_IDS, executeLifiSwap, maxAffordableEth } from "@/lib/lifi/execute";
+import { trackLifiSwap } from "@/lib/lifi/tracker";
 import { executeSoroswap } from "@/lib/swap/soroswap";
 import { describeTurnkeyError, isUserCancelledError } from "@/lib/turnkey/client";
 import { getRun, updateRun, type RunSpec } from "./run-store";
@@ -73,6 +74,51 @@ export const startRun = async (id: string, deps: RunDeps): Promise<void> => {
       updateRun(id, { transferId: r.transferId });
       await race15(refreshAfterStellarAction(queryClient, { userId, stellarAddress, chain: NATIVE_CHAIN[spec.to], chainAddress: spec.toAddress, expectMove: [spec.to] }));
       updateRun(id, { status: "done", stage: "done", result: { hash: r.dstSwapTxHash ?? r.burnTxHash, verdict: r.deliveryVerdict } });
+      return;
+    }
+
+    if (spec.kind === "lifi") {
+      // One passkey on the source chain, then the bridge (THORChain / Chainflip /
+      // Relay …) delivers to the user's own destination address. No server row —
+      // lifi/record (inside the tracker) is the swap's only activity row.
+      updateRun(id, { stage: "sign" });
+      const addresses = { ethereumAddress: wallet.ethereumAddress, solanaAddress: wallet.solanaAddress, bitcoinAddress: wallet.bitcoinAddress };
+      const txHash = await executeLifiSwap(spec.quote, addresses, wallet.subOrgId);
+      updateRun(id, { broadcastStarted: true, sourceTxHash: txHash, stage: "confirming" });
+      const toChain = NATIVE_CHAIN[spec.to];
+      const toAddress = wallet[toChain === "ethereum" ? "ethereumAddress" : toChain === "solana" ? "solanaAddress" : "bitcoinAddress"] ?? undefined;
+      const final = await trackLifiSwap(
+        {
+          txHash,
+          fromChainId: spec.quote.action.fromChainId,
+          toChainId: spec.quote.action.toChainId,
+          fromSymbol: spec.from,
+          toSymbol: spec.to,
+          amountIn: spec.amount,
+          amountOut: String(spec.toAmount),
+          feeAmount: spec.feePercent > 0 ? (parseFloat(spec.amount) * spec.feePercent).toFixed(8) : undefined
+        },
+        {
+          stellarAddress,
+          onStage: (s) => updateRun(id, { stage: s }),
+          onRecorded: () => void queryClient.invalidateQueries({ queryKey: ["activity"] }),
+          // Hard rule 14: the destination chain's balance is refetched BEFORE "Done".
+          onArrival: () => refreshAfterStellarAction(queryClient, { userId, stellarAddress, chain: toChain, chainAddress: toAddress, expectMove: [spec.to] })
+        }
+      );
+      if (final === "done") {
+        updateRun(id, { status: "done", stage: "done", result: { hash: txHash, verdict: "DONE" } });
+      } else if (final === "refunded") {
+        // Source chain moved back — refresh it so the balance is honest.
+        const fromChain = NATIVE_CHAIN[spec.from];
+        await race15(refreshAfterStellarAction(queryClient, { userId, stellarAddress, chain: fromChain, chainAddress: wallet[fromChain === "ethereum" ? "ethereumAddress" : fromChain === "solana" ? "solanaAddress" : "bitcoinAddress"] ?? undefined, expectMove: [spec.from] }));
+        updateRun(id, { status: "calm", stage: null, result: { hash: txHash, verdict: "REFUNDED" }, notice: { text: `The bridge couldn’t complete this swap and returned your ${spec.from}. No funds were lost — small swaps are sometimes refunded.`, tone: "blue" } });
+      } else if (final === "failed") {
+        updateRun(id, { status: "error", result: { hash: txHash, verdict: "FAILED" }, notice: { text: `The ${spec.from} transaction didn’t confirm. If it never left your wallet nothing was spent; if it did, the bridge returns it automatically — check Activity for the final state.`, tone: "amber" } });
+      } else {
+        // ~20 min without a verdict: some routes legitimately take longer.
+        updateRun(id, { status: "calm", stage: null, result: { hash: txHash, verdict: "PENDING" }, notice: { text: `Your ${spec.to} is still on its way — this route can take a while. It arrives automatically at your own address; the Activity row keeps tracking it.`, tone: "blue" } });
+      }
       return;
     }
 

@@ -1,6 +1,6 @@
 // Executes a LI.FI quote's transactionRequest on the SOURCE chain, signed by
-// the Turnkey passkey — port of web lib/lifi/execute.ts (ETH + SOL; Bitcoin's
-// local-sighash path is deliberately not here yet, see docs/lifi-cctp-plan.md).
+// the Turnkey passkey — port of web lib/lifi/execute.ts (ETH, SOL, and BTC via
+// the local-sighash signer in ./btc-sign.ts — hard rule 8 lives there).
 
 import { createPublicClient, fallback, http, serializeTransaction } from "viem";
 import { mainnet } from "viem/chains";
@@ -196,6 +196,41 @@ const executeSol = async (quote: LifiQuote, solanaAddress: string, subOrgId: str
   return connection.sendRawTransaction(vtx.serialize(), { skipPreflight: false });
 };
 
+// --- Bitcoin source -----------------------------------------------------------
+// Every PSBT starts with the magic bytes "psbt\xff" (70736274ff), which is why
+// a base64 PSBT always begins "cHNidP8". LI.FI hands it over base64; the signer
+// and the broadcast route want hex. Detect by magic bytes — silently mangling
+// a PSBT is the one thing we must not do here.
+const PSBT_MAGIC_HEX = /^70736274ff/i;
+const psbtToHex = (data: string): string => {
+  const raw = data.startsWith("0x") ? data.slice(2) : data;
+  if (PSBT_MAGIC_HEX.test(raw)) return raw;
+  const hex = bytesToHex(Uint8Array.from(Buffer.from(raw, "base64")));
+  if (PSBT_MAGIC_HEX.test(hex)) return hex;
+  throw new Error("Unrecognised PSBT encoding from LI.FI — expected hex or base64");
+};
+
+const executeBtc = async (quote: LifiQuote, bitcoinAddress: string, subOrgId: string): Promise<string> => {
+  // The PSBT from LI.FI — re-encoded if needed, never rebuilt or reordered.
+  const psbtHex = psbtToHex(quote.transactionRequest.data);
+  // The spend cap is the quote's amount; an unreadable cap is a reason to
+  // stop, not to sign (web doc 95 Wave 6).
+  let sat: bigint;
+  try {
+    sat = BigInt(quote.action.fromAmount);
+  } catch {
+    throw new Error(`Refusing to sign: the quote's amount (${String(quote.action.fromAmount)}) is unreadable, so the spend limit cannot be checked`);
+  }
+  // Loaded on demand: bitcoinjs-lib only matters to Bitcoin-source swaps.
+  const { signLifiBtcPsbt } = await import("./btc-sign");
+  const signedTxHex = await signLifiBtcPsbt(psbtHex, bitcoinAddress, subOrgId, sat);
+  // The server finalises + extracts + broadcasts; idempotent by the txid of
+  // the signed transaction (a retry can never double-spend).
+  const data = await apiFetch<{ txid?: string; error?: string }>("/api/turnkey/broadcast-btc", { body: { signedTxHex } });
+  if (!data?.txid) throw new Error(data?.error ?? "Broadcast failed");
+  return data.txid;
+};
+
 /** Sign + broadcast the source leg; returns the tx hash / signature. */
 export const executeLifiSwap = async (
   quote: LifiQuote,
@@ -210,7 +245,8 @@ export const executeLifiSwap = async (
       if (!addresses.solanaAddress) throw new Error("Missing Solana address");
       return executeSol(quote, addresses.solanaAddress, subOrgId);
     case LIFI_CHAIN_IDS.BTC:
-      throw new Error("Bitcoin as a swap source isn’t available on mobile yet.");
+      if (!addresses.bitcoinAddress) throw new Error("Missing Bitcoin address");
+      return executeBtc(quote, addresses.bitcoinAddress, subOrgId);
     default:
       throw new Error(`Unsupported source chain ${quote.action.fromChainId}`);
   }
