@@ -83,7 +83,9 @@ export default function HomeScreen() {
   // Like the web drawer (account-drawer.tsx allTokens): only assets actually
   // held. The aggregator always emits five rows; without this a new user sees
   // five phantom "$0.00" lines instead of the empty state.
-  const heldAssets = portfolioData.assets.filter((a) => !!a.address && Number(a.balance) > 0);
+  const heldAssets = portfolioData.assets
+    .filter((a) => !!a.address && Number(a.balance) > 0)
+    .sort((a, b) => b.usdValue - a.usdValue); // web tokens-tab: by USD value, largest first
   const email = user?.email ?? "";
   const displayName = email ? email.split("@")[0] : "Your wallet";
 
@@ -178,22 +180,21 @@ export default function HomeScreen() {
                       </YStack>
                     ) : (
                       <>
-                        {heldAssets.map((asset) => (
-                          <AssetRow
-                            key={asset.asset_code}
-                            asset={asset}
-                            onPress={() =>
-                              router.push(`/asset/${asset.asset_code.toLowerCase()}`)
-                            }
-                          />
-                        ))}
+                        {heldAssets
+                          .filter((a) => a.usdValue >= savings.value || savings.value <= 0)
+                          .map((asset) => (
+                            <AssetRow key={asset.asset_code} asset={asset} onPress={() => router.push(`/asset/${asset.asset_code.toLowerCase()}`)} />
+                          ))}
                         {savings.value > 0 ? (
-                          <SavingsRow
-                            value={savings.value}
-                            apy={vault.data?.apy ?? null}
-                            onPress={() => router.push("/(tabs)/savings")}
-                          />
+                          <SavingsRow value={savings.value} apy={vault.data?.apy ?? null} onPress={() => router.push("/(tabs)/savings")} />
                         ) : null}
+                        {savings.value > 0
+                          ? heldAssets
+                              .filter((a) => a.usdValue < savings.value)
+                              .map((asset) => (
+                                <AssetRow key={asset.asset_code} asset={asset} onPress={() => router.push(`/asset/${asset.asset_code.toLowerCase()}`)} />
+                              ))
+                          : null}
                       </>
                     )
                   ) : isLoading ? (

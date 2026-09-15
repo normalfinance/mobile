@@ -28,7 +28,14 @@ import {
   useBackendPortfolio,
   usePriceHistory
 } from "@/hooks/use-backend-portfolio";
-import { useTurnkeyWallet, walletAddresses } from "@/hooks/use-turnkey-wallet";
+import { Alert } from "react-native";
+import { useQueryClient } from "@tanstack/react-query";
+import { PrimaryButton } from "@/components/home/primitives";
+import { SEND_ASSETS, type SendSymbol } from "@/lib/send/registry";
+import { ensureChainAddress } from "@/lib/turnkey/accounts";
+import { describeTurnkeyError, isUserCancelledError } from "@/lib/turnkey/client";
+import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
+import { turnkeyWalletQueryKey, useTurnkeyWallet, walletAddresses } from "@/hooks/use-turnkey-wallet";
 import { useColors } from "@/lib/theme/appearance";
 import { radius, space, tracking } from "@/lib/theme/tokens";
 import {
@@ -62,8 +69,26 @@ export default function AssetDetailScreen() {
   const symbol = (raw ?? "").toUpperCase();
 
   const { portfolioData, transactions, isLoading } = useBackendPortfolio();
-  const { wallet } = useTurnkeyWallet();
+  const { wallet, refetch: refetchWallet } = useTurnkeyWallet();
+  const queryClient = useQueryClient();
+  const { user } = useSupabaseAuth();
   const addresses = React.useMemo(() => walletAddresses(wallet), [wallet]);
+  const meta = (symbol in SEND_ASSETS ? SEND_ASSETS[symbol as SendSymbol] : null);
+  const hasChain = !!meta && addresses.some((a) => a.chain === meta.chain);
+  const [addingChain, setAddingChain] = React.useState(false);
+  const addChain = async () => {
+    if (!wallet || !meta) return;
+    setAddingChain(true);
+    try {
+      const updated = await ensureChainAddress(wallet, meta.chain);
+      queryClient.setQueryData(turnkeyWalletQueryKey(user?.id), updated);
+      await refetchWallet();
+    } catch (e) {
+      if (!isUserCancelledError(e)) Alert.alert("Couldn’t add the chain", describeTurnkeyError(e));
+    } finally {
+      setAddingChain(false);
+    }
+  };
   const [period, setPeriod] = React.useState<PortfolioPeriod>("7D");
   const [receiveOpen, setReceiveOpen] = React.useState(false);
 
@@ -84,7 +109,9 @@ export default function AssetDetailScreen() {
     () => points.map(([, value]) => ({ value })),
     [points]
   );
-  const chartWidth = Dimensions.get("window").width - space.gutter * 2 - 2;
+  // Card inner width: screen − gutters − 1px borders − row padding. gifted-charts
+  // still reserves a y-axis label column when axes are hidden — zeroed below.
+  const chartWidth = Dimensions.get("window").width - space.gutter * 2 - 2 - space.rowX * 2;
 
   const assetTxs = transactions.filter((tx) => tx.asset === symbol);
   const positiveChange = (change24h ?? periodChange ?? 0) >= 0;
@@ -133,7 +160,7 @@ export default function AssetDetailScreen() {
               </XStack>
             </YStack>
 
-            <YStack height={180} marginTop={12} justifyContent='center'>
+            <YStack height={180} marginTop={12} justifyContent='center' paddingHorizontal={space.rowX} overflow='hidden'>
               {history.isLoading ? (
                 <YStack paddingHorizontal={space.rowX}>
                   <Skeleton width='100%' height={140} />
@@ -155,6 +182,9 @@ export default function AssetDetailScreen() {
                   endOpacity={0}
                   initialSpacing={0}
                   endSpacing={0}
+                  yAxisLabelWidth={0}
+                  yAxisThickness={0}
+                  xAxisThickness={0}
                   spacing={chartWidth / Math.max(1, chartData.length - 1)}
                   disableScroll
                   adjustToWidth
@@ -224,22 +254,31 @@ export default function AssetDetailScreen() {
                 {fAssetQuantity(asset?.balance ?? 0, symbol)} {symbol}
               </Mono>
             </XStack>
-            <XStack gap={8} marginTop={8} marginHorizontal={8}>
-              <YStack flex={1}>
-                <SecondaryButton
-                  label='Receive'
-                  icon={<ArrowDown size={16} color={c.ink} strokeWidth={2} />}
-                  onPress={() => setReceiveOpen(true)}
-                />
+            {meta && wallet && !hasChain ? (
+              <YStack gap={8} marginTop={8} marginHorizontal={8}>
+                <UiText fontSize={13} color={c.muted} lineHeight={18}>
+                  Your Normal wallet has no {meta.name} address yet. One passkey confirmation adds it on the same wallet — nothing new to back up.
+                </UiText>
+                <PrimaryButton label={addingChain ? "Adding…" : `Add ${meta.name} to my wallet`} onPress={addChain} loading={addingChain} />
               </YStack>
-              <YStack flex={1}>
-                <SecondaryButton
-                  label='Send'
-                  icon={<ArrowUp size={16} color={c.ink} strokeWidth={2} />}
-                  onPress={() => router.push(`/send?symbol=${symbol}`)}
-                />
-              </YStack>
-            </XStack>
+            ) : (
+              <XStack gap={8} marginTop={8} marginHorizontal={8}>
+                <YStack flex={1}>
+                  <SecondaryButton
+                    label='Receive'
+                    icon={<ArrowDown size={16} color={c.ink} strokeWidth={2} />}
+                    onPress={() => setReceiveOpen(true)}
+                  />
+                </YStack>
+                <YStack flex={1}>
+                  <SecondaryButton
+                    label='Send'
+                    icon={<ArrowUp size={16} color={c.ink} strokeWidth={2} />}
+                    onPress={() => router.push(`/send?symbol=${symbol}`)}
+                  />
+                </YStack>
+              </XStack>
+            )}
           </Card>
 
           {/* Activity for this asset */}

@@ -84,6 +84,7 @@ export const ActivityRow = ({
           </XStack>
           <UiText fontSize={t.assetSub.size} color={c.muted}>
             {formatWhen(tx.timestamp)}
+            {tx.type === "swap" && tx.counterparty ? ` · from ${tx.counterparty}` : ""}
           </UiText>
         </YStack>
       </XStack>

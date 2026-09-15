@@ -8,7 +8,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { Text, XStack, YStack } from "tamagui";
 import {
   ArrowLeftRight,
-  Clock,
+  Coins,
   House,
   PiggyBank,
   Settings,
@@ -21,30 +21,32 @@ import { useColors } from "@/lib/theme/appearance";
 import { space } from "@/lib/theme/tokens";
 import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
 
-import ActivityScreen from "./activity";
+import AssetsScreen from "./assets";
 import HomeScreen from "./index";
 import SavingsScreen from "./savings";
 import SettingsScreen from "./settings";
 import SwapScreen from "./swap";
 
-type TabKey = "home" | "savings" | "swap" | "activity" | "settings";
+type TabKey = "home" | "savings" | "swap" | "assets" | "settings";
 
 const tabRoutes: Record<
   TabKey,
-  `/(${"tabs"})${"" | "/savings" | "/swap" | "/activity" | "/settings"}`
+  `/(${"tabs"})${"" | "/savings" | "/swap" | "/assets" | "/settings"}`
 > = {
   home: "/(tabs)",
   savings: "/(tabs)/savings",
   swap: "/(tabs)/swap",
-  activity: "/(tabs)/activity",
+  assets: "/(tabs)/assets",
   settings: "/(tabs)/settings"
 };
 
+// Activity lives on Home (Tokens | Activity); the fourth tab is the full
+// catalogue of assets the app supports, held or not (Niko, 2026-09-16).
 const TAB_ITEMS: { key: TabKey; label: string; Icon: LucideIcon }[] = [
   { key: "home", label: "Home", Icon: House },
   { key: "savings", label: "Savings", Icon: PiggyBank },
   { key: "swap", label: "Swap", Icon: ArrowLeftRight },
-  { key: "activity", label: "Activity", Icon: Clock },
+  { key: "assets", label: "Assets", Icon: Coins },
   { key: "settings", label: "Settings", Icon: Settings }
 ];
 
@@ -78,8 +80,8 @@ export default function TabLayout() {
         return <SavingsScreen />;
       case "swap":
         return <SwapScreen />;
-      case "activity":
-        return <ActivityScreen />;
+      case "assets":
+        return <AssetsScreen />;
       case "settings":
         return <SettingsScreen />;
       default:

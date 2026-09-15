@@ -17,6 +17,7 @@ import { useQueries, useQuery } from "@tanstack/react-query";
 
 import { apiFetch } from "@/lib/api";
 import { fetchActiveRamps, type RampTransfer } from "@/lib/ramp/coinbase";
+import { reconcilePendingSends, usePendingSends } from "@/lib/send/pending-sends";
 import type { Transaction } from "@/services/portfolio.service";
 import { useTurnkeyWallet, type WalletChain } from "@/hooks/use-turnkey-wallet";
 
@@ -94,8 +95,24 @@ const walletItemToTransaction = (item: WalletActivityItem): Transaction | null =
       txHash: item.txHash
     };
   }
-  // Soroswap rows arrive with the swap flow; until then they are not rendered.
-  return null;
+  // Swap (Soroswap / LI.FI record): one row, shown as what was received.
+  const swap = item as Extract<WalletActivityItem, { kind: "swap" }>;
+  const amountOut = parseFloat(swap.amountOut) || 0;
+  const amountIn = parseFloat(swap.amountIn) || 0;
+  const symOut = swap.tokenOutSymbol ?? "";
+  const symIn = swap.tokenInSymbol ?? "";
+  return {
+    id: item.id,
+    type: "swap",
+    asset: symOut,
+    amount: amountOut,
+    usdValue: 0,
+    timestamp,
+    status: "completed",
+    chain: "stellar",
+    txHash: item.txHash,
+    counterparty: symIn ? `${amountIn} ${symIn}` : undefined
+  };
 };
 
 const fetchChainActivity = (chain: WalletChain, address: string) =>
@@ -128,6 +145,7 @@ const toTransaction = (
  */
 export const useActivityFeed = (priceOf: (symbol: string) => number = () => 0) => {
   const { addresses, isLoading: isWalletLoading } = useTurnkeyWallet();
+  const pendingSends = usePendingSends();
 
   const stellarAddress = addresses.find((a) => a.chain === "stellar")?.address ?? null;
 
@@ -160,8 +178,27 @@ export const useActivityFeed = (priceOf: (symbol: string) => number = () => 0) =
   });
 
   // Fixed-length memo key: the number of queries changes with the wallet.
-  const dataKey = queries.map((q) => q.dataUpdatedAt).join(",") + "|" + walletQuery.dataUpdatedAt + "|" + rampsQuery.dataUpdatedAt;
+  const dataKey = queries.map((q) => q.dataUpdatedAt).join(",") + "|" + walletQuery.dataUpdatedAt + "|" + rampsQuery.dataUpdatedAt + "|" + pendingSends.length;
   const transactions = useMemo(() => {
+    // Every hash the feeds know this render — a pending send it covers is retired.
+    const known = new Set<string>();
+    queries.forEach((q) => (q.data?.items ?? []).forEach((i) => i.txHash && known.add(i.txHash.toLowerCase())));
+    (walletQuery.data?.items ?? []).forEach((i) => i.txHash && known.add(i.txHash.toLowerCase()));
+    reconcilePendingSends(known);
+    const pendingRows: Transaction[] = pendingSends
+      .filter((p) => !known.has(p.txHash.toLowerCase()))
+      .map((p) => ({
+        id: `pending-send:${p.chain}:${p.txHash}`,
+        type: "send",
+        asset: p.symbol,
+        amount: parseFloat(p.amount) || 0,
+        usdValue: (parseFloat(p.amount) || 0) * priceOf(p.symbol),
+        timestamp: new Date(p.createdAt),
+        status: "pending",
+        chain: p.chain,
+        txHash: p.txHash,
+        counterparty: p.destination
+      }));
     const rampRows: Transaction[] = (rampsQuery.data ?? [])
       .filter((r: RampTransfer) => !["arrived", "paid_out", "abandoned"].includes(r.status))
       .map((r) => ({
@@ -180,7 +217,7 @@ export const useActivityFeed = (priceOf: (symbol: string) => number = () => 0) =
       .map(walletItemToTransaction)
       .filter((t): t is Transaction => !!t);
     const ownHashes = new Set(walletRows.map((t) => t.txHash).filter((h): h is string => !!h));
-    const rows: Transaction[] = [...rampRows, ...walletRows];
+    const rows: Transaction[] = [...pendingRows, ...rampRows, ...walletRows];
     addresses.forEach(({ chain }, i) => {
       const items = queries[i]?.data?.items ?? [];
       for (const item of items) {

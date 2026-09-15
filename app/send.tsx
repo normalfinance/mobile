@@ -21,7 +21,8 @@ import { useSavingsPosition } from "@/hooks/use-savings";
 import { turnkeyWalletQueryKey, useTurnkeyWallet, type WalletChain } from "@/hooks/use-turnkey-wallet";
 import { refreshAfterStellarAction } from "@/lib/data/after-action";
 import { btcBuild, btcMaxSend, sendBtc } from "@/lib/send/bitcoin";
-import { sendEth, spendableEth } from "@/lib/send/evm";
+import { GAS_RESERVE_ETH, sendEth, spendableEth } from "@/lib/send/evm";
+import { addPendingSend } from "@/lib/send/pending-sends";
 import { SEND_ASSETS, SEND_ORDER, parseChainQr, type SendSymbol } from "@/lib/send/registry";
 import { SOL_FEE, sendSol, solMaxSend } from "@/lib/send/solana";
 import { parseStellarQr } from "@/lib/stellar/qr";
@@ -181,7 +182,10 @@ export default function SendScreen() {
     }
   };
 
-  const canContinue = !!from && amountOk && destOk && !memoMissing && (spendable === null || amountNum <= spendable + 1e-12);
+  // A null spendable means the live read hasn't answered — never let the
+  // user proceed on a number we don't have (the gas-reserve gap Niko hit).
+  const cannotCoverGas = symbol === "ETH" && balance > 0 && balance <= GAS_RESERVE_ETH;
+  const canContinue = !!from && amountOk && destOk && !memoMissing && spendable !== null && amountNum <= spendable + 1e-12 && !cannotCoverGas;
 
   const send = async () => {
     if (!wallet?.subOrgId || !from) return;
@@ -222,6 +226,8 @@ export default function SendScreen() {
       }
       setResult({ hash });
       setConfirming(false);
+      // Visible in Activity at once, until the chain feed carries the hash.
+      addPendingSend({ chain: meta.chain, txHash: hash, symbol, amount: String(amountNum), destination: destTrim });
       void refreshAfterStellarAction(queryClient, {
         userId: user?.id,
         stellarAddress: wallet.stellarAddress,
@@ -321,6 +327,13 @@ export default function SendScreen() {
                       {spendable === null ? "…" : `${fAssetQuantity(spendable, symbol)} ${symbol} available`}
                     </Mono>
                   </XStack>
+                  {cannotCoverGas ? (
+                    <UiText fontSize={12} color={c.failed}>
+                      Not enough ETH to pay gas — sending needs about {GAS_RESERVE_ETH} ETH on top of the amount.
+                    </UiText>
+                  ) : spendable !== null && amountOk && amountNum > spendable ? (
+                    <UiText fontSize={12} color={c.failed}>Amount exceeds what you can send after fees.</UiText>
+                  ) : null}
                 </>
               )}
             </Card>
