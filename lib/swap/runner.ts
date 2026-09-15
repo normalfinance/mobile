@@ -64,6 +64,9 @@ export const startRun = async (id: string, deps: RunDeps): Promise<void> => {
         amount: spec.amount,
         feePercent: spec.feePercent,
         lifiTool: spec.lifiTool,
+        expectedOut: String(spec.toAmount),
+        // Link the row the moment it exists so In flight reopens THIS run.
+        onTransferCreated: (transferId) => updateRun(id, { transferId }),
         onStage: (s) => updateRun(id, { stage: s, broadcastStarted: s !== "burn-prepare" && s !== "burn" ? true : getRun(id)?.broadcastStarted ?? false }),
         autopilotHint: deps.autopilotHint
       });
@@ -83,6 +86,8 @@ export const startRun = async (id: string, deps: RunDeps): Promise<void> => {
       quote: spec.quote,
       amount: spec.amount,
       feePercent: spec.feePercent,
+      expectedOut: String(spec.usdcOut),
+      onTransferCreated: (transferId) => updateRun(id, { transferId }),
       onStage: (s) => updateRun(id, { stage: s, broadcastStarted: s !== "lifi" ? true : getRun(id)?.broadcastStarted ?? false }),
       autopilotHint: deps.autopilotHint,
       onAutopilotFallback: () => updateRun(id, { notice: { text: "Autopilot could not finish this step — confirming with your passkey instead.", tone: "blue" } })

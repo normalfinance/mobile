@@ -13,13 +13,14 @@ import { XStack, YStack } from "tamagui";
 import { Check, ChevronLeft } from "lucide-react-native";
 
 import { AssetIcon } from "@/components/ui/AssetIcon";
-import { Card, IconBox, IconButton, Mono, PillButton, PrimaryButton, Screen, SecondaryButton, UiText } from "@/components/home/primitives";
+import { Card, Divider, IconBox, IconButton, Mono, PillButton, PrimaryButton, Screen, SecondaryButton, UiText } from "@/components/home/primitives";
 import { StepList } from "@/components/savings/StepList";
 import { AutopilotSheet } from "@/components/swap/AutopilotSheet";
 import { inFlightQueryKey } from "@/components/swap/InFlightTransfers";
 import { useTurnkeyWallet } from "@/hooks/use-turnkey-wallet";
-import type { CrosschainSymbol } from "@/lib/cctp/config";
-import { bannerPhase, fetchCctpTransfers, recoverInbound, recoverOutbound, refundOutbound, type CctpTransfer } from "@/lib/cctp/engine";
+import { NATIVE_CHAIN, type CrosschainSymbol } from "@/lib/cctp/config";
+import { bannerPhase, fetchCctpTransfer, quoteSnapshot, recoverInbound, recoverOutbound, refundOutbound, type CctpTransfer } from "@/lib/cctp/engine";
+import { refreshAfterStellarAction } from "@/lib/data/after-action";
 import { useRun, useRunByTransfer, updateRun } from "@/lib/swap/run-store";
 import { startRun } from "@/lib/swap/runner";
 import { activeStepFor, explorerFor, stepsFor, timingFor } from "@/lib/swap/steps";
@@ -34,6 +35,27 @@ import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
 
 const ADDRESS_OF: Record<CrosschainSymbol, "bitcoinAddress" | "ethereumAddress" | "solanaAddress"> = { BTC: "bitcoinAddress", ETH: "ethereumAddress", SOL: "solanaAddress" };
 
+/**
+ * What a server row means for the step list. Statuses are the server's state
+ * machine (web lib/cctp/state.ts): CREATED → BURN_SUBMITTED → ATTESTED →
+ * MINT_SUBMITTED → COMPLETED, plus FAILED / REFUNDED. "Finished" is web's
+ * definition: outbound once the pivot swap is on-chain, inbound once COMPLETED.
+ */
+const rowView = (tr: CctpTransfer) => {
+  const outbound = tr.direction === "stellar_to_crosschain";
+  const phase = bannerPhase(tr);
+  const terminal = tr.status === "FAILED" || tr.status === "REFUNDED";
+  const finished = outbound ? !!tr.dstSwapTxHash : tr.status === "COMPLETED";
+  const stage: string | null = terminal
+    ? null
+    : finished
+      ? "done"
+      : outbound
+        ? phase === "halt-finish" ? "pivot-swap" : tr.burnTxHash ? "bridging" : "burn-prepare"
+        : tr.burnTxHash ? "bridging" : tr.srcSwapTxHash ? "arriving" : "lifi";
+  return { outbound, phase, terminal, finished, stage };
+};
+
 export default function SwapRunScreen() {
   const c = useColors();
   const router = useRouter();
@@ -47,14 +69,44 @@ export default function SwapRunScreen() {
   const runByTransfer = useRunByTransfer(params.transferId);
   const run = runById ?? runByTransfer;
 
-  // Resume mode: a server row without a live run in this session.
+  // Resume mode: a server row without a live run in this session. Reads the
+  // ONE row (a plain GET advances it server-side between cron ticks — web's
+  // resume view does the same) at web's cadence: 5s while the Circle bridge is
+  // mid-flight, 10s while waiting on an arrival or pivot, 15s otherwise, off
+  // once finished or terminal.
   const rowQ = useQuery({
     queryKey: ["cctp", "row", params.transferId ?? "none"],
     enabled: !!params.transferId && !run,
-    queryFn: async () => (await fetchCctpTransfers(true)).find((t) => t.id === params.transferId) ?? null,
-    refetchInterval: 15_000
+    queryFn: () => fetchCctpTransfer(params.transferId!, true),
+    refetchInterval: (query) => {
+      const tr = query.state.data;
+      if (!tr) return 15_000;
+      const view = rowView(tr);
+      if (view.finished || view.terminal) return false;
+      if (view.stage === "bridging") return 5_000;
+      if (view.phase === "halt-finish" || view.phase === "halt-receive" || view.stage === "delivering") return 10_000;
+      return 15_000;
+    }
   });
   const row = rowQ.data ?? null;
+
+  // Hard rule 14: when the server says the row finished, refetch the
+  // destination chain before the screen says "Done" — and never show the old
+  // balance on Home behind it.
+  const refreshedRef = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (!row || !user?.id || !wallet?.stellarAddress) return;
+    if (!rowView(row).finished || refreshedRef.current === row.id) return;
+    refreshedRef.current = row.id;
+    const outbound = row.direction === "stellar_to_crosschain";
+    const to = row.dstAsset as CrosschainSymbol;
+    void refreshAfterStellarAction(queryClient, {
+      userId: user.id,
+      stellarAddress: wallet.stellarAddress,
+      ...(outbound && NATIVE_CHAIN[to] ? { chain: NATIVE_CHAIN[to], chainAddress: wallet[ADDRESS_OF[to]] ?? undefined, expectMove: [to] } : { expectMove: ["USDC"] })
+    }).catch(() => undefined);
+    void queryClient.invalidateQueries({ queryKey: inFlightQueryKey });
+  }, [row, user?.id, wallet, queryClient]);
 
   // Autopilot consent (CCTP runs): once before Start; sticky for the run.
   const autopilotQ = useQuery({ queryKey: ["autopilot", "status"], queryFn: fetchAutopilotStatus, enabled: autopilotAvailable() && !!wallet, staleTime: 60_000 });
@@ -163,28 +215,29 @@ export default function SwapRunScreen() {
       }
     ]);
 
-  const header = (from: string, to: string, amount: string) => (
+  // Title is the pair; amounts live in the card as two stacked rows — one
+  // asset per row, real asset icons, no arrows (Niko 2026-09-16).
+  const header = (from: string, to: string, pay: string, receive: string | null) => (
     <YStack gap={12}>
       <XStack alignItems='center' gap={4}>
         <IconButton onPress={() => router.back()} label='Back'><ChevronLeft size={22} color={c.ink} strokeWidth={2} /></IconButton>
-        <UiText fontSize={22} fontWeight='600' letterSpacing={tracking(22)}>Swapping {from} → {to}</UiText>
+        <UiText fontSize={22} fontWeight='600' letterSpacing={tracking(22)}>Swap {from} to {to}</UiText>
       </XStack>
-      <Card padding={14}>
-        <XStack alignItems='center' justifyContent='space-between'>
-          <XStack alignItems='center' gap={10}>
-            <AssetIcon symbol={from} size={32} fontSize='$2' />
-            <YStack>
-              <UiText fontSize={12} color={c.muted}>You pay</UiText>
-              <Mono fontSize={16}>{amount} {from}</Mono>
-            </YStack>
-          </XStack>
-          <XStack alignItems='center' gap={10}>
-            <YStack alignItems='flex-end'>
-              <UiText fontSize={12} color={c.muted}>You receive</UiText>
-              <Mono fontSize={16}>{to}</Mono>
-            </YStack>
-            <AssetIcon symbol={to} size={32} fontSize='$2' />
-          </XStack>
+      <Card paddingVertical={4} paddingHorizontal={4}>
+        <XStack alignItems='center' gap={12} paddingHorizontal={space.rowX} paddingVertical={space.rowY}>
+          <AssetIcon symbol={from} size={36} fontSize='$3' />
+          <YStack flex={1}>
+            <UiText fontSize={12} color={c.muted}>You pay</UiText>
+            <Mono fontSize={16}>{pay} {from}</Mono>
+          </YStack>
+        </XStack>
+        <Divider />
+        <XStack alignItems='center' gap={12} paddingHorizontal={space.rowX} paddingVertical={space.rowY}>
+          <AssetIcon symbol={to} size={36} fontSize='$3' />
+          <YStack flex={1}>
+            <UiText fontSize={12} color={c.muted}>You receive{receive?.startsWith("≥") ? " (minimum)" : ""}</UiText>
+            {receive ? <Mono fontSize={16}>{receive.replace(/^[≥≈]\s*/, "")} {to}</Mono> : <UiText fontSize={14} color={c.muted}>{to} · amount shown on delivery</UiText>}
+          </YStack>
         </XStack>
       </Card>
     </YStack>
@@ -201,7 +254,7 @@ export default function SwapRunScreen() {
       <Screen>
         <ScrollView contentContainerStyle={{ paddingBottom: 48 }}>
           <YStack paddingHorizontal={space.gutter} paddingTop={56} gap={20}>
-            {header(spec.from, `${receiveText} ${spec.to}`, spec.amount)}
+            {header(spec.from, spec.to, spec.amount, receiveText)}
 
             {done ? (
               <YStack alignItems='center' gap={10} paddingTop={8}>
@@ -260,23 +313,22 @@ export default function SwapRunScreen() {
 
   // ---- render: resume from a server row ----------------------------------------
   if (row) {
-    const outbound = row.direction === "stellar_to_crosschain";
-    const phase = bannerPhase(row);
-    const terminal = row.status === "FAILED" || row.status === "REFUNDED";
-    const finished = outbound ? !!row.dstSwapTxHash : row.status === "COMPLETED";
+    const { outbound, phase, terminal, finished, stage } = rowView(row);
+    const expected = parseFloat(quoteSnapshot(row).expectedOut ?? "") || 0;
     const spec = outbound
-      ? ({ kind: "cctp-out", from: "USDC", to: row.dstAsset as CrosschainSymbol, amount: row.srcAmount ?? "", feePercent: 0, lifiTool: null, toAddress: "", etaMin: null, toAmount: parseFloat(row.dstAmount ?? "0") || 0 } as const)
+      ? ({ kind: "cctp-out", from: "USDC", to: row.dstAsset as CrosschainSymbol, amount: row.srcAmount ?? "", feePercent: 0, lifiTool: null, toAddress: "", etaMin: null, toAmount: expected } as const)
       : ({ kind: "cctp-in", from: row.srcAsset as CrosschainSymbol, to: "USDC", amount: row.srcAmount ?? "", quote: { action: { fromChainId: 0, toChainId: 0, fromAmount: "0" }, estimate: { toAmount: "0", toAmountMin: row.amountWire, executionDuration: 0 }, transactionRequest: { data: "" } }, feePercent: 0, etaMin: null, usdcOut: Number(row.amountWire) / 1e6 } as const);
-    // Stage from the server's truth.
-    const stage = terminal ? null : finished ? "done" : outbound
-      ? (phase === "halt-finish" ? "pivot-swap" : row.burnTxHash ? "bridging" : "burn-prepare")
-      : (row.burnTxHash ? "bridging" : row.srcSwapTxHash ? "arriving" : "lifi");
     const steps = stepsFor(spec, { autopilot: autopilotOn }, stage);
+    // Delivered amount once the server has it; the quoted minimum before that.
+    const delivered = parseFloat(row.dstAmount ?? "") || 0;
+    const receiveText = outbound
+      ? delivered ? fNumber(delivered, { maximumFractionDigits: 6 }) : expected ? `≥ ${fNumber(expected, { maximumFractionDigits: 6 })}` : null
+      : finished && delivered ? fNumber(delivered, { maximumFractionDigits: 2 }) : `≥ ${fNumber(spec.usdcOut, { maximumFractionDigits: 2 })}`;
     return (
       <Screen>
         <ScrollView contentContainerStyle={{ paddingBottom: 48 }}>
           <YStack paddingHorizontal={space.gutter} paddingTop={56} gap={20}>
-            {header(spec.from, spec.to, spec.amount || "—")}
+            {header(spec.from, spec.to, spec.amount || "—", receiveText)}
             <Card padding={14} gap={12}>
               <StepList title={finished ? "Swap complete" : terminal ? (row.status === "REFUNDED" ? "Refunded" : "Did not complete") : "Swap in progress"} timing='' steps={finished ? [...steps, { id: "done", label: "Done", sub: `${spec.to} received` }] : steps} activeId={finished || terminal ? null : stage} allDone={finished} />
               {row.errorDetail ? <UiText fontSize={12} color={c.muted} lineHeight={17}>{row.errorDetail}</UiText> : null}

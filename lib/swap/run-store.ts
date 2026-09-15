@@ -40,11 +40,7 @@ export interface RunState {
 let pending: RunSpec | null = null;
 const runs = new Map<string, RunState>();
 const listeners = new Set<() => void>();
-let version = 0;
-const notify = () => {
-  version += 1;
-  listeners.forEach((l) => l());
-};
+const notify = () => listeners.forEach((l) => l());
 
 export const setPendingRun = (spec: RunSpec): string => {
   pending = spec;
@@ -75,14 +71,20 @@ const subscribe = (l: () => void) => {
   return () => listeners.delete(l);
 };
 
-export const useRun = (id: string | undefined): RunState | undefined => {
-  const v = React.useSyncExternalStore(subscribe, () => version, () => version);
-  void v;
-  return id ? runs.get(id) : undefined;
-};
+// The snapshot IS the run object (a fresh object per update, see updateRun).
+// Reading `runs.get(id)` outside the snapshot broke under the React Compiler:
+// it memoised the lookup on `id` alone, so the page kept rendering the idle
+// run after Start (Niko 2026-09-16: "the steps did not start").
+export const useRun = (id: string | undefined): RunState | undefined =>
+  React.useSyncExternalStore(
+    subscribe,
+    () => (id ? runs.get(id) : undefined),
+    () => (id ? runs.get(id) : undefined)
+  );
 
-export const useRunByTransfer = (transferId: string | undefined): RunState | undefined => {
-  const v = React.useSyncExternalStore(subscribe, () => version, () => version);
-  void v;
-  return transferId ? runByTransfer(transferId) : undefined;
-};
+export const useRunByTransfer = (transferId: string | undefined): RunState | undefined =>
+  React.useSyncExternalStore(
+    subscribe,
+    () => (transferId ? runByTransfer(transferId) : undefined),
+    () => (transferId ? runByTransfer(transferId) : undefined)
+  );

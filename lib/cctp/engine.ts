@@ -67,8 +67,28 @@ export const fetchCctpTransfers = async (history: boolean): Promise<CctpTransfer
   return data?.transfers ?? [];
 };
 
-const getTransfer = (id: string, advance: boolean) =>
+/** One row. A plain read (advance=true) also advances the state machine
+ *  server-side between cron ticks — web's resume view relies on this. */
+export const fetchCctpTransfer = (id: string, advance: boolean) =>
   apiFetch<{ transfer?: CctpTransfer }>(`/api/cctp/transfers/${id}`, advance ? {} : { query: { noAdvance: 1 } }).then((d) => d?.transfer ?? null);
+const getTransfer = fetchCctpTransfer;
+
+/** Our own snapshot inside `quoteJson` (the server stores it opaquely). */
+export interface CctpQuoteSnapshot {
+  feePercent?: number;
+  lifiTool?: string | null;
+  fundedFrom?: string;
+  /** Quoted minimum out, human units — lets a reopened row show "You receive". */
+  expectedOut?: string;
+}
+export const quoteSnapshot = (tr: CctpTransfer): CctpQuoteSnapshot => {
+  try {
+    const v = tr.quoteJson ? JSON.parse(tr.quoteJson) : null;
+    return v && typeof v === "object" ? (v as CctpQuoteSnapshot) : {};
+  } catch {
+    return {};
+  }
+};
 
 /** Money-state writes never swallow: 3 attempts, then the caller SAYS it. */
 const patchTransfer = async (id: string, body: Record<string, string | boolean>): Promise<CctpTransfer | null> => {
@@ -191,6 +211,10 @@ export interface OutboundParams {
   /** LI.FI feePercent from the display quote (recorded on the row). */
   feePercent: number;
   lifiTool: string | null;
+  /** Quoted minimum out (human), recorded on the row for the resume view. */
+  expectedOut?: string;
+  /** The server row exists — before anything is signed or broadcast. */
+  onTransferCreated?: (transferId: string) => void;
   onStage?: (s: OutboundStage) => void;
   /** Fires before each passkey prompt (burn legs). */
   onSigning?: () => void;
@@ -266,11 +290,12 @@ export const runOutboundSwap = async (p: OutboundParams): Promise<OutboundResult
       srcAmount: p.amount,
       srcAddress: p.stellarAddress,
       destAddress: p.evmAddress, // the gas top-up must reach the EVM pivot address
-      quoteJson: { feePercent: p.feePercent, lifiTool: p.lifiTool, fundedFrom: "normal" }
+      quoteJson: { feePercent: p.feePercent, lifiTool: p.lifiTool, fundedFrom: "normal", expectedOut: p.expectedOut }
     }
   });
   if (!created?.id) throw new Error(created?.error ?? "Could not start the swap");
   const transferId = created.id;
+  p.onTransferCreated?.(transferId);
   let stage: OutboundStage = "burn-prepare";
   let broadcastStarted = false;
   const setStage = (s: OutboundStage) => {
@@ -502,6 +527,10 @@ export interface InboundParams {
   /** Human source amount, for the activity feed. */
   amount: string;
   feePercent: number;
+  /** Quoted minimum USDC out (human), recorded on the row for the resume view. */
+  expectedOut?: string;
+  /** The server row exists — before anything is signed or broadcast. */
+  onTransferCreated?: (transferId: string) => void;
   onStage?: (s: InboundStage) => void;
   isCancelled?: () => boolean;
   autopilotHint?: boolean | (() => boolean);
@@ -523,11 +552,12 @@ export const runInboundSwap = async (p: InboundParams): Promise<{ transferId: st
       srcAmount: p.amount,
       srcAddress: p.evmAddress, // the gas top-up must reach the EVM burn address
       destAddress: p.stellarAddress,
-      quoteJson: { feePercent: p.feePercent, lifiTool: p.quote.tool ?? null, fundedFrom: "normal" }
+      quoteJson: { feePercent: p.feePercent, lifiTool: p.quote.tool ?? null, fundedFrom: "normal", expectedOut: p.expectedOut }
     }
   });
   if (!created?.id) throw new Error(created?.error ?? "Could not start the swap");
   const transferId = created.id;
+  p.onTransferCreated?.(transferId);
   let stage: InboundStage = "lifi";
   let broadcastStarted = false;
   const setStage = (s: InboundStage) => {
