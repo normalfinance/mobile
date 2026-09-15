@@ -5,11 +5,11 @@
 import React from "react";
 import { Dimensions, ScrollView } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { LineChart } from "react-native-gifted-charts";
 import { XStack, YStack } from "tamagui";
 import { ArrowDown, ArrowUp, ChevronLeft, Inbox } from "lucide-react-native";
 
 import { ActivityRow } from "@/components/home/ActivityRow";
+import { PriceChart } from "@/components/asset/PriceChart";
 import {
   Card,
   Divider,
@@ -59,6 +59,7 @@ const PERIODS: { key: PortfolioPeriod; label: string }[] = [
   { key: "7D", label: "1W" },
   { key: "30D", label: "1M" },
   { key: "365D", label: "1Y" },
+  { key: "5Y", label: "5Y" },
   { key: "All", label: "All" }
 ];
 
@@ -105,12 +106,7 @@ export default function AssetDetailScreen() {
       ? ((lastHistoryPrice - firstHistoryPrice) / firstHistoryPrice) * 100
       : null;
 
-  const chartData = React.useMemo(
-    () => points.map(([, value]) => ({ value })),
-    [points]
-  );
-  // Card inner width: screen − gutters − 1px borders − row padding. gifted-charts
-  // still reserves a y-axis label column when axes are hidden — zeroed below.
+  // Card inner width: screen − gutters − 1px borders − row padding.
   const chartWidth = Dimensions.get("window").width - space.gutter * 2 - 2 - space.rowX * 2;
 
   const assetTxs = transactions.filter((tx) => tx.asset === symbol);
@@ -160,35 +156,11 @@ export default function AssetDetailScreen() {
               </XStack>
             </YStack>
 
-            <YStack height={180} marginTop={12} justifyContent='center' paddingHorizontal={space.rowX} overflow='hidden'>
+            <YStack height={210} marginTop={12} justifyContent='center' paddingHorizontal={space.rowX} overflow='hidden'>
               {history.isLoading ? (
-                <YStack paddingHorizontal={space.rowX}>
-                  <Skeleton width='100%' height={140} />
-                </YStack>
-              ) : chartData.length > 1 ? (
-                <LineChart
-                  data={chartData}
-                  width={chartWidth}
-                  height={160}
-                  color={c.ink}
-                  thickness={2}
-                  curved
-                  hideDataPoints
-                  hideAxesAndRules
-                  areaChart
-                  startFillColor={c.ink}
-                  startOpacity={0.08}
-                  endFillColor={c.surface}
-                  endOpacity={0}
-                  initialSpacing={0}
-                  endSpacing={0}
-                  yAxisLabelWidth={0}
-                  yAxisThickness={0}
-                  xAxisThickness={0}
-                  spacing={chartWidth / Math.max(1, chartData.length - 1)}
-                  disableScroll
-                  adjustToWidth
-                />
+                <Skeleton width='100%' height={170} />
+              ) : points.length > 1 ? (
+                <PriceChart points={points} period={period} width={chartWidth} />
               ) : (
                 <UiText fontSize={13} color={c.muted} textAlign='center'>
                   No price history{history.error ? `: ${history.error.message}` : ""}

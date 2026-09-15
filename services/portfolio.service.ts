@@ -26,7 +26,7 @@ export interface ChartDataPoint {
   date: string;
 }
 
-export type PortfolioPeriod = "1D" | "7D" | "30D" | "180D" | "365D" | "All";
+export type PortfolioPeriod = "1D" | "7D" | "30D" | "180D" | "365D" | "5Y" | "All";
 
 export type TransactionType =
   | "swap"

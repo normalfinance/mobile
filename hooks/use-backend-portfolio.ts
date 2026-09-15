@@ -111,6 +111,7 @@ export const PERIOD_TO_RANGE: Record<PortfolioPeriod, HistoryRange> = {
   "30D": "1m",
   "180D": "1y", // the backend has no 6-month range; 1y is the closest superset
   "365D": "1y",
+  "5Y": "5y", // backend range (route: 21600s cache, like 1y/all)
   All: "all"
 };
 
