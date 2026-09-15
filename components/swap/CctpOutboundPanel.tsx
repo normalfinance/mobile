@@ -142,11 +142,11 @@ export function CctpOutboundPanel({ to, amount, setAmount, fromPill, toPill, onF
 
   return (
           <YStack gap={20}>
-            <Card padding={12} gap={8}>
-              <AmountInput amount={amount} setAmount={setAmount} symbol='USDC' price={price("USDC") || 1} spendable={usdcBalance} decimals={6} balanceDecimals={2} pill={fromPill} fiat={fiat} insufficient={insufficient} />
-              <SwapMiddle onFlip={onFlip} fiat={fiat} onToggleFiat={onToggleFiat} />
+            <Card padding={12} gap={0}>
+              <AmountInput amount={amount} setAmount={setAmount} symbol='USDC' price={price("USDC") || 1} spendable={usdcBalance} decimals={6} balanceDecimals={2} pill={fromPill} fiat={fiat} onToggleFiat={onToggleFiat} insufficient={insufficient} />
+              <SwapMiddle onFlip={onFlip} />
 
-              <ReceiveBox amount={quote ? quote.toAmount : null} symbol={to} price={price(to)} decimals={to === "BTC" ? 8 : to === "ETH" ? 6 : 4} pill={toPill} fiat={fiat} loading={quoting} qualifier='minimum' />
+              <ReceiveBox amount={quote ? quote.toAmount : null} symbol={to} price={price(to)} decimals={to === "BTC" ? 8 : to === "ETH" ? 6 : 4} pill={toPill} fiat={fiat} onToggleFiat={onToggleFiat} loading={quoting} qualifier='minimum' />
 
               {quote ? (
                 <YStack paddingHorizontal={4} paddingTop={6} gap={6}>

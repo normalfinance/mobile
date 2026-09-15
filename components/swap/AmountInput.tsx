@@ -6,12 +6,33 @@
 
 import React from "react";
 import { Input, XStack, YStack } from "tamagui";
-import { ArrowDownUp, DollarSign } from "lucide-react-native";
+import { ArrowDownUp, ArrowUpDown } from "lucide-react-native";
 
 import { IconBox, Mono, PillButton, Skeleton, UiText } from "@/components/home/primitives";
+
 import { useColors } from "@/lib/theme/appearance";
 import { radius, tracking } from "@/lib/theme/tokens";
 import { fCurrency, fNumber } from "@/lib/utils/number-format.utils";
+
+/** The converted value under an amount — tapping it flips the card between USD and coins. */
+const ConvertedLine = ({ text, onPress, muted }: { text: string; onPress?: () => void; muted?: boolean }) => {
+  const c = useColors();
+  return (
+    <XStack
+      alignSelf='flex-start'
+      alignItems='center'
+      gap={5}
+      onPress={onPress}
+      pressStyle={onPress ? { opacity: 0.5 } : undefined}
+      accessibilityRole={onPress ? "button" : undefined}
+      accessibilityLabel='Switch between US dollars and coins'
+      hitSlop={8}
+    >
+      {onPress ? <ArrowUpDown size={12} color={muted ? c.faint : c.muted} strokeWidth={2.2} /> : null}
+      <Mono fontSize={12} color={muted ? c.faint : c.muted}>{text}</Mono>
+    </XStack>
+  );
+};
 
 const floorTo = (v: number, decimals: number): string => {
   const f = 10 ** decimals;
@@ -28,6 +49,7 @@ export function AmountInput({
   balanceDecimals,
   pill,
   fiat,
+  onToggleFiat,
   editable = true,
   insufficient,
   note,
@@ -47,6 +69,7 @@ export function AmountInput({
   pill: React.ReactNode;
   /** The card's currency mode (Swap tab state). */
   fiat: boolean;
+  onToggleFiat?: () => void;
   editable?: boolean;
   insufficient?: boolean;
   /** Optional line under the input (e.g. "Keeps 0.003 ETH for fees"). */
@@ -79,7 +102,9 @@ export function AmountInput({
     if (fiatOn) setFiatText((spendable * price).toFixed(2));
   };
 
-  const secondary = amountNum > 0 && price > 0 ? (fiatOn ? `${fNumber(amountNum, { maximumFractionDigits: Math.min(decimals, 8) })} ${symbol}` : `≈ ${fCurrency(amountNum * price)}`) : null;
+  // Always shown when a price exists — it is the currency switch, so it must
+  // be there before the user has typed anything.
+  const secondary = price > 0 ? (fiatOn ? `${fNumber(amountNum, { maximumFractionDigits: Math.min(decimals, 8) })} ${symbol}` : `≈ ${fCurrency(amountNum * price)}`) : null;
 
   return (
     <YStack backgroundColor={c.inputBg} borderRadius={radius.input} padding={14} gap={8}>
@@ -114,12 +139,8 @@ export function AmountInput({
         </XStack>
         {pill}
       </XStack>
-      {secondary || note ? (
-        <XStack justifyContent='space-between' alignItems='center' gap={8}>
-          <Mono fontSize={12} color={c.muted}>{secondary ?? ""}</Mono>
-          {note ? <Mono fontSize={11} color={c.faint} textAlign='right' flexShrink={1}>{note}</Mono> : null}
-        </XStack>
-      ) : null}
+      {secondary ? <ConvertedLine text={secondary} onPress={onToggleFiat} muted={amountNum <= 0} /> : null}
+      {note ? <Mono fontSize={11} color={c.faint}>{note}</Mono> : null}
     </YStack>
   );
 }
@@ -132,6 +153,7 @@ export function ReceiveBox({
   decimals,
   pill,
   fiat,
+  onToggleFiat,
   loading,
   qualifier
 }: {
@@ -142,6 +164,7 @@ export function ReceiveBox({
   decimals: number;
   pill: React.ReactNode;
   fiat: boolean;
+  onToggleFiat?: () => void;
   loading?: boolean;
   /** "minimum" | "estimated" — shown after the label. */
   qualifier?: string;
@@ -152,7 +175,7 @@ export function ReceiveBox({
   const coin = has ? `${fNumber(amount!, { maximumFractionDigits: decimals })} ${symbol}` : null;
   const usd = has && price > 0 ? fCurrency(amount! * price) : null;
   const big = fiatOn ? usd : has ? fNumber(amount!, { maximumFractionDigits: decimals }) : null;
-  const small = fiatOn ? coin : usd ? `≈ ${usd}` : null;
+  const small = price > 0 ? (fiatOn ? (coin ?? `0 ${symbol}`) : `≈ ${usd ?? fCurrency(0)}`) : null;
   return (
     <YStack backgroundColor={c.inputBg} borderRadius={radius.input} padding={14} gap={8}>
       <UiText fontSize={12} color={c.muted}>You receive{qualifier ? ` (${qualifier})` : ""}</UiText>
@@ -166,43 +189,32 @@ export function ReceiveBox({
         )}
         {pill}
       </XStack>
-      {small ? <Mono fontSize={12} color={c.muted}>{small}</Mono> : null}
+      {small ? <ConvertedLine text={small} onPress={onToggleFiat} muted={!has} /> : null}
     </YStack>
   );
 }
 
-/** The row between the boxes: flip arrow centred, the USD / coin toggle at the right. */
-export function SwapMiddle({ onFlip, fiat, onToggleFiat, canFiat = true }: { onFlip?: () => void; fiat: boolean; onToggleFiat: () => void; canFiat?: boolean }) {
+/** The 4px seam between the boxes, with the flip button floating on it (adds no height of its own). */
+export function SwapMiddle({ onFlip }: { onFlip?: () => void }) {
   const c = useColors();
   return (
-    <XStack alignItems='center' justifyContent='center' marginVertical={-12} zIndex={1} height={32}>
+    <YStack height={4} alignItems='center' zIndex={1}>
       {onFlip ? (
-        <IconBox size={32} borderWidth={1} borderColor={c.border} backgroundColor={c.surface} onPress={onFlip} pressStyle={{ backgroundColor: c.pressTint }} accessibilityRole='button' accessibilityLabel='Flip assets'>
+        <IconBox
+          size={32}
+          position='absolute'
+          top={-14}
+          borderWidth={1}
+          borderColor={c.border}
+          backgroundColor={c.surface}
+          onPress={onFlip}
+          pressStyle={{ backgroundColor: c.pressTint }}
+          accessibilityRole='button'
+          accessibilityLabel='Flip assets'
+        >
           <ArrowDownUp size={16} color={c.ink} strokeWidth={2} />
         </IconBox>
       ) : null}
-      {canFiat ? (
-        <XStack position='absolute' right={10} alignItems='center'>
-          <XStack
-            onPress={onToggleFiat}
-            height={28}
-            paddingLeft={6}
-            paddingRight={9}
-            gap={4}
-            alignItems='center'
-            borderRadius={999}
-            borderWidth={1}
-            borderColor={fiat ? c.cta : c.border}
-            backgroundColor={fiat ? c.cta : c.surface}
-            pressStyle={{ backgroundColor: fiat ? c.ctaPressed : c.pressTint }}
-            accessibilityRole='button'
-            accessibilityLabel={fiat ? "Show amounts in coins" : "Show amounts in US dollars"}
-          >
-            <DollarSign size={13} color={fiat ? c.ctaText : c.ink} strokeWidth={2.2} />
-            <UiText fontSize={11} fontWeight='600' color={fiat ? c.ctaText : c.ink}>USD</UiText>
-          </XStack>
-        </XStack>
-      ) : null}
-    </XStack>
+    </YStack>
   );
 }

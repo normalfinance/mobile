@@ -182,10 +182,10 @@ export function CctpInboundPanel({ from, amount, setAmount, fromPill, toPill, on
 
   return (
     <YStack gap={20}>
-      <Card padding={12} gap={8}>
-        <AmountInput amount={amount} setAmount={setAmount} symbol={from} price={price} spendable={spendable} decimals={NATIVE_DECIMALS[from]} balanceDecimals={from === "ETH" ? 5 : from === "BTC" ? 8 : 4} pill={fromPill} fiat={fiat} editable={!busy} insufficient={insufficient} note={balance > 0 ? `Keeps ${fNumber(reserve, { maximumFractionDigits: from === "BTC" ? 8 : 5 })} ${from} for fees` : null} />
-        <SwapMiddle onFlip={busy ? undefined : onFlip} fiat={fiat} onToggleFiat={onToggleFiat} canFiat={price > 0} />
-        <ReceiveBox amount={usdcOut} symbol='USDC' price={1} decimals={2} pill={toPill} fiat={fiat} loading={quoting} qualifier='minimum' />
+      <Card padding={12} gap={0}>
+        <AmountInput amount={amount} setAmount={setAmount} symbol={from} price={price} spendable={spendable} decimals={NATIVE_DECIMALS[from]} balanceDecimals={from === "ETH" ? 5 : from === "BTC" ? 8 : 4} pill={fromPill} fiat={fiat} onToggleFiat={onToggleFiat} editable={!busy} insufficient={insufficient} note={balance > 0 ? `Keeps ${fNumber(reserve, { maximumFractionDigits: from === "BTC" ? 8 : 5 })} ${from} for fees` : null} />
+        <SwapMiddle onFlip={busy ? undefined : onFlip} />
+        <ReceiveBox amount={usdcOut} symbol='USDC' price={1} decimals={2} pill={toPill} fiat={fiat} onToggleFiat={onToggleFiat} loading={quoting} qualifier='minimum' />
 
         {quote ? (
           <YStack paddingHorizontal={4} paddingTop={6} gap={6}>

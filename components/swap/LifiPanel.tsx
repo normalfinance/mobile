@@ -198,10 +198,10 @@ export function LifiPanel({ from, to, amount, setAmount, fromPill, toPill, onFli
 
   return (
     <YStack gap={20}>
-      <Card padding={12} gap={8}>
-        <AmountInput amount={amount} setAmount={setAmount} symbol={from} price={price} spendable={spendable} decimals={NATIVE_DECIMALS[from]} balanceDecimals={from === "SOL" ? 4 : from === "ETH" ? 5 : 8} pill={fromPill} fiat={fiat} editable={!busy} insufficient={insufficient} note={balance > 0 ? `Keeps ${fNumber(reserve, { maximumFractionDigits: from === "BTC" ? 8 : 5 })} ${from} for fees` : null} />
-        <SwapMiddle onFlip={busy ? undefined : onFlip} fiat={fiat} onToggleFiat={onToggleFiat} canFiat={price > 0} />
-        <ReceiveBox amount={toAmount} symbol={to} price={toPrice} decimals={to === "BTC" ? 8 : to === "ETH" ? 6 : 4} pill={toPill} fiat={fiat} loading={quoting} qualifier='estimated' />
+      <Card padding={12} gap={0}>
+        <AmountInput amount={amount} setAmount={setAmount} symbol={from} price={price} spendable={spendable} decimals={NATIVE_DECIMALS[from]} balanceDecimals={from === "SOL" ? 4 : from === "ETH" ? 5 : 8} pill={fromPill} fiat={fiat} onToggleFiat={onToggleFiat} editable={!busy} insufficient={insufficient} note={balance > 0 ? `Keeps ${fNumber(reserve, { maximumFractionDigits: from === "BTC" ? 8 : 5 })} ${from} for fees` : null} />
+        <SwapMiddle onFlip={busy ? undefined : onFlip} />
+        <ReceiveBox amount={toAmount} symbol={to} price={toPrice} decimals={to === "BTC" ? 8 : to === "ETH" ? 6 : 4} pill={toPill} fiat={fiat} onToggleFiat={onToggleFiat} loading={quoting} qualifier='estimated' />
 
         {quote ? (
           <YStack paddingHorizontal={4} paddingTop={6} gap={6}>

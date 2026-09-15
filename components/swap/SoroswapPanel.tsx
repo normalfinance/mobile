@@ -206,7 +206,7 @@ export function SoroswapPanel({ from, to, amount, setAmount, fromPill, toPill, o
   return (
     <>
         <YStack gap={space.section}>
-          <Card padding={12} gap={8}>
+          <Card padding={12} gap={0}>
             <AmountInput
               amount={amount}
               setAmount={setAmount}
@@ -217,12 +217,14 @@ export function SoroswapPanel({ from, to, amount, setAmount, fromPill, toPill, o
               balanceDecimals={from === "XLM" ? 4 : 2}
               pill={fromPill}
               fiat={fiat}
+              onToggleFiat={onToggleFiat}
               editable={!busy}
               insufficient={insufficient}
+              note={from === "XLM" && probe.data?.exists && xlmHoldback > 0 ? `Keeps ${fNumber(xlmHoldback, { maximumFractionDigits: 2 })} XLM for the network reserve${hasActiveSavings ? " & savings fees" : ""}` : null}
               balanceText={probe.data || from === "USDC" ? undefined : "…"}
             />
-            <SwapMiddle onFlip={flip} fiat={fiat} onToggleFiat={onToggleFiat} />
-            <ReceiveBox amount={quote ? parseFloat(quote.amountOut) || 0 : null} symbol={to} price={to === "USDC" ? price("USDC") || 1 : price(to)} decimals={to === "XLM" ? 4 : 2} pill={toPill} fiat={fiat} loading={quoting} />
+            <SwapMiddle onFlip={flip} />
+            <ReceiveBox amount={quote ? parseFloat(quote.amountOut) || 0 : null} symbol={to} price={to === "USDC" ? price("USDC") || 1 : price(to)} decimals={to === "XLM" ? 4 : 2} pill={toPill} fiat={fiat} onToggleFiat={onToggleFiat} loading={quoting} />
 
             {quote ? (
               <YStack paddingHorizontal={4} paddingTop={6} gap={6}>
@@ -237,12 +239,6 @@ export function SoroswapPanel({ from, to, amount, setAmount, fromPill, toPill, o
               </YStack>
             ) : quoteError && amountOk ? (
               <UiText fontSize={12} color={c.failed} paddingHorizontal={4}>{quoteError}</UiText>
-            ) : null}
-
-            {from === "XLM" && probe.data?.exists && xlmHoldback > 0 ? (
-              <UiText fontSize={11} color={c.faint} paddingHorizontal={4} fontFamily='$mono'>
-                Keeps {fNumber(xlmHoldback, { maximumFractionDigits: 2 })} XLM for the network reserve{hasActiveSavings ? " & savings fees" : ""}
-              </UiText>
             ) : null}
 
             {needsActivation || needsTrustline || (cannotPayFee && !needsActivation) || priceMoved ? (
