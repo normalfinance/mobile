@@ -29,6 +29,9 @@ export default function SwapScreen() {
   const [to, setTo] = React.useState<SwapSymbol>("USDC");
   const [amount, setAmount] = React.useState("");
   const [pickerSide, setPickerSide] = React.useState<"from" | "to" | null>(null);
+  // One currency mode for the whole card (web isFiatMode): both boxes follow it.
+  const [fiat, setFiat] = React.useState(false);
+  const toggleFiat = () => setFiat((p) => !p);
 
   // web selectFrom / selectTo / handleFlip
   const selectFrom = (sym: SwapSymbol) => {
@@ -82,13 +85,13 @@ export default function SwapScreen() {
             <ScreenTitle title='Swap' />
 
             {route === "soroswap" ? (
-              <SoroswapPanel from={from as StellarSymbol} to={to as StellarSymbol} amount={amount} setAmount={setAmount} fromPill={pill(from, "from")} toPill={pill(to, "to")} onFlip={flip} />
+              <SoroswapPanel from={from as StellarSymbol} to={to as StellarSymbol} amount={amount} setAmount={setAmount} fromPill={pill(from, "from")} toPill={pill(to, "to")} onFlip={flip} fiat={fiat} onToggleFiat={toggleFiat} />
             ) : route === "cctp-out" ? (
-              <CctpOutboundPanel to={to as CrosschainSymbol} amount={amount} setAmount={setAmount} fromPill={pill(from, "from")} toPill={pill(to, "to")} />
+              <CctpOutboundPanel to={to as CrosschainSymbol} amount={amount} setAmount={setAmount} fromPill={pill(from, "from")} toPill={pill(to, "to")} onFlip={flip} fiat={fiat} onToggleFiat={toggleFiat} />
             ) : route === "cctp-in" ? (
-              <CctpInboundPanel from={from as CrosschainSymbol} amount={amount} setAmount={setAmount} fromPill={pill(from, "from")} toPill={pill(to, "to")} />
+              <CctpInboundPanel from={from as CrosschainSymbol} amount={amount} setAmount={setAmount} fromPill={pill(from, "from")} toPill={pill(to, "to")} onFlip={flip} fiat={fiat} onToggleFiat={toggleFiat} />
             ) : route === "lifi" ? (
-              <LifiPanel from={from as CrosschainSymbol} to={to as CrosschainSymbol} amount={amount} setAmount={setAmount} fromPill={pill(from, "from")} toPill={pill(to, "to")} onFlip={flip} />
+              <LifiPanel from={from as CrosschainSymbol} to={to as CrosschainSymbol} amount={amount} setAmount={setAmount} fromPill={pill(from, "from")} toPill={pill(to, "to")} onFlip={flip} fiat={fiat} onToggleFiat={toggleFiat} />
             ) : (
               <Card padding={12} gap={12}>
                 <YStack backgroundColor={c.inputBg} borderRadius={radius.input} padding={14} gap={10}>

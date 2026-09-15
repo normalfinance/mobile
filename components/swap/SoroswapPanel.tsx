@@ -10,10 +10,9 @@ import { useIsFocused } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { XStack, YStack } from "tamagui";
-import { ArrowDownUp } from "lucide-react-native";
 
-import { Card, IconBox, Mono, PrimaryButton, Skeleton, UiText } from "@/components/home/primitives";
-import { AmountInput } from "@/components/swap/AmountInput";
+import { Card, Mono, PrimaryButton, UiText } from "@/components/home/primitives";
+import { AmountInput, ReceiveBox, SwapMiddle } from "@/components/swap/AmountInput";
 import { ReceiveSheet } from "@/components/home/ReceiveSheet";
 import { useBackendPortfolio } from "@/hooks/use-backend-portfolio";
 import { useSavingsPosition, useStellarAccountProbe } from "@/hooks/use-savings";
@@ -24,7 +23,7 @@ import { canPaySorobanFee, maxXlmForSorobanSwap, spendableXlmForOutflow } from "
 import { QUOTE_DRIFT_TOLERANCE, QUOTE_MAX_AGE_MS, getSwapQuote, type SwapQuote, type SwapSymbol } from "@/lib/swap/soroswap";
 import { setPendingRun } from "@/lib/swap/run-store";
 import { useColors } from "@/lib/theme/appearance";
-import { radius, space, tracking } from "@/lib/theme/tokens";
+import { radius, space } from "@/lib/theme/tokens";
 import { describeTurnkeyError, isUserCancelledError } from "@/lib/turnkey/client";
 import { ensureDeviceReady } from "@/lib/turnkey/device-check";
 import { useDeviceReady } from "@/lib/turnkey/device-ready";
@@ -41,9 +40,11 @@ export interface SwapPanelProps {
   fromPill: React.ReactNode;
   toPill: React.ReactNode;
   onFlip?: () => void;
+  fiat: boolean;
+  onToggleFiat: () => void;
 }
 
-export function SoroswapPanel({ from, to, amount, setAmount, fromPill, toPill, onFlip }: SwapPanelProps & { from: SwapSymbol; to: SwapSymbol }) {
+export function SoroswapPanel({ from, to, amount, setAmount, fromPill, toPill, onFlip, fiat, onToggleFiat }: SwapPanelProps & { from: SwapSymbol; to: SwapSymbol }) {
   const c = useColors();
   const isFocused = useIsFocused();
   const router = useRouter();
@@ -202,17 +203,6 @@ export function SoroswapPanel({ from, to, amount, setAmount, fromPill, toPill, o
   else if (quoting || !quote) button = { label: quoteError ? "Quote unavailable" : "Fetching quote…", disabled: true };
   else button = { label: "Swap with passkey", onPress: run };
 
-  const amountBox = ({ label, pill, children, under }: { label: string; pill: React.ReactNode; children: React.ReactNode; under?: React.ReactNode }) => (
-    <YStack backgroundColor={c.inputBg} borderRadius={radius.input} padding={14} gap={10}>
-      <UiText fontSize={12} color={c.muted}>{label}</UiText>
-      <XStack alignItems='center' justifyContent='space-between' gap={10}>
-        {children}
-        {pill}
-      </XStack>
-      {under}
-    </YStack>
-  );
-
   return (
     <>
         <YStack gap={space.section}>
@@ -226,27 +216,13 @@ export function SoroswapPanel({ from, to, amount, setAmount, fromPill, toPill, o
               decimals={7}
               balanceDecimals={from === "XLM" ? 4 : 2}
               pill={fromPill}
+              fiat={fiat}
               editable={!busy}
               insufficient={insufficient}
               balanceText={probe.data || from === "USDC" ? undefined : "…"}
             />
-            <XStack justifyContent='center' marginVertical={-14} zIndex={1}>
-              <IconBox size={32} borderWidth={1} borderColor={c.border} backgroundColor={c.surface} onPress={flip} pressStyle={{ backgroundColor: c.pressTint }}>
-                <ArrowDownUp size={16} color={c.ink} strokeWidth={2} />
-              </IconBox>
-            </XStack>
-            {amountBox({
-              label: "You receive",
-              pill: toPill,
-              children: quoting && !quote ? (
-                <Skeleton width={120} height={30} />
-              ) : (
-                <Mono fontSize={28} letterSpacing={tracking(28)} color={quote ? c.ink : c.faint} flex={1} numberOfLines={1}>
-                  {quote ? fNumber(parseFloat(quote.amountOut), { maximumFractionDigits: to === "XLM" ? 4 : 2 }) : "0.00"}
-                </Mono>
-              ),
-              under: quote && (to === "USDC" || price(to) > 0) ? <Mono fontSize={11} color={c.faint}>≈ {fCurrency(parseFloat(quote.amountOut) * (to === "USDC" ? price("USDC") || 1 : price(to)))}</Mono> : null
-            })}
+            <SwapMiddle onFlip={flip} fiat={fiat} onToggleFiat={onToggleFiat} />
+            <ReceiveBox amount={quote ? parseFloat(quote.amountOut) || 0 : null} symbol={to} price={to === "USDC" ? price("USDC") || 1 : price(to)} decimals={to === "XLM" ? 4 : 2} pill={toPill} fiat={fiat} loading={quoting} />
 
             {quote ? (
               <YStack paddingHorizontal={4} paddingTop={6} gap={6}>

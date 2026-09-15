@@ -10,8 +10,8 @@ import { useRouter } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { XStack, YStack } from "tamagui";
 
-import { Card, Mono, PrimaryButton, Skeleton, UiText } from "@/components/home/primitives";
-import { AmountInput } from "@/components/swap/AmountInput";
+import { Card, Mono, PrimaryButton, UiText } from "@/components/home/primitives";
+import { AmountInput, ReceiveBox, SwapMiddle } from "@/components/swap/AmountInput";
 import { setPendingRun } from "@/lib/swap/run-store";
 import { useBackendPortfolio } from "@/hooks/use-backend-portfolio";
 import { useStellarAccountProbe } from "@/hooks/use-savings";
@@ -21,10 +21,9 @@ import { NATIVE_CHAIN, NATIVE_DECIMALS, usdcToWire, type CrosschainSymbol } from
 import { SEND_ASSETS } from "@/lib/send/registry";
 import { MIN_XLM_FOR_SOROBAN_TX, xlmAvailableForFees } from "@/lib/stellar/send";
 import { useColors } from "@/lib/theme/appearance";
-import { radius, space, tracking } from "@/lib/theme/tokens";
+import { radius, space } from "@/lib/theme/tokens";
 import { ensureChainAddress } from "@/lib/turnkey/accounts";
 import { describeTurnkeyError, isUserCancelledError } from "@/lib/turnkey/client";
-import { fCurrency, fNumber } from "@/lib/utils/number-format.utils";
 import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
 
 const MIN_USD = 10;
@@ -40,7 +39,7 @@ const fromBaseUnits = (raw: string, decimals: number) => {
   return Number(`${s.slice(0, s.length - decimals)}.${s.slice(s.length - decimals)}`);
 };
 
-export function CctpOutboundPanel({ to, amount, setAmount, fromPill, toPill }: { to: CrosschainSymbol; amount: string; setAmount: (v: string) => void; fromPill: React.ReactNode; toPill: React.ReactNode }) {
+export function CctpOutboundPanel({ to, amount, setAmount, fromPill, toPill, onFlip, fiat, onToggleFiat }: { to: CrosschainSymbol; amount: string; setAmount: (v: string) => void; fromPill: React.ReactNode; toPill: React.ReactNode; onFlip?: () => void; fiat: boolean; onToggleFiat: () => void }) {
   const c = useColors();
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -144,20 +143,10 @@ export function CctpOutboundPanel({ to, amount, setAmount, fromPill, toPill }: {
   return (
           <YStack gap={20}>
             <Card padding={12} gap={8}>
-              <AmountInput amount={amount} setAmount={setAmount} symbol='USDC' price={price("USDC") || 1} spendable={usdcBalance} decimals={6} balanceDecimals={2} pill={fromPill} insufficient={insufficient} />
+              <AmountInput amount={amount} setAmount={setAmount} symbol='USDC' price={price("USDC") || 1} spendable={usdcBalance} decimals={6} balanceDecimals={2} pill={fromPill} fiat={fiat} insufficient={insufficient} />
+              <SwapMiddle onFlip={onFlip} fiat={fiat} onToggleFiat={onToggleFiat} />
 
-              <YStack backgroundColor={c.inputBg} borderRadius={radius.input} padding={14} gap={10}>
-                <UiText fontSize={12} color={c.muted}>You receive (minimum)</UiText>
-                <XStack alignItems='center' justifyContent='space-between' gap={10}>
-                  {quoting && !quote ? <Skeleton width={120} height={30} /> : (
-                    <Mono fontSize={28} letterSpacing={tracking(28)} color={quote ? c.ink : c.faint} flex={1} numberOfLines={1}>
-                      {quote ? fNumber(quote.toAmount, { maximumFractionDigits: to === "BTC" ? 6 : 4 }) : "0.00"}
-                    </Mono>
-                  )}
-                  {toPill}
-                </XStack>
-                {quote ? <Mono fontSize={11} color={c.faint}>≈ {fCurrency(quote.toAmount * price(to))}</Mono> : null}
-              </YStack>
+              <ReceiveBox amount={quote ? quote.toAmount : null} symbol={to} price={price(to)} decimals={to === "BTC" ? 8 : to === "ETH" ? 6 : 4} pill={toPill} fiat={fiat} loading={quoting} qualifier='minimum' />
 
               {quote ? (
                 <YStack paddingHorizontal={4} paddingTop={6} gap={6}>

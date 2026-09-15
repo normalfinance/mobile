@@ -9,8 +9,8 @@ import { useRouter } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { XStack, YStack } from "tamagui";
 
-import { Card, Mono, PillButton, PrimaryButton, Skeleton, UiText } from "@/components/home/primitives";
-import { AmountInput } from "@/components/swap/AmountInput";
+import { Card, Mono, PillButton, PrimaryButton, UiText } from "@/components/home/primitives";
+import { AmountInput, ReceiveBox, SwapMiddle } from "@/components/swap/AmountInput";
 import { setPendingRun } from "@/lib/swap/run-store";
 import { useBackendPortfolio } from "@/hooks/use-backend-portfolio";
 import { useStellarAccountProbe } from "@/hooks/use-savings";
@@ -19,7 +19,7 @@ import { NATIVE_CHAIN, NATIVE_DECIMALS, type CrosschainSymbol } from "@/lib/cctp
 import { ethGasReserve, fetchLifiQuote, type LifiQuote } from "@/lib/lifi/execute";
 import { SEND_ASSETS } from "@/lib/send/registry";
 import { useColors } from "@/lib/theme/appearance";
-import { radius, space, tracking } from "@/lib/theme/tokens";
+import { radius, space } from "@/lib/theme/tokens";
 import { ensureChainAddress } from "@/lib/turnkey/accounts";
 import { describeTurnkeyError, isUserCancelledError } from "@/lib/turnkey/client";
 import { fCurrency, fNumber } from "@/lib/utils/number-format.utils";
@@ -42,7 +42,7 @@ const toBaseUnits = (amount: number, decimals: number): string => {
   return (BigInt(w) * BigInt(10) ** BigInt(decimals) + BigInt(f.padEnd(decimals, "0"))).toString();
 };
 
-export function CctpInboundPanel({ from, amount, setAmount, fromPill, toPill }: { from: CrosschainSymbol; amount: string; setAmount: (v: string) => void; fromPill: React.ReactNode; toPill: React.ReactNode }) {
+export function CctpInboundPanel({ from, amount, setAmount, fromPill, toPill, onFlip, fiat, onToggleFiat }: { from: CrosschainSymbol; amount: string; setAmount: (v: string) => void; fromPill: React.ReactNode; toPill: React.ReactNode; onFlip?: () => void; fiat: boolean; onToggleFiat: () => void }) {
   const c = useColors();
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -183,19 +183,9 @@ export function CctpInboundPanel({ from, amount, setAmount, fromPill, toPill }: 
   return (
     <YStack gap={20}>
       <Card padding={12} gap={8}>
-        <AmountInput amount={amount} setAmount={setAmount} symbol={from} price={price} spendable={spendable} decimals={NATIVE_DECIMALS[from]} balanceDecimals={from === "ETH" ? 5 : from === "BTC" ? 8 : 4} pill={fromPill} editable={!busy} insufficient={insufficient} note={balance > 0 ? `Keeps ${fNumber(reserve, { maximumFractionDigits: from === "BTC" ? 8 : 5 })} ${from} for fees` : null} />
-        <YStack backgroundColor={c.inputBg} borderRadius={radius.input} padding={14} gap={10}>
-          <UiText fontSize={12} color={c.muted}>You receive (minimum)</UiText>
-          <XStack alignItems='center' justifyContent='space-between' gap={10}>
-            {quoting && !quote ? <Skeleton width={120} height={30} /> : (
-              <Mono fontSize={28} letterSpacing={tracking(28)} color={usdcOut !== null ? c.ink : c.faint} flex={1} numberOfLines={1}>
-                {usdcOut !== null ? fNumber(usdcOut, { maximumFractionDigits: 2 }) : "0.00"}
-              </Mono>
-            )}
-            {toPill}
-          </XStack>
-          {usdcOut !== null ? <Mono fontSize={11} color={c.faint}>≈ {fCurrency(usdcOut)}</Mono> : null}
-        </YStack>
+        <AmountInput amount={amount} setAmount={setAmount} symbol={from} price={price} spendable={spendable} decimals={NATIVE_DECIMALS[from]} balanceDecimals={from === "ETH" ? 5 : from === "BTC" ? 8 : 4} pill={fromPill} fiat={fiat} editable={!busy} insufficient={insufficient} note={balance > 0 ? `Keeps ${fNumber(reserve, { maximumFractionDigits: from === "BTC" ? 8 : 5 })} ${from} for fees` : null} />
+        <SwapMiddle onFlip={busy ? undefined : onFlip} fiat={fiat} onToggleFiat={onToggleFiat} canFiat={price > 0} />
+        <ReceiveBox amount={usdcOut} symbol='USDC' price={1} decimals={2} pill={toPill} fiat={fiat} loading={quoting} qualifier='minimum' />
 
         {quote ? (
           <YStack paddingHorizontal={4} paddingTop={6} gap={6}>
