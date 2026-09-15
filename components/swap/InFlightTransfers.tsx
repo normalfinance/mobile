@@ -7,6 +7,7 @@
 import React from "react";
 import { Alert } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
+import { useRouter } from "expo-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { XStack, YStack } from "tamagui";
 import { ArrowLeftRight } from "lucide-react-native";
@@ -14,7 +15,7 @@ import { ArrowLeftRight } from "lucide-react-native";
 import { Card, Chip, Mono, PillButton, UiText } from "@/components/home/primitives";
 import { useTurnkeyWallet } from "@/hooks/use-turnkey-wallet";
 import { apiFetch } from "@/lib/api";
-import { bannerPhase, fetchCctpTransfers, recoverOutbound, refundOutbound, type CctpTransfer } from "@/lib/cctp/engine";
+import { bannerPhase, fetchCctpTransfers, recoverInbound, recoverOutbound, refundOutbound, type CctpTransfer } from "@/lib/cctp/engine";
 import type { CrosschainSymbol } from "@/lib/cctp/config";
 import { useColors } from "@/lib/theme/appearance";
 import { space } from "@/lib/theme/tokens";
@@ -30,6 +31,7 @@ const ADDRESS_OF: Record<CrosschainSymbol, "bitcoinAddress" | "ethereumAddress" 
 
 const copyFor = (tr: CctpTransfer, phase: ReturnType<typeof bannerPhase>) => {
   if (phase === "halt-finish") return { title: `USDC arrived on Base — finish the swap to ${tr.dstAsset}`, sub: "One more confirmation with your passkey", tone: "amber" as const, chip: "Action needed" };
+  if (phase === "halt-receive") return { title: `USDC heading to your own Base account — finish once it arrives`, sub: `From ${tr.srcAsset}; the Circle bridge to Stellar needs one confirmation (automatic with autopilot)`, tone: "amber" as const, chip: "Action needed" };
   if (phase === "auto") return { title: `Bridging USDC to Stellar`, sub: "Completes automatically — safe to close", tone: "blue" as const, chip: "In progress" };
   if (tr.burnTxHash && tr.status !== "COMPLETED") return { title: `Bridging USDC to Base`, sub: "Circle attestation — about a minute", tone: "blue" as const, chip: "In progress" };
   return { title: `Swap USDC → ${tr.dstAsset}`, sub: "Waiting for the first transaction", tone: "neutral" as const, chip: "Pending" };
@@ -38,6 +40,7 @@ const copyFor = (tr: CctpTransfer, phase: ReturnType<typeof bannerPhase>) => {
 export const InFlightTransfers = () => {
   const c = useColors();
   const isFocused = useIsFocused();
+  const router = useRouter();
   const queryClient = useQueryClient();
   const { wallet } = useTurnkeyWallet();
   const [busyId, setBusyId] = React.useState<string | null>(null);
@@ -56,7 +59,7 @@ export const InFlightTransfers = () => {
   const rows = (q.data ?? []).filter((tr) => {
     if (TERMINAL.includes(tr.status)) return false;
     const phase = bannerPhase(tr);
-    if (phase !== "hidden") return true; // halt-finish (outbound) / auto (refund bridging back)
+    if (phase !== "hidden") return true; // halt-finish / halt-receive / auto
     // Outbound mid-bridge (burn sent, mint pending): web's modal owns this; on a
     // phone the screen may be gone, so show it — the poke advances it.
     return tr.direction === "stellar_to_crosschain" && !!tr.burnTxHash && !tr.dstSwapTxHash && tr.status !== "COMPLETED";
@@ -72,6 +75,24 @@ export const InFlightTransfers = () => {
   }, [q.dataUpdatedAt, isFocused]);
 
   if (!rows.length) return null;
+
+  const finishInbound = async (tr: CctpTransfer) => {
+    if (!wallet?.subOrgId) return;
+    setBusyId(tr.id);
+    try {
+      const outcome = await recoverInbound({ subOrgId: wallet.subOrgId, row: tr, onStage: (s) => setStageText(s === "topup" ? "Covering network fees…" : "Starting the bridge…") });
+      if (outcome === "burned") Alert.alert("Bridging to Stellar", "Your USDC is on its way — completes automatically in about 20 minutes.");
+      else if (outcome === "retired") Alert.alert("Nothing was bridged", "That swap had already failed on-chain — your funds never left your wallet. Removed it from In flight.");
+      else Alert.alert("Not there yet", "USDC has not reached Base yet — the bridge is still working. This finishes by itself; nothing to do.");
+    } catch (e) {
+      if (!isUserCancelledError(e)) Alert.alert("Couldn’t finish", e instanceof Error ? e.message : describeTurnkeyError(e));
+    } finally {
+      setBusyId(null);
+      setStageText(null);
+      void queryClient.invalidateQueries({ queryKey: inFlightQueryKey });
+      void queryClient.invalidateQueries({ queryKey: ["activity"] });
+    }
+  };
 
   const finish = async (tr: CctpTransfer) => {
     if (!wallet?.subOrgId) return;
@@ -126,7 +147,16 @@ export const InFlightTransfers = () => {
           const copy = copyFor(tr, phase);
           const busy = busyId === tr.id;
           return (
-            <YStack key={tr.id} padding={space.rowX} gap={8} borderTopWidth={i ? 1 : 0} borderTopColor={c.divider}>
+            <YStack
+              key={tr.id}
+              padding={space.rowX}
+              gap={8}
+              borderTopWidth={i ? 1 : 0}
+              borderTopColor={c.divider}
+              onPress={() => router.push({ pathname: "/swap-run", params: { transferId: tr.id } })}
+              pressStyle={{ backgroundColor: c.pressTint }}
+              accessibilityRole='button'
+            >
               <XStack alignItems='center' gap={space.rowGap}>
                 <YStack width={32} height={32} borderRadius={16} backgroundColor={c.iconCircle} alignItems='center' justifyContent='center'>
                   <ArrowLeftRight size={16} color={c.ink} strokeWidth={2} />
@@ -144,6 +174,10 @@ export const InFlightTransfers = () => {
                 <XStack gap={8}>
                   <PillButton label={busy ? "Working…" : "Finish"} onPress={() => !busy && void finish(tr)} />
                   <PillButton label='Bring back as USDC' onPress={() => !busy && bringBack(tr)} />
+                </XStack>
+              ) : phase === "halt-receive" ? (
+                <XStack gap={8}>
+                  <PillButton label={busy ? "Working…" : "Finish"} onPress={() => !busy && void finishInbound(tr)} />
                 </XStack>
               ) : null}
             </YStack>

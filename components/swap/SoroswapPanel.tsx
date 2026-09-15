@@ -5,40 +5,30 @@
 // activation → trustline → amount → balance → Soroban fee → quote.
 
 import React from "react";
-import { Alert, Linking } from "react-native";
+import { Alert } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
+import { useRouter } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
-import * as Haptics from "expo-haptics";
 import { Input, XStack, YStack } from "tamagui";
-import { ArrowDownUp, Check } from "lucide-react-native";
+import { ArrowDownUp } from "lucide-react-native";
 
-import { Card, IconBox, Mono, PillButton, PrimaryButton, SecondaryButton, Skeleton, UiText } from "@/components/home/primitives";
+import { Card, IconBox, Mono, PillButton, PrimaryButton, Skeleton, UiText } from "@/components/home/primitives";
 import { ReceiveSheet } from "@/components/home/ReceiveSheet";
-import { StepList, type Step } from "@/components/savings/StepList";
 import { useBackendPortfolio } from "@/hooks/use-backend-portfolio";
 import { useSavingsPosition, useStellarAccountProbe } from "@/hooks/use-savings";
 import { useTurnkeyWallet, walletAddresses } from "@/hooks/use-turnkey-wallet";
 import { refreshAfterStellarAction } from "@/lib/data/after-action";
 import { addUsdcTrustline } from "@/lib/savings/engine";
 import { canPaySorobanFee, maxXlmForSorobanSwap, spendableXlmForOutflow } from "@/lib/stellar/send";
-import {
-  QUOTE_DRIFT_TOLERANCE,
-  QUOTE_MAX_AGE_MS,
-  executeSoroswap,
-  getSwapQuote,
-  type SwapQuote,
-  type SwapStage,
-  type SwapSymbol
-} from "@/lib/swap/soroswap";
+import { QUOTE_DRIFT_TOLERANCE, QUOTE_MAX_AGE_MS, getSwapQuote, type SwapQuote, type SwapSymbol } from "@/lib/swap/soroswap";
+import { setPendingRun } from "@/lib/swap/run-store";
 import { useColors } from "@/lib/theme/appearance";
 import { radius, space, tracking } from "@/lib/theme/tokens";
 import { describeTurnkeyError, isUserCancelledError } from "@/lib/turnkey/client";
 import { ensureDeviceReady } from "@/lib/turnkey/device-check";
 import { useDeviceReady } from "@/lib/turnkey/device-ready";
-import { fCurrency, fNumber, shortenAddress } from "@/lib/utils/number-format.utils";
+import { fCurrency, fNumber } from "@/lib/utils/number-format.utils";
 import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
-
-type UiStage = SwapStage | "refetch" | "done" | null;
 
 const truncate7 = (v: number) => (Math.floor(v * 1e7) / 1e7).toFixed(7).replace(/\.?0+$/, "");
 // Web allows dust swaps where the Soroban fee dwarfs the trade; a small floor.
@@ -56,6 +46,7 @@ export interface SwapPanelProps {
 export function SoroswapPanel({ from, to, amount, setAmount, fromPill, toPill, onFlip }: SwapPanelProps & { from: SwapSymbol; to: SwapSymbol }) {
   const c = useColors();
   const isFocused = useIsFocused();
+  const router = useRouter();
   const queryClient = useQueryClient();
   const { user } = useSupabaseAuth();
   const { wallet } = useTurnkeyWallet();
@@ -67,14 +58,10 @@ export function SoroswapPanel({ from, to, amount, setAmount, fromPill, toPill, o
   const [quote, setQuote] = React.useState<SwapQuote | null>(null);
   const [quoteError, setQuoteError] = React.useState<string | null>(null);
   const [quoting, setQuoting] = React.useState(false);
-  const [stage, setStage] = React.useState<UiStage>(null);
-  const [embedded, setEmbedded] = React.useState(false);
-  const [doneHash, setDoneHash] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [receiveOpen, setReceiveOpen] = React.useState(false);
   const [addingTrustline, setAddingTrustline] = React.useState(false);
   const [priceMoved, setPriceMoved] = React.useState(false);
-  const [degradedAfterSign, setDegradedAfterSign] = React.useState(false);
 
   // Account state (Horizon): activation, trustline, XLM for the Soroban fee.
   // Watched only while a gate is open and this tab is on screen.
@@ -177,21 +164,13 @@ export function SoroswapPanel({ from, to, amount, setAmount, fromPill, toPill, o
     }
   };
 
-  const tick = (s: UiStage) => {
-    setStage(s);
-    if (s && s !== "degraded") void Haptics.selectionAsync().catch(() => undefined);
-  };
-
+  // Hand the run to the swap-run page (all steps up front, explicit Start).
   const run = async () => {
     if (!quote || !wallet?.subOrgId || !address) return;
     setBusy(true);
-    setDoneHash(null);
     setPriceMoved(false);
-    setDegradedAfterSign(false);
     try {
-      // A quote older than 45s is re-fetched; if the price moved >1% against
-      // the user, show the new number and ask for a second press (web's LI.FI
-      // engine does this; its Soroswap path signs a rebuilt quote unchecked).
+      // A quote older than 45s is re-fetched; a >1% worse price needs a second press.
       let live = quote;
       if (Date.now() - quote.fetchedAt > QUOTE_MAX_AGE_MS) {
         live = await getSwapQuote(from, to, amountNum);
@@ -201,64 +180,14 @@ export function SoroswapPanel({ from, to, amount, setAmount, fromPill, toPill, o
           return;
         }
       }
-      setEmbedded(live.embedded);
-      if (!(await gate())) return;
-      let signedOnce = false;
-      const hash = await executeSoroswap({
-        quote: live,
-        subOrgId: wallet.subOrgId,
-        address,
-        onStage: (s) => {
-          if (s === "sign-swap") signedOnce = true;
-          if (s === "degraded") {
-            setEmbedded(false);
-            // The server refused the one-signature build AFTER a signature:
-            // that signature is discarded; two more confirmations follow.
-            if (signedOnce) setDegradedAfterSign(true);
-          }
-          if (s === "sign-fee") setEmbedded(false);
-          tick(s);
-        }
-      });
-      // Feed row exists already (written before broadcast); balances are
-      // gated: Done only after the portfolio converged on BOTH sides of the
-      // pair (refresh=1 loop), capped at 15s (web #62/#66).
-      tick("refetch");
-      await Promise.race([
-        refreshAfterStellarAction(queryClient, { userId: user?.id, stellarAddress: address, expectMove: [from, to] }),
-        new Promise((r) => setTimeout(r, 15_000))
-      ]);
-      setDoneHash(hash);
-      tick("done");
+      const runId = setPendingRun({ kind: "soroswap", from, to, quote: live, amount: amountNum.toString() });
       setAmount("");
       setQuote(null);
-    } catch (e) {
-      setStage(null);
-      if (isUserCancelledError(e)) Alert.alert("Cancelled", "Nothing was submitted and nothing was charged.");
-      else Alert.alert("Swap failed", e instanceof Error ? e.message : describeTurnkeyError(e));
+      router.push({ pathname: "/swap-run", params: { runId } });
     } finally {
       setBusy(false);
     }
   };
-
-  const twoSignatures = quote ? !quote.embedded || !embedded : false;
-  const steps: Step[] = [
-    { id: "build", label: "Preparing the swap", sub: "Building your transaction" },
-    {
-      id: "sign",
-      label: "Confirm with passkey",
-      sub: degradedAfterSign
-        ? "The one-signature route was refused — two more confirmations: the swap, then the fee"
-        : stage === "sign-fee"
-          ? "Now the Normal fee · 2 of 2"
-          : twoSignatures
-            ? "Two confirmations: the swap, then the Normal fee"
-            : "One confirmation — the fee is inside the swap"
-    },
-    { id: "submit", label: "Submitting to Stellar", sub: "Broadcasting — usually a few seconds" },
-    { id: "refetch", label: "Updating balances", sub: "Waiting until your wallet shows the result" }
-  ];
-  const activeId = stage === "sign-swap" || stage === "sign-fee" ? "sign" : stage === "degraded" ? "build" : stage === "done" ? null : stage;
 
   // Button (web order).
   let button: { label: string; onPress?: () => void; disabled?: boolean; loading?: boolean };
@@ -270,7 +199,7 @@ export function SoroswapPanel({ from, to, amount, setAmount, fromPill, toPill, o
   else if (cannotPayFee) button = { label: "Receive XLM for the network fee", onPress: () => setReceiveOpen(true) };
   else if (tooSmall) button = { label: `Minimum swap is about $${MIN_SWAP_USD}`, disabled: true };
   else if (priceMoved) button = { label: "Price moved — press to continue", onPress: run };
-  else if (busy) button = { label: (steps.find((s) => s.id === activeId)?.label ?? "Swapping") + "…", loading: true };
+  else if (busy) button = { label: "Checking the price…", loading: true };
   else if (quoting || !quote) button = { label: quoteError ? "Quote unavailable" : "Fetching quote…", disabled: true };
   else button = { label: "Swap with passkey", onPress: run };
 
@@ -286,33 +215,6 @@ export function SoroswapPanel({ from, to, amount, setAmount, fromPill, toPill, o
       </XStack>
     </YStack>
   );
-
-  if (stage === "done" && doneHash) {
-    return (
-      <>
-          <YStack gap={16}>
-            <YStack alignItems='center' gap={10} paddingTop={24}>
-              <IconBox size={56}><Check size={28} color={c.positive} strokeWidth={2} /></IconBox>
-              <UiText fontSize={16} fontWeight='500'>Swapped</UiText>
-              <UiText fontSize={13} color={c.muted}>{from} → {to}</UiText>
-            </YStack>
-            <Card padding={14}>
-              <StepList title='Swap complete' timing='' steps={[...steps, { id: "done", label: "Done", sub: `${to} received` }]} activeId={null} allDone />
-            </Card>
-            <Card paddingTop={4} paddingHorizontal={4} paddingBottom={4}>
-              <XStack paddingHorizontal={space.rowX} paddingVertical={space.rowY} justifyContent='space-between' alignItems='center'>
-                <UiText fontSize={13.5} color={c.muted}>Transaction</UiText>
-                <Mono fontSize={12}>{shortenAddress(doneHash, 8, 8)}</Mono>
-              </XStack>
-            </Card>
-            <YStack gap={8}>
-              <PrimaryButton label='Swap again' onPress={() => { setStage(null); setDoneHash(null); }} />
-              <SecondaryButton label='View on stellar.expert' onPress={() => Linking.openURL(`https://stellar.expert/explorer/public/tx/${doneHash}`)} />
-            </YStack>
-          </YStack>
-      </>
-    );
-  }
 
   return (
     <>
@@ -405,12 +307,6 @@ export function SoroswapPanel({ from, to, amount, setAmount, fromPill, toPill, o
             </YStack>
           </Card>
 
-          <Card padding={14} gap={12}>
-            <StepList title='What happens when you swap' timing='~30s' steps={steps} activeId={activeId} />
-            <UiText fontSize={12} color={c.muted} lineHeight={17}>
-              Runs on Stellar via Soroswap. Nothing is sent until every confirmation is done — cancelling a prompt charges nothing.
-            </UiText>
-          </Card>
         </YStack>
 
       <ReceiveSheet open={receiveOpen} addresses={walletAddresses(wallet)} initialChain='stellar' onClose={() => setReceiveOpen(false)} />

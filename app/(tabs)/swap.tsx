@@ -14,6 +14,7 @@ import { ChevronDown } from "lucide-react-native";
 import { Card, PrimaryButton, Screen, ScreenTitle, UiText } from "@/components/home/primitives";
 import { AssetIcon } from "@/components/ui/AssetIcon";
 import { AssetPicker } from "@/components/swap/AssetPicker";
+import { CctpInboundPanel } from "@/components/swap/CctpInboundPanel";
 import { CctpOutboundPanel } from "@/components/swap/CctpOutboundPanel";
 import { InFlightTransfers } from "@/components/swap/InFlightTransfers";
 import { SoroswapPanel } from "@/components/swap/SoroswapPanel";
@@ -83,6 +84,8 @@ export default function SwapScreen() {
               <SoroswapPanel from={from as StellarSymbol} to={to as StellarSymbol} amount={amount} setAmount={setAmount} fromPill={pill(from, "from")} toPill={pill(to, "to")} onFlip={flip} />
             ) : route === "cctp-out" ? (
               <CctpOutboundPanel to={to as CrosschainSymbol} amount={amount} setAmount={setAmount} fromPill={pill(from, "from")} toPill={pill(to, "to")} />
+            ) : route === "cctp-in" ? (
+              <CctpInboundPanel from={from as CrosschainSymbol} amount={amount} setAmount={setAmount} fromPill={pill(from, "from")} toPill={pill(to, "to")} />
             ) : (
               <Card padding={12} gap={12}>
                 <YStack backgroundColor={c.inputBg} borderRadius={radius.input} padding={14} gap={10}>
@@ -95,11 +98,9 @@ export default function SwapScreen() {
                 </YStack>
                 <YStack padding={12} borderRadius={radius.input} backgroundColor={c.chips.blue.bg}>
                   <UiText fontSize={13} color={c.ink2} lineHeight={19}>
-                    {route === "cctp-in"
-                      ? `${from} → USDC arrives on mobile soon (the cross-chain route into Stellar). For now: receive USDC directly, or swap ${from} on the web app.`
-                      : route === "lifi"
-                        ? `${from} → ${to} arrives on mobile soon (LI.FI cross-chain). Available on the web app today.`
-                        : "That pair isn’t available. Pick another asset."}
+                    {route === "lifi"
+                      ? `${from} → ${to} arrives on mobile soon (LI.FI cross-chain). Available on the web app today.`
+                      : "That pair isn’t available. Pick another asset."}
                   </UiText>
                 </YStack>
                 <PrimaryButton label='Not available yet' disabled />

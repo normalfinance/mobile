@@ -21,6 +21,7 @@
 // Never move an address's WHOLE balance: scopedAmountWire (2026-08-26).
 
 import { ApiError, apiFetch } from "@/lib/api";
+import { executeLifiSwap, lifiSourceVerdict, type LifiQuote } from "@/lib/lifi/execute";
 import { PivotRevertError, executePivotSwap, pollPivotDelivery, readBaseEth, readBaseUsdc } from "./base";
 import { burnUsdcOnBase } from "./burn-evm";
 import { StellarSubmitError, burnUsdcOnStellar } from "./burn-stellar";
@@ -461,6 +462,175 @@ export const refundOutbound = async (p: {
   await patchTransfer(newId, { burnTxHash, dstAmount: wireToUsdc(refundWire) });
   await patchTransfer(tr.id, { markRefunded: "true" });
   return { newId, burnTxHash };
+};
+
+// ---------------------------------------------------------------------------
+// INBOUND (BTC/ETH/SOL → USDC on Stellar) — port of web runInbound:
+//   1. row (record before broadcast)                              0 sigs
+//   2. LI.FI source swap: native → USDC at the user's OWN Base addr 1 sig
+//      → PATCH { srcSwapTxHash }
+//   3. arrival watch: Base USDC ≥ baseline + 95% of toAmountMin; every 3rd
+//      poll asks LI.FI for a refund/fail verdict (calm ending); 45-min cap
+//   4. burn on Base → Stellar: autopilot (0 sigs) else top-up + passkey (1–2)
+//      mintRecipient = CctpForwarder, real recipient in hookData (hard rule 10)
+//   5. poll to COMPLETED (Base finality ~20 min; relayer mints on Stellar)
+// ---------------------------------------------------------------------------
+
+export type InboundStage = "lifi" | "arriving" | "topup" | "burn" | "bridging" | "done";
+
+/** A quiet truth, not an alarm: the source leg refunded or reverted, nothing bridged. */
+export class CalmEndError extends Error {
+  __calmEnd = true;
+}
+
+const tryAutopilotBurn = async (id: string): Promise<string | null> => {
+  try {
+    const d = await apiFetch<{ success?: boolean; burnTxHash?: string }>("/api/cctp/autopilot/burn", { body: { transferId: id } });
+    return d?.success && d.burnTxHash ? d.burnTxHash : null;
+  } catch {
+    return null;
+  }
+};
+
+export interface InboundParams {
+  subOrgId: string;
+  stellarAddress: string;
+  evmAddress: string;
+  fromSymbol: CrosschainSymbol;
+  addresses: { ethereumAddress: string | null; solanaAddress: string | null; bitcoinAddress: string | null };
+  quote: LifiQuote;
+  /** Human source amount, for the activity feed. */
+  amount: string;
+  feePercent: number;
+  onStage?: (s: InboundStage) => void;
+  isCancelled?: () => boolean;
+  autopilotHint?: boolean | (() => boolean);
+  /** Autopilot was expected but could not sign — say it before the prompt (web). */
+  onAutopilotFallback?: () => void;
+}
+
+export const runInboundSwap = async (p: InboundParams): Promise<{ transferId: string; srcSwapTxHash: string; burnTxHash: string; dstAmount: string; usedAutopilot: boolean }> => {
+  const isCancelled = p.isCancelled ?? (() => false);
+  const target = BigInt(p.quote.estimate.toAmountMin); // USDC that will reach Base
+  const created = await apiFetch<{ id?: string; error?: string }>("/api/cctp/transfers", {
+    body: {
+      direction: "crosschain_to_stellar",
+      sourceDomain: CCTP_DOMAIN.base,
+      destDomain: CCTP_DOMAIN.stellar,
+      amountWire: target.toString(),
+      srcAsset: p.fromSymbol,
+      dstAsset: "USDC",
+      srcAmount: p.amount,
+      srcAddress: p.evmAddress, // the gas top-up must reach the EVM burn address
+      destAddress: p.stellarAddress,
+      quoteJson: { feePercent: p.feePercent, lifiTool: p.quote.tool ?? null, fundedFrom: "normal" }
+    }
+  });
+  if (!created?.id) throw new Error(created?.error ?? "Could not start the swap");
+  const transferId = created.id;
+  let stage: InboundStage = "lifi";
+  let broadcastStarted = false;
+  const setStage = (s: InboundStage) => {
+    stage = s;
+    p.onStage?.(s);
+  };
+  const fail = (e: unknown, opts?: { optionsExhausted?: boolean }) =>
+    new OutboundError(e instanceof Error ? e.message : String(e), { transferId, stage: stage as unknown as OutboundStage, broadcastStarted, ...opts });
+
+  try {
+    const baseline = await readBaseUsdc(p.evmAddress);
+    setStage("lifi");
+    const srcSwapTxHash = await executeLifiSwap(p.quote, p.addresses, p.subOrgId);
+    broadcastStarted = true;
+    await patchTransfer(transferId, { srcSwapTxHash });
+
+    setStage("arriving");
+    const started = Date.now();
+    let arrivedWire = 0n;
+    for (let poll = 1; ; poll += 1) {
+      if (isCancelled()) throw new Error("cancelled");
+      let bal = baseline;
+      try {
+        bal = await readBaseUsdc(p.evmAddress);
+      } catch {
+        /* transient RPC hiccup */
+      }
+      if (bal >= baseline + (target * 95n) / 100n) {
+        arrivedWire = scopedAmountWire(bal - baseline, target); // own share + slippage headroom, never more
+        break;
+      }
+      if (poll % 3 === 0) {
+        const verdict = await lifiSourceVerdict(srcSwapTxHash, p.quote.action.fromChainId, p.quote.action.toChainId);
+        if (verdict === "REFUNDED" || verdict === "FAILED") {
+          await patchTransfer(transferId, { markSourceRefunded: true }).catch(() => null); // server re-verifies against LI.FI
+          throw new CalmEndError(
+            verdict === "REFUNDED"
+              ? `The bridge could not complete and returned your ${p.fromSymbol} — it is back in your wallet. Nothing was lost; you can simply start a new swap.`
+              : `The exchange rejected this swap on-chain — the transaction reverted, which usually means the price moved past its protection. Your ${p.fromSymbol} never left your wallet; only the small network fee was spent. Get a fresh quote and swap again whenever you like.`
+          );
+        }
+      }
+      if (Date.now() - started > 45 * 60_000) {
+        throw new Error("The bridge is taking unusually long — your funds are safe at your own addresses. Finish or track this transfer under In flight.");
+      }
+      await new Promise((r) => setTimeout(r, 10_000));
+    }
+
+    setStage("topup");
+    const hinted = typeof p.autopilotHint === "function" ? p.autopilotHint() : !!p.autopilotHint;
+    let burnTxHash: string | null = null;
+    let usedAutopilot = false;
+    const gateOn = hinted || (await autopilotActive());
+    if (gateOn) {
+      burnTxHash = await tryAutopilotBurn(transferId); // server patches burnTxHash + BURN_SUBMITTED
+      usedAutopilot = !!burnTxHash;
+    }
+    if (!burnTxHash) {
+      if (gateOn) p.onAutopilotFallback?.();
+      await topUp(transferId, p.evmAddress);
+      setStage("burn");
+      const r = await burnUsdcOnBase({ subOrgId: p.subOrgId, evmAddress: p.evmAddress, amountWire: arrivedWire, stellarRecipient: p.stellarAddress });
+      burnTxHash = r.burnTxHash;
+      await patchTransfer(transferId, { burnTxHash });
+    } else {
+      setStage("burn");
+    }
+
+    setStage("bridging");
+    await pollStatus(transferId, "COMPLETED", 15_000, isCancelled);
+    const dstAmount = wireToUsdc(arrivedWire);
+    await patchTransfer(transferId, { dstAmount });
+    setStage("done");
+    return { transferId, srcSwapTxHash, burnTxHash, dstAmount, usedAutopilot };
+  } catch (e) {
+    if (e instanceof CalmEndError) throw e;
+    if (!broadcastStarted) await patchTransfer(transferId, { markFailed: true }).catch(() => null);
+    if (e instanceof OutboundError) throw e;
+    throw fail(e);
+  }
+};
+
+/** In-flight recovery for an inbound row halted at 'halt-receive' (USDC on
+ *  Base, burn pending) — web banner recover(). */
+export const recoverInbound = async (p: { subOrgId: string; row: CctpTransfer; onStage?: (s: "topup" | "burn") => void }): Promise<"burned" | "not-arrived" | "retired"> => {
+  const tr = p.row;
+  p.onStage?.("topup");
+  await topUp(tr.id, tr.srcAddress);
+  const bal = await readBaseUsdc(tr.srcAddress);
+  if (bal === 0n) {
+    // Nothing on Base: still in flight, or a ghost — ask the server to re-verify against LI.FI.
+    const row = await patchTransfer(tr.id, { markSourceRefunded: true }).catch(() => null);
+    return row?.status === "FAILED" ? "retired" : "not-arrived";
+  }
+  const burnWire = scopedAmountWire(bal, BigInt(tr.amountWire));
+  p.onStage?.("burn");
+  if (await autopilotActive()) {
+    const h = await tryAutopilotBurn(tr.id);
+    if (h) return "burned";
+  }
+  const { burnTxHash } = await burnUsdcOnBase({ subOrgId: p.subOrgId, evmAddress: tr.srcAddress, amountWire: burnWire, stellarRecipient: tr.destAddress });
+  await patchTransfer(tr.id, { burnTxHash, dstAmount: wireToUsdc(burnWire) });
+  return "burned";
 };
 
 export { bannerPhase };

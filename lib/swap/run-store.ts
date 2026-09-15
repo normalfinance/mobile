@@ -1,0 +1,88 @@
+// The swap RUN lives outside any screen (web doc 93 0c, agreed with Niko
+// 2026-08-27: "every swap runs on a PAGE, not a popup" — all steps shown up
+// front, an explicit Start button, and a run that survives navigation). The
+// card hands a spec to this store, app/swap-run.tsx starts it and renders
+// progress from here; the In-flight card reopens a run by its transfer id.
+
+import React from "react";
+
+import type { CrosschainSymbol } from "@/lib/cctp/config";
+import type { LifiQuote } from "@/lib/lifi/execute";
+import type { SwapQuote } from "@/lib/swap/soroswap";
+import type { StellarSymbol } from "@/lib/swap/registry";
+
+export type RunSpec =
+  | { kind: "soroswap"; from: StellarSymbol; to: StellarSymbol; quote: SwapQuote; amount: string }
+  | { kind: "cctp-out"; from: "USDC"; to: CrosschainSymbol; amount: string; feePercent: number; lifiTool: string | null; toAddress: string; etaMin: number | null; toAmount: number }
+  | { kind: "cctp-in"; from: CrosschainSymbol; to: "USDC"; amount: string; quote: LifiQuote; feePercent: number; etaMin: number | null; usdcOut: number };
+
+export interface RunNotice {
+  text: string;
+  tone: "amber" | "blue";
+  affordable?: string;
+}
+
+export interface RunState {
+  id: string; // local id; equals transferId once known for CCTP
+  spec: RunSpec;
+  status: "idle" | "running" | "done" | "error" | "calm";
+  stage: string | null;
+  /** Soroswap: one or two signatures; CCTP: autopilot on for this run. */
+  flags: { embedded?: boolean; degradedAfterSign?: boolean; autopilot?: boolean; priceMoved?: boolean };
+  transferId?: string;
+  result?: { hash: string; verdict?: string | null; dstAmount?: string };
+  notice?: RunNotice;
+  /** true once money reached a chain — recovery is via In flight, not "try again". */
+  broadcastStarted: boolean;
+  startedAt: number;
+}
+
+let pending: RunSpec | null = null;
+const runs = new Map<string, RunState>();
+const listeners = new Set<() => void>();
+let version = 0;
+const notify = () => {
+  version += 1;
+  listeners.forEach((l) => l());
+};
+
+export const setPendingRun = (spec: RunSpec): string => {
+  pending = spec;
+  const id = `run-${Date.now()}`;
+  runs.set(id, { id, spec, status: "idle", stage: null, flags: {}, broadcastStarted: false, startedAt: Date.now() });
+  notify();
+  return id;
+};
+
+export const getRun = (id: string): RunState | undefined => runs.get(id);
+export const runByTransfer = (transferId: string): RunState | undefined => [...runs.values()].find((r) => r.transferId === transferId);
+
+export const updateRun = (id: string, patch: Partial<RunState> | ((r: RunState) => Partial<RunState>)): void => {
+  const cur = runs.get(id);
+  if (!cur) return;
+  const p = typeof patch === "function" ? patch(cur) : patch;
+  runs.set(id, { ...cur, ...p, flags: { ...cur.flags, ...(p.flags ?? {}) } });
+  notify();
+};
+
+export const clearPendingRun = () => {
+  pending = null;
+};
+export const getPendingRun = () => pending;
+
+const subscribe = (l: () => void) => {
+  listeners.add(l);
+  return () => listeners.delete(l);
+};
+
+export const useRun = (id: string | undefined): RunState | undefined => {
+  const v = React.useSyncExternalStore(subscribe, () => version, () => version);
+  void v;
+  return id ? runs.get(id) : undefined;
+};
+
+export const useRunByTransfer = (transferId: string | undefined): RunState | undefined => {
+  const v = React.useSyncExternalStore(subscribe, () => version, () => version);
+  void v;
+  return transferId ? runByTransfer(transferId) : undefined;
+};
