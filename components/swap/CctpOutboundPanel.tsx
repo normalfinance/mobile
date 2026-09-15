@@ -8,9 +8,10 @@ import React from "react";
 import { Alert } from "react-native";
 import { useRouter } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { Input, XStack, YStack } from "tamagui";
+import { XStack, YStack } from "tamagui";
 
-import { Card, Mono, PillButton, PrimaryButton, Skeleton, UiText } from "@/components/home/primitives";
+import { Card, Mono, PrimaryButton, Skeleton, UiText } from "@/components/home/primitives";
+import { AmountInput } from "@/components/swap/AmountInput";
 import { setPendingRun } from "@/lib/swap/run-store";
 import { useBackendPortfolio } from "@/hooks/use-backend-portfolio";
 import { useStellarAccountProbe } from "@/hooks/use-savings";
@@ -143,19 +144,7 @@ export function CctpOutboundPanel({ to, amount, setAmount, fromPill, toPill }: {
   return (
           <YStack gap={20}>
             <Card padding={12} gap={8}>
-              <YStack backgroundColor={c.inputBg} borderRadius={radius.input} padding={14} gap={10}>
-                <XStack justifyContent='space-between' alignItems='center'>
-                  <UiText fontSize={12} color={c.muted}>You pay</UiText>
-                  <XStack alignItems='center' gap={8}>
-                    <Mono fontSize={11} color={insufficient ? c.failed : c.muted}>{fNumber(usdcBalance, { maximumFractionDigits: 2 })} USDC</Mono>
-                    <PillButton label='Max' onPress={() => setAmount((Math.floor(usdcBalance * 1e6) / 1e6).toString())} />
-                  </XStack>
-                </XStack>
-                <XStack alignItems='center' justifyContent='space-between' gap={10}>
-                  <Input flex={1} unstyled backgroundColor='transparent' borderWidth={0} color={c.ink} placeholderTextColor={c.faint} fontFamily='$mono' fontSize={28} letterSpacing={tracking(28)} placeholder='0.00' keyboardType='decimal-pad' value={amount} onChangeText={setAmount} editable />
-                  {fromPill}
-                </XStack>
-              </YStack>
+              <AmountInput amount={amount} setAmount={setAmount} symbol='USDC' price={price("USDC") || 1} spendable={usdcBalance} decimals={6} balanceDecimals={2} pill={fromPill} insufficient={insufficient} />
 
               <YStack backgroundColor={c.inputBg} borderRadius={radius.input} padding={14} gap={10}>
                 <UiText fontSize={12} color={c.muted}>You receive (minimum)</UiText>
@@ -167,12 +156,12 @@ export function CctpOutboundPanel({ to, amount, setAmount, fromPill, toPill }: {
                   )}
                   {toPill}
                 </XStack>
+                {quote ? <Mono fontSize={11} color={c.faint}>≈ {fCurrency(quote.toAmount * price(to))}</Mono> : null}
               </YStack>
 
               {quote ? (
                 <YStack paddingHorizontal={4} paddingTop={6} gap={6}>
                   <XStack justifyContent='space-between'><UiText fontSize={12} color={c.muted}>Normal fee ({+(quote.feePercent * 100).toFixed(2)}%)</UiText><Mono fontSize={12}>−{(amount6 * quote.feePercent).toFixed(4)} USDC</Mono></XStack>
-                  <XStack justifyContent='space-between'><UiText fontSize={12} color={c.muted}>Value</UiText><Mono fontSize={12}>{fCurrency(quote.toAmount * price(to))}</Mono></XStack>
                   <XStack justifyContent='space-between'><UiText fontSize={12} color={c.muted}>Estimated time</UiText><Mono fontSize={12}>~{quote.etaMin} min</Mono></XStack>
                 </YStack>
               ) : quoteError && amountOk && !tooSmall ? (

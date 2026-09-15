@@ -7,9 +7,10 @@ import React from "react";
 import { Alert } from "react-native";
 import { useRouter } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { Input, XStack, YStack } from "tamagui";
+import { XStack, YStack } from "tamagui";
 
 import { Card, Mono, PillButton, PrimaryButton, Skeleton, UiText } from "@/components/home/primitives";
+import { AmountInput } from "@/components/swap/AmountInput";
 import { setPendingRun } from "@/lib/swap/run-store";
 import { useBackendPortfolio } from "@/hooks/use-backend-portfolio";
 import { useStellarAccountProbe } from "@/hooks/use-savings";
@@ -34,13 +35,6 @@ const ADDRESS_OF: Record<WalletChain, "stellarAddress" | "bitcoinAddress" | "eth
   bitcoin: "bitcoinAddress",
   ethereum: "ethereumAddress",
   solana: "solanaAddress"
-};
-
-// MAX must round DOWN (web: toFixed(min(decimals, 8), ROUND_DOWN)) — toFixed
-// rounds to nearest, so a max that landed above spendable read "insufficient".
-const floorTo = (v: number, decimals: number): string => {
-  const f = 10 ** decimals;
-  return (Math.floor(v * f) / f).toFixed(decimals).replace(/\.?0+$/, "") || "0";
 };
 
 const toBaseUnits = (amount: number, decimals: number): string => {
@@ -189,22 +183,7 @@ export function CctpInboundPanel({ from, amount, setAmount, fromPill, toPill }: 
   return (
     <YStack gap={20}>
       <Card padding={12} gap={8}>
-        <YStack backgroundColor={c.inputBg} borderRadius={radius.input} padding={14} gap={10}>
-          <XStack justifyContent='space-between' alignItems='center'>
-            <UiText fontSize={12} color={c.muted}>You pay</UiText>
-            <XStack alignItems='center' gap={8}>
-              <Mono fontSize={11} color={insufficient ? c.failed : c.muted}>{fNumber(spendable, { maximumFractionDigits: from === "ETH" ? 5 : from === "BTC" ? 8 : 4 })} {from}</Mono>
-              <PillButton label='Max' onPress={() => setAmount(floorTo(spendable, Math.min(NATIVE_DECIMALS[from], 8)))} />
-            </XStack>
-          </XStack>
-          <XStack alignItems='center' justifyContent='space-between' gap={10}>
-            <Input flex={1} unstyled backgroundColor='transparent' borderWidth={0} color={c.ink} placeholderTextColor={c.faint} fontFamily='$mono' fontSize={28} letterSpacing={tracking(28)} placeholder='0.00' keyboardType='decimal-pad' value={amount} onChangeText={setAmount} editable={!busy} />
-            {fromPill}
-          </XStack>
-          {balance > 0 ? (
-            <UiText fontSize={11} color={c.faint} fontFamily='$mono'>Keeps {fNumber(reserve, { maximumFractionDigits: from === "BTC" ? 8 : 5 })} {from} for network fees</UiText>
-          ) : null}
-        </YStack>
+        <AmountInput amount={amount} setAmount={setAmount} symbol={from} price={price} spendable={spendable} decimals={NATIVE_DECIMALS[from]} balanceDecimals={from === "ETH" ? 5 : from === "BTC" ? 8 : 4} pill={fromPill} editable={!busy} insufficient={insufficient} note={balance > 0 ? `Keeps ${fNumber(reserve, { maximumFractionDigits: from === "BTC" ? 8 : 5 })} ${from} for fees` : null} />
         <YStack backgroundColor={c.inputBg} borderRadius={radius.input} padding={14} gap={10}>
           <UiText fontSize={12} color={c.muted}>You receive (minimum)</UiText>
           <XStack alignItems='center' justifyContent='space-between' gap={10}>
@@ -215,6 +194,7 @@ export function CctpInboundPanel({ from, amount, setAmount, fromPill, toPill }: 
             )}
             {toPill}
           </XStack>
+          {usdcOut !== null ? <Mono fontSize={11} color={c.faint}>≈ {fCurrency(usdcOut)}</Mono> : null}
         </YStack>
 
         {quote ? (

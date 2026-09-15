@@ -17,11 +17,12 @@ import { Card, Divider, IconBox, IconButton, Mono, PillButton, PrimaryButton, Sc
 import { StepList } from "@/components/savings/StepList";
 import { AutopilotSheet } from "@/components/swap/AutopilotSheet";
 import { inFlightQueryKey } from "@/components/swap/InFlightTransfers";
+import { useBackendPortfolio } from "@/hooks/use-backend-portfolio";
 import { useTurnkeyWallet } from "@/hooks/use-turnkey-wallet";
 import { NATIVE_CHAIN, type CrosschainSymbol } from "@/lib/cctp/config";
 import { bannerPhase, fetchCctpTransfer, quoteSnapshot, recoverInbound, recoverOutbound, refundOutbound, type CctpTransfer } from "@/lib/cctp/engine";
 import { refreshAfterStellarAction } from "@/lib/data/after-action";
-import { useRun, useRunByTransfer, updateRun } from "@/lib/swap/run-store";
+import { useRun, useRunByTransfer, updateRun, type RunSpec } from "@/lib/swap/run-store";
 import { startRun } from "@/lib/swap/runner";
 import { activeStepFor, explorerFor, stepsFor, timingFor } from "@/lib/swap/steps";
 import { useColors } from "@/lib/theme/appearance";
@@ -30,7 +31,7 @@ import { autopilotAvailable, fetchAutopilotStatus, grantAutopilotConsent } from 
 import { describeTurnkeyError, isUserCancelledError } from "@/lib/turnkey/client";
 import { ensureDeviceReady } from "@/lib/turnkey/device-check";
 import { useDeviceReady } from "@/lib/turnkey/device-ready";
-import { fNumber } from "@/lib/utils/number-format.utils";
+import { fCurrency, fNumber } from "@/lib/utils/number-format.utils";
 import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
 
 const ADDRESS_OF: Record<CrosschainSymbol, "bitcoinAddress" | "ethereumAddress" | "solanaAddress"> = { BTC: "bitcoinAddress", ETH: "ethereumAddress", SOL: "solanaAddress" };
@@ -56,6 +57,65 @@ const rowView = (tr: CctpTransfer) => {
   return { outbound, phase, terminal, finished, stage };
 };
 
+/**
+ * What the user is agreeing to — every number the quote carries, in one list
+ * (web swap-card details rows). USD via the portfolio's spot prices.
+ */
+const detailsFor = (spec: RunSpec, priceOf: (sym: string) => number): { label: string; value: string; tone?: "amber" }[] => {
+  const rows: { label: string; value: string; tone?: "amber" }[] = [];
+  const amountIn = parseFloat(spec.amount) || 0;
+  const inUsd = amountIn * priceOf(spec.from);
+  const rate = (out: number) => (amountIn > 0 && out > 0 ? `1 ${spec.from} ≈ ${fNumber(out / amountIn, { maximumFractionDigits: 6 })} ${spec.to}` : null);
+  const gasRows = (gasCosts?: { amountUSD?: string }[]) => {
+    const gasUsd = (gasCosts ?? []).reduce((sum, g) => sum + (parseFloat(g.amountUSD ?? "0") || 0), 0);
+    if (gasUsd <= 0) return;
+    const share = inUsd > 0 ? gasUsd / inUsd : 0;
+    rows.push({ label: "Network gas", value: `≈ ${fCurrency(gasUsd)}${inUsd > 0 ? ` (${Math.round(share * 100)}%)` : ""}`, tone: share > 0.2 ? "amber" : undefined });
+  };
+  const feeRow = (feePercent: number, feeToken: number, sym: string) => {
+    if (feePercent <= 0 || feeToken <= 0) return;
+    const usd = feeToken * priceOf(sym);
+    rows.push({ label: `Normal fee (${+(feePercent * 100).toFixed(2)}%)`, value: `−${fNumber(feeToken, { maximumFractionDigits: 6 })} ${sym}${usd > 0 ? ` (${fCurrency(usd)})` : ""}` });
+  };
+  if (spec.kind === "soroswap") {
+    const out = parseFloat(spec.quote.amountOut) || 0;
+    const fee = parseFloat(spec.quote.fee) || 0;
+    const r = rate(out);
+    if (r) rows.push({ label: "Rate", value: r });
+    rows.push({ label: "Minimum received (1% slippage)", value: `${fNumber(parseFloat(spec.quote.minAmountOut) || 0, { maximumFractionDigits: 4 })} ${spec.to}` });
+    feeRow(0.005, fee, spec.from);
+    rows.push({ label: "Route", value: "Soroswap on Stellar" });
+    rows.push({ label: "Estimated time", value: "~30 s" });
+  } else if (spec.kind === "cctp-out") {
+    const r = rate(spec.toAmount);
+    if (r) rows.push({ label: "Rate", value: r });
+    rows.push({ label: "Minimum received", value: `${fNumber(spec.toAmount, { maximumFractionDigits: 6 })} ${spec.to}` });
+    feeRow(spec.feePercent, amountIn * spec.feePercent, "USDC");
+    rows.push({ label: "Bridge (Circle CCTP)", value: "Free" });
+    rows.push({ label: "Route", value: `Stellar → Base${spec.lifiTool ? ` → ${spec.lifiTool}` : ""}` });
+    if (spec.etaMin) rows.push({ label: "Estimated time", value: `~${spec.etaMin} min` });
+  } else if (spec.kind === "cctp-in") {
+    const r = rate(spec.usdcOut);
+    if (r) rows.push({ label: "Rate", value: r });
+    gasRows(spec.quote.estimate.gasCosts);
+    rows.push({ label: "Minimum received", value: `${fNumber(spec.usdcOut, { maximumFractionDigits: 2 })} USDC` });
+    feeRow(spec.feePercent, amountIn * spec.feePercent, spec.from);
+    rows.push({ label: "Bridge (Circle CCTP)", value: "Free" });
+    rows.push({ label: "Route", value: `${spec.quote.tool ? `${spec.quote.tool} → ` : ""}Base → Stellar` });
+    if (spec.etaMin) rows.push({ label: "Estimated time", value: `~${spec.etaMin} min` });
+  } else {
+    const r = rate(spec.toAmount);
+    if (r) rows.push({ label: "Rate", value: r });
+    gasRows(spec.quote.estimate.gasCosts);
+    const dec = spec.to === "BTC" ? 8 : spec.to === "ETH" ? 6 : 4;
+    rows.push({ label: "Minimum received", value: `${fNumber(Number(spec.quote.estimate.toAmountMin) / 10 ** (spec.to === "BTC" ? 8 : spec.to === "ETH" ? 18 : 9), { maximumFractionDigits: dec })} ${spec.to}` });
+    feeRow(spec.feePercent, amountIn * spec.feePercent, spec.from);
+    if (spec.tool) rows.push({ label: "Route", value: spec.tool });
+    if (spec.etaMin) rows.push({ label: "Estimated time", value: `~${spec.etaMin} min` });
+  }
+  return rows;
+};
+
 export default function SwapRunScreen() {
   const c = useColors();
   const router = useRouter();
@@ -64,6 +124,13 @@ export default function SwapRunScreen() {
   const { user } = useSupabaseAuth();
   const { wallet } = useTurnkeyWallet();
   const { ready: deviceReady } = useDeviceReady(wallet?.subOrgId);
+  const { portfolioData } = useBackendPortfolio();
+  const priceOf = (sym: string) => (sym === "USDC" ? portfolioData.assets.find((a) => a.asset_code === "USDC")?.usdPrice || 1 : portfolioData.assets.find((a) => a.asset_code === sym)?.usdPrice ?? 0);
+  const usdOf = (amount: string | number, sym: string): string | null => {
+    const n = typeof amount === "number" ? amount : parseFloat(amount) || 0;
+    const p = priceOf(sym);
+    return n > 0 && p > 0 ? `≈ ${fCurrency(n * p)}` : null;
+  };
 
   const runById = useRun(params.runId);
   const runByTransfer = useRunByTransfer(params.transferId);
@@ -217,7 +284,10 @@ export default function SwapRunScreen() {
 
   // Title is the pair; amounts live in the card as two stacked rows — one
   // asset per row, real asset icons, no arrows (Niko 2026-09-16).
-  const header = (from: string, to: string, pay: string, receive: string | null) => (
+  const header = (from: string, to: string, pay: string, receive: string | null) => {
+    const payUsd = usdOf(pay, from);
+    const receiveUsd = receive ? usdOf(receive.replace(/^[≥≈]\s*/, "").replace(/,/g, ""), to) : null;
+    return (
     <YStack gap={12}>
       <XStack alignItems='center' gap={4}>
         <IconButton onPress={() => router.back()} label='Back'><ChevronLeft size={22} color={c.ink} strokeWidth={2} /></IconButton>
@@ -230,6 +300,7 @@ export default function SwapRunScreen() {
             <UiText fontSize={12} color={c.muted}>You pay</UiText>
             <Mono fontSize={16}>{pay} {from}</Mono>
           </YStack>
+          {payUsd ? <Mono fontSize={13} color={c.muted}>{payUsd}</Mono> : null}
         </XStack>
         <Divider />
         <XStack alignItems='center' gap={12} paddingHorizontal={space.rowX} paddingVertical={space.rowY}>
@@ -238,10 +309,28 @@ export default function SwapRunScreen() {
             <UiText fontSize={12} color={c.muted}>You receive{receive?.startsWith("≥") ? " (minimum)" : ""}</UiText>
             {receive ? <Mono fontSize={16}>{receive.replace(/^[≥≈]\s*/, "")} {to}</Mono> : <UiText fontSize={14} color={c.muted}>{to} · amount shown on delivery</UiText>}
           </YStack>
+          {receiveUsd ? <Mono fontSize={13} color={c.muted}>{receiveUsd}</Mono> : null}
         </XStack>
       </Card>
     </YStack>
-  );
+    );
+  };
+
+  const detailsCard = (spec: RunSpec) => {
+    const rows = detailsFor(spec, priceOf);
+    if (!rows.length) return null;
+    return (
+      <Card padding={14} gap={8}>
+        <UiText fontSize={11} fontWeight='700' letterSpacing={1.4} color={c.faint}>DETAILS</UiText>
+        {rows.map((r) => (
+          <XStack key={r.label} justifyContent='space-between' alignItems='center' gap={12}>
+            <UiText fontSize={12} color={c.muted}>{r.label}</UiText>
+            <Mono fontSize={12} color={r.tone === "amber" ? c.chips.amber.color : c.ink} textAlign='right' flexShrink={1}>{r.value}</Mono>
+          </XStack>
+        ))}
+      </Card>
+    );
+  };
 
   // ---- render: live run ------------------------------------------------------
   if (run) {
@@ -260,6 +349,7 @@ export default function SwapRunScreen() {
         <ScrollView contentContainerStyle={{ paddingBottom: 48 }}>
           <YStack paddingHorizontal={space.gutter} paddingTop={56} gap={20}>
             {header(spec.from, spec.to, spec.amount, receiveText)}
+            {!done ? detailsCard(spec) : null}
 
             {done ? (
               <YStack alignItems='center' gap={10} paddingTop={8}>

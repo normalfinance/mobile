@@ -7,10 +7,11 @@ import React from "react";
 import { Alert } from "react-native";
 import { useRouter } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { Input, XStack, YStack } from "tamagui";
+import { XStack, YStack } from "tamagui";
 import { ArrowDownUp } from "lucide-react-native";
 
-import { Card, IconButton, Mono, PillButton, PrimaryButton, Skeleton, UiText } from "@/components/home/primitives";
+import { Card, IconButton, Mono, PrimaryButton, Skeleton, UiText } from "@/components/home/primitives";
+import { AmountInput } from "@/components/swap/AmountInput";
 import { setPendingRun } from "@/lib/swap/run-store";
 import { useBackendPortfolio } from "@/hooks/use-backend-portfolio";
 import { turnkeyWalletQueryKey, useTurnkeyWallet, type WalletChain } from "@/hooks/use-turnkey-wallet";
@@ -39,11 +40,6 @@ const ADDRESS_OF: Record<WalletChain, "stellarAddress" | "bitcoinAddress" | "eth
   solana: "solanaAddress"
 };
 
-// MAX rounds DOWN (web: toFixed(min(decimals, 8), ROUND_DOWN)).
-const floorTo = (v: number, decimals: number): string => {
-  const f = 10 ** decimals;
-  return (Math.floor(v * f) / f).toFixed(decimals).replace(/\.?0+$/, "") || "0";
-};
 const toBaseUnits = (amount: number, decimals: number): string => {
   const [w, f = ""] = amount.toFixed(decimals).split(".");
   return (BigInt(w) * BigInt(10) ** BigInt(decimals) + BigInt(f.padEnd(decimals, "0"))).toString();
@@ -73,6 +69,7 @@ export function LifiPanel({ from, to, amount, setAmount, fromPill, toPill, onFli
   const asset = portfolioData.assets.find((a) => a.asset_code === from);
   const balance = Number(asset?.balance ?? 0);
   const price = asset?.usdPrice ?? 0;
+  const toPrice = portfolioData.assets.find((a) => a.asset_code === to)?.usdPrice ?? 0;
   const spendable = Math.max(balance - reserve, 0);
   const amountNum = Number(amount.replace(",", "."));
   const amountOk = Number.isFinite(amountNum) && amountNum > 0;
@@ -203,22 +200,7 @@ export function LifiPanel({ from, to, amount, setAmount, fromPill, toPill, onFli
   return (
     <YStack gap={20}>
       <Card padding={12} gap={8}>
-        <YStack backgroundColor={c.inputBg} borderRadius={radius.input} padding={14} gap={10}>
-          <XStack justifyContent='space-between' alignItems='center'>
-            <UiText fontSize={12} color={c.muted}>You pay</UiText>
-            <XStack alignItems='center' gap={8}>
-              <Mono fontSize={11} color={insufficient ? c.failed : c.muted}>{fNumber(spendable, { maximumFractionDigits: from === "SOL" ? 4 : from === "ETH" ? 5 : 8 })} {from}</Mono>
-              <PillButton label='Max' onPress={() => setAmount(floorTo(spendable, Math.min(NATIVE_DECIMALS[from], 8)))} />
-            </XStack>
-          </XStack>
-          <XStack alignItems='center' justifyContent='space-between' gap={10}>
-            <Input flex={1} unstyled backgroundColor='transparent' borderWidth={0} color={c.ink} placeholderTextColor={c.faint} fontFamily='$mono' fontSize={28} letterSpacing={tracking(28)} placeholder='0.00' keyboardType='decimal-pad' value={amount} onChangeText={setAmount} editable={!busy} />
-            {fromPill}
-          </XStack>
-          {balance > 0 ? (
-            <UiText fontSize={11} color={c.faint} fontFamily='$mono'>Keeps {fNumber(reserve, { maximumFractionDigits: from === "BTC" ? 8 : 5 })} {from} for network fees</UiText>
-          ) : null}
-        </YStack>
+        <AmountInput amount={amount} setAmount={setAmount} symbol={from} price={price} spendable={spendable} decimals={NATIVE_DECIMALS[from]} balanceDecimals={from === "SOL" ? 4 : from === "ETH" ? 5 : 8} pill={fromPill} editable={!busy} insufficient={insufficient} note={balance > 0 ? `Keeps ${fNumber(reserve, { maximumFractionDigits: from === "BTC" ? 8 : 5 })} ${from} for fees` : null} />
         <XStack justifyContent='center' marginVertical={-14} zIndex={1}>
           <YStack backgroundColor={c.surface} borderRadius={999} borderWidth={1} borderColor={c.border}>
             <IconButton onPress={onFlip} label='Flip assets'><ArrowDownUp size={16} color={c.ink} strokeWidth={2} /></IconButton>
@@ -234,6 +216,7 @@ export function LifiPanel({ from, to, amount, setAmount, fromPill, toPill, onFli
             )}
             {toPill}
           </XStack>
+          {toAmount !== null && toPrice > 0 ? <Mono fontSize={11} color={c.faint}>≈ {fCurrency(toAmount * toPrice)}</Mono> : null}
         </YStack>
 
         {quote ? (

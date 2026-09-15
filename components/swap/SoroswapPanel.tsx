@@ -9,10 +9,11 @@ import { Alert } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { Input, XStack, YStack } from "tamagui";
+import { XStack, YStack } from "tamagui";
 import { ArrowDownUp } from "lucide-react-native";
 
-import { Card, IconBox, Mono, PillButton, PrimaryButton, Skeleton, UiText } from "@/components/home/primitives";
+import { Card, IconBox, Mono, PrimaryButton, Skeleton, UiText } from "@/components/home/primitives";
+import { AmountInput } from "@/components/swap/AmountInput";
 import { ReceiveSheet } from "@/components/home/ReceiveSheet";
 import { useBackendPortfolio } from "@/hooks/use-backend-portfolio";
 import { useSavingsPosition, useStellarAccountProbe } from "@/hooks/use-savings";
@@ -30,7 +31,6 @@ import { useDeviceReady } from "@/lib/turnkey/device-ready";
 import { fCurrency, fNumber } from "@/lib/utils/number-format.utils";
 import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
 
-const truncate7 = (v: number) => (Math.floor(v * 1e7) / 1e7).toFixed(7).replace(/\.?0+$/, "");
 // Web allows dust swaps where the Soroban fee dwarfs the trade; a small floor.
 const MIN_SWAP_USD = 1;
 
@@ -130,7 +130,6 @@ export function SoroswapPanel({ from, to, amount, setAmount, fromPill, toPill, o
     setQuote(null);
     onFlip?.();
   };
-  const useMax = () => setAmount(truncate7(from === "XLM" ? maxXlmForSorobanSwap(spendableXlm) : fromBalance));
 
   const rate = quote && parseFloat(quote.amountIn) > 0 ? (parseFloat(quote.amountOut) / (parseFloat(quote.amountIn) - parseFloat(quote.fee))).toFixed(6) : null;
 
@@ -203,16 +202,14 @@ export function SoroswapPanel({ from, to, amount, setAmount, fromPill, toPill, o
   else if (quoting || !quote) button = { label: quoteError ? "Quote unavailable" : "Fetching quote…", disabled: true };
   else button = { label: "Swap with passkey", onPress: run };
 
-  const amountBox = ({ label, pill, children, right }: { label: string; pill: React.ReactNode; children: React.ReactNode; right?: React.ReactNode }) => (
+  const amountBox = ({ label, pill, children, under }: { label: string; pill: React.ReactNode; children: React.ReactNode; under?: React.ReactNode }) => (
     <YStack backgroundColor={c.inputBg} borderRadius={radius.input} padding={14} gap={10}>
-      <XStack justifyContent='space-between' alignItems='center'>
-        <UiText fontSize={12} color={c.muted}>{label}</UiText>
-        {right}
-      </XStack>
+      <UiText fontSize={12} color={c.muted}>{label}</UiText>
       <XStack alignItems='center' justifyContent='space-between' gap={10}>
         {children}
         {pill}
       </XStack>
+      {under}
     </YStack>
   );
 
@@ -220,36 +217,19 @@ export function SoroswapPanel({ from, to, amount, setAmount, fromPill, toPill, o
     <>
         <YStack gap={space.section}>
           <Card padding={12} gap={8}>
-            {amountBox({
-              label: "You pay",
-              pill: fromPill,
-              right: (
-                <XStack alignItems='center' gap={8}>
-                  <Mono fontSize={11} color={insufficient ? c.failed : c.muted}>
-                    {probe.data || from === "USDC" ? `${fNumber(fromBalance, { maximumFractionDigits: from === "XLM" ? 4 : 2 })} ${from}` : "…"}
-                  </Mono>
-                  <PillButton label='Max' onPress={useMax} />
-                </XStack>
-              ),
-              children: (
-              <Input
-                flex={1}
-                unstyled
-                backgroundColor='transparent'
-                borderWidth={0}
-                color={c.ink}
-                placeholderTextColor={c.faint}
-                fontFamily='$mono'
-                fontSize={28}
-                letterSpacing={tracking(28)}
-                placeholder='0.00'
-                keyboardType='decimal-pad'
-                value={amount}
-                onChangeText={setAmount}
-                editable={!busy}
-              />
-              )
-            })}
+            <AmountInput
+              amount={amount}
+              setAmount={setAmount}
+              symbol={from}
+              price={from === "USDC" ? price("USDC") || 1 : price(from)}
+              spendable={from === "XLM" ? maxXlmForSorobanSwap(spendableXlm) : fromBalance}
+              decimals={7}
+              balanceDecimals={from === "XLM" ? 4 : 2}
+              pill={fromPill}
+              editable={!busy}
+              insufficient={insufficient}
+              balanceText={probe.data || from === "USDC" ? undefined : "…"}
+            />
             <XStack justifyContent='center' marginVertical={-14} zIndex={1}>
               <IconBox size={32} borderWidth={1} borderColor={c.border} backgroundColor={c.surface} onPress={flip} pressStyle={{ backgroundColor: c.pressTint }}>
                 <ArrowDownUp size={16} color={c.ink} strokeWidth={2} />
@@ -264,7 +244,8 @@ export function SoroswapPanel({ from, to, amount, setAmount, fromPill, toPill, o
                 <Mono fontSize={28} letterSpacing={tracking(28)} color={quote ? c.ink : c.faint} flex={1} numberOfLines={1}>
                   {quote ? fNumber(parseFloat(quote.amountOut), { maximumFractionDigits: to === "XLM" ? 4 : 2 }) : "0.00"}
                 </Mono>
-              )
+              ),
+              under: quote && (to === "USDC" || price(to) > 0) ? <Mono fontSize={11} color={c.faint}>≈ {fCurrency(parseFloat(quote.amountOut) * (to === "USDC" ? price("USDC") || 1 : price(to)))}</Mono> : null
             })}
 
             {quote ? (
