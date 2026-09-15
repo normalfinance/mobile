@@ -18,6 +18,7 @@ import { useQueries, useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 import { fetchActiveRamps, type RampTransfer } from "@/lib/ramp/coinbase";
 import { reconcilePendingSends, usePendingSends } from "@/lib/send/pending-sends";
+import { fetchCctpTransfers, type CctpTransfer } from "@/lib/cctp/engine";
 import type { Transaction } from "@/services/portfolio.service";
 import { useTurnkeyWallet, type WalletChain } from "@/hooks/use-turnkey-wallet";
 
@@ -169,6 +170,17 @@ export const useActivityFeed = (priceOf: (symbol: string) => number = () => 0) =
     retry: 1
   });
 
+  // Cross-chain (CCTP) swaps: one row per transfer, pending until delivered.
+  // Polled 30s only while one is in flight (web use-user-activity.ts).
+  const cctpQuery = useQuery({
+    queryKey: ["activity", "cctp", stellarAddress ?? "none"],
+    enabled: !!stellarAddress,
+    queryFn: () => fetchCctpTransfers(true),
+    staleTime: 20_000,
+    refetchInterval: (q) => ((q.state.data ?? []).some((t) => !["COMPLETED", "FAILED", "REFUNDED"].includes(t.status) || (t.direction === "stellar_to_crosschain" && t.status === "COMPLETED" && !t.dstSwapTxHash)) ? 30_000 : false),
+    retry: 1
+  });
+
   const walletQuery = useQuery({
     queryKey: walletActivityQueryKey(stellarAddress ?? "none"),
     enabled: !!stellarAddress,
@@ -178,7 +190,7 @@ export const useActivityFeed = (priceOf: (symbol: string) => number = () => 0) =
   });
 
   // Fixed-length memo key: the number of queries changes with the wallet.
-  const dataKey = queries.map((q) => q.dataUpdatedAt).join(",") + "|" + walletQuery.dataUpdatedAt + "|" + rampsQuery.dataUpdatedAt + "|" + pendingSends.length;
+  const dataKey = queries.map((q) => q.dataUpdatedAt).join(",") + "|" + walletQuery.dataUpdatedAt + "|" + rampsQuery.dataUpdatedAt + "|" + pendingSends.length + "|" + cctpQuery.dataUpdatedAt;
   const transactions = useMemo(() => {
     // Every hash the feeds know this render — a pending send it covers is retired.
     const known = new Set<string>();
@@ -217,12 +229,37 @@ export const useActivityFeed = (priceOf: (symbol: string) => number = () => 0) =
       .map(walletItemToTransaction)
       .filter((t): t is Transaction => !!t);
     const ownHashes = new Set(walletRows.map((t) => t.txHash).filter((h): h is string => !!h));
-    const rows: Transaction[] = [...pendingRows, ...rampRows, ...walletRows];
+    // CCTP: outbound is done only once the pivot delivered (dstSwapTxHash);
+    // inbound at COMPLETED. Legs we signed are suppressed from the chain feeds.
+    const cctpLegHashes = new Set<string>();
+    const cctpRows: Transaction[] = (cctpQuery.data ?? [])
+      .filter((tr: CctpTransfer) => !!tr.srcAmount) // pre-amount-tracking rows would render as 0 → 0
+      .map((tr) => {
+        for (const h of [tr.burnTxHash, tr.mintTxHash, tr.srcSwapTxHash, tr.dstSwapTxHash]) if (h) cctpLegHashes.add(h.toLowerCase());
+        const outbound = tr.direction === "stellar_to_crosschain";
+        const failed = tr.status === "FAILED";
+        const refunded = tr.status === "REFUNDED";
+        const done = outbound ? tr.status === "COMPLETED" && !!tr.dstSwapTxHash : tr.status === "COMPLETED";
+        return {
+          id: `cctp:${tr.id}`,
+          type: "swap",
+          asset: tr.dstAsset,
+          amount: parseFloat(tr.dstAmount ?? "0") || 0,
+          usdValue: 0,
+          timestamp: new Date(tr.createdAt),
+          status: failed || refunded ? "failed" : done ? "completed" : "pending",
+          chain: "stellar",
+          txHash: tr.burnTxHash,
+          counterparty: `${tr.srcAmount} ${tr.srcAsset}${refunded ? " · refunded" : ""}`
+        } as Transaction;
+      });
+    cctpLegHashes.forEach((h) => known.add(h));
+    const rows: Transaction[] = [...pendingRows, ...rampRows, ...cctpRows, ...walletRows];
     addresses.forEach(({ chain }, i) => {
       const items = queries[i]?.data?.items ?? [];
       for (const item of items) {
-        // The same hash as a savings row is that action's raw chain leg — show once.
-        if (item.txHash && ownHashes.has(item.txHash)) continue;
+        // The same hash as a savings/CCTP row is that action's raw chain leg — show once.
+        if (item.txHash && (ownHashes.has(item.txHash) || cctpLegHashes.has(item.txHash.toLowerCase()))) continue;
         rows.push(toTransaction(chain, item, priceOf));
       }
     });
@@ -237,7 +274,7 @@ export const useActivityFeed = (priceOf: (symbol: string) => number = () => 0) =
   const isFetching = queries.some((q) => q.isFetching) || walletQuery.isFetching;
   const error = (queries.find((q) => q.error)?.error as Error | undefined) ?? null;
 
-  const refetch = () => Promise.all([...queries.map((q) => q.refetch()), walletQuery.refetch(), rampsQuery.refetch()]);
+  const refetch = () => Promise.all([...queries.map((q) => q.refetch()), walletQuery.refetch(), rampsQuery.refetch(), cctpQuery.refetch()]);
 
   return { transactions, isLoading, isFetching, error, refetch };
 };

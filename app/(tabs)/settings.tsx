@@ -34,7 +34,12 @@ import { supabase } from "@/lib/supabase";
 import { useAppearance, useColors, type AppearanceMode } from "@/lib/theme/appearance";
 import { space } from "@/lib/theme/tokens";
 import { shortenAddress } from "@/lib/utils/number-format.utils";
-import { describeTurnkeyError, isNoPasskeyError } from "@/lib/turnkey/client";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Zap } from "lucide-react-native";
+import { Chip } from "@/components/home/primitives";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { autopilotAvailable, fetchAutopilotStatus, grantAutopilotConsent, revokeAutopilotConsent } from "@/lib/turnkey/autopilot";
+import { describeTurnkeyError, isNoPasskeyError, isUserCancelledError } from "@/lib/turnkey/client";
 import { verifyDevicePasskey } from "@/lib/turnkey/device-check";
 import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
 
@@ -51,6 +56,46 @@ export default function SettingsScreen() {
   const { addresses, wallet } = useTurnkeyWallet();
   const router = useRouter();
   const [testing, setTesting] = React.useState(false);
+
+  // Autopilot (single-signature cross-chain swaps): truth is Turnkey via the
+  // status route; enable = the consent ceremony, disable = delete the delegate.
+  const queryClient = useQueryClient();
+  const autopilot = useQuery({ queryKey: ["autopilot", "status"], queryFn: fetchAutopilotStatus, enabled: autopilotAvailable() && !!wallet, staleTime: 60_000 });
+  const [autopilotBusy, setAutopilotBusy] = React.useState(false);
+  const toggleAutopilot = () => {
+    if (!wallet?.subOrgId) return;
+    const active = autopilot.data?.active === true;
+    const run = async () => {
+      setAutopilotBusy(true);
+      try {
+        if (active) {
+          if (!autopilot.data?.autopilotUserId) throw new Error("No autopilot user found.");
+          await revokeAutopilotConsent(wallet.subOrgId, autopilot.data.autopilotUserId);
+        } else {
+          await grantAutopilotConsent(wallet.subOrgId);
+          // Un-suppress the swap-time offer the user once declined (web).
+          await AsyncStorage.removeItem("autopilot_declined_v1").catch(() => undefined);
+        }
+        await queryClient.invalidateQueries({ queryKey: ["autopilot", "status"] });
+      } catch (e) {
+        if (!isUserCancelledError(e)) Alert.alert(active ? "Couldn’t turn off" : "Couldn’t turn on", describeTurnkeyError(e));
+      } finally {
+        setAutopilotBusy(false);
+      }
+    };
+    if (active) {
+      Alert.alert("Turn off automatic completion?", "Cross-chain swaps will need a second passkey confirmation after the bridge again. One confirmation to turn off.", [
+        { text: "Cancel", style: "cancel" },
+        { text: "Turn off", style: "destructive", onPress: () => void run() }
+      ]);
+    } else {
+      Alert.alert(
+        "Turn on automatic completion?",
+        "Normal finishes the Base step of cross-chain swaps for you, so you confirm once at the start. Allowed: Base-network transactions to Circle, USDC and LI.FI only, enforced by your wallet’s policy. One or two passkey confirmations.",
+        [{ text: "Cancel", style: "cancel" }, { text: "Turn on", onPress: () => void run() }]
+      );
+    }
+  };
 
   // Proves passkey → Turnkey → ed25519 end to end. Signs a no-op Stellar
   // transaction and verifies the signature locally; nothing is submitted.
@@ -189,6 +234,24 @@ export default function SettingsScreen() {
                 sub='Signs a random digest with your passkey and verifies it. Nothing is sent.'
                 onPress={testing ? undefined : testSigning}
               />
+              {autopilotAvailable() ? (
+                <>
+                  <Divider />
+                  <ListRow
+                    icon={<Zap size={16} color={c.ink} strokeWidth={1.8} />}
+                    label={autopilotBusy ? "Working…" : "Automatic swap completion"}
+                    sub={autopilot.data?.active ? "Cross-chain swaps finish by themselves after one confirmation" : "Finish cross-chain swaps with a single confirmation"}
+                    right={
+                      <Chip
+                        tone={autopilot.data?.active ? "green" : autopilot.data?.reason === "unknown" ? "amber" : "neutral"}
+                        // A failed status read is "Unknown", never a claimed "Off" (web).
+                        label={autopilot.isLoading ? "…" : autopilot.data?.active ? "On" : autopilot.data?.reason === "unknown" ? "Unknown" : "Off"}
+                      />
+                    }
+                    onPress={autopilotBusy ? undefined : toggleAutopilot}
+                  />
+                </>
+              ) : null}
             </Card>
           </YStack>
 
