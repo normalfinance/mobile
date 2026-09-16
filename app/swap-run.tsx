@@ -5,6 +5,7 @@
 
 import React from "react";
 import { Alert, Linking, ScrollView } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -23,6 +24,7 @@ import { NATIVE_CHAIN, type CrosschainSymbol } from "@/lib/cctp/config";
 import { bannerPhase, fetchCctpTransfer, quoteSnapshot, recoverInbound, recoverOutbound, refundOutbound, type CctpTransfer } from "@/lib/cctp/engine";
 import { refreshAfterStellarAction } from "@/lib/data/after-action";
 import { useRun, useRunByTransfer, updateRun, type RunSpec } from "@/lib/swap/run-store";
+import { requoteAt } from "@/lib/swap/requote";
 import { startRun } from "@/lib/swap/runner";
 import { activeStepFor, explorerFor, stepsFor, timingFor } from "@/lib/swap/steps";
 import { useColors } from "@/lib/theme/appearance";
@@ -125,6 +127,8 @@ export default function SwapRunScreen() {
   const { wallet } = useTurnkeyWallet();
   const { ready: deviceReady } = useDeviceReady(wallet?.subOrgId);
   const { portfolioData } = useBackendPortfolio();
+  const insets = useSafeAreaInsets();
+  const topPad = insets.top + 8;
   const priceOf = (sym: string) => (sym === "USDC" ? portfolioData.assets.find((a) => a.asset_code === "USDC")?.usdPrice || 1 : portfolioData.assets.find((a) => a.asset_code === sym)?.usdPrice ?? 0);
   const usdOf = (amount: string | number, sym: string): string | null => {
     const n = typeof amount === "number" ? amount : parseFloat(amount) || 0;
@@ -227,6 +231,23 @@ export default function SwapRunScreen() {
     if (run.spec.kind === "cctp-out" || run.spec.kind === "cctp-in") await offerConsent();
     void Haptics.selectionAsync().catch(() => undefined);
     void startRun(run.id, { queryClient, userId: user?.id, wallet, autopilotHint: () => grantedRef.current || autopilotQ.data?.active === true });
+  };
+
+  // Gas shortfall resolution: re-price THIS run at the affordable amount and
+  // stay here — the numbers refresh and Start is live again (no bouncing back
+  // to the Swap tab to retype it).
+  const [requoting, setRequoting] = React.useState(false);
+  const useAffordable = async (amount: string) => {
+    if (!run || !wallet) return;
+    setRequoting(true);
+    try {
+      const spec = await requoteAt(run.spec, wallet, amount);
+      updateRun(run.id, { spec, status: "idle", stage: null, notice: { text: `Amount updated to ${amount} ${spec.from} — review the fresh quote and press Start swap.`, tone: "blue" } });
+    } catch (e) {
+      updateRun(run.id, { notice: { text: e instanceof Error ? e.message : String(e), tone: "amber" } });
+    } finally {
+      setRequoting(false);
+    }
   };
 
   // Haptic tick per stage change.
@@ -347,7 +368,7 @@ export default function SwapRunScreen() {
     return (
       <Screen>
         <ScrollView contentContainerStyle={{ paddingBottom: 48 }}>
-          <YStack paddingHorizontal={space.gutter} paddingTop={56} gap={20}>
+          <YStack paddingHorizontal={space.gutter} paddingTop={topPad} gap={20}>
             {header(spec.from, spec.to, spec.amount, receiveText)}
             {!done ? detailsCard(spec) : null}
 
@@ -376,7 +397,7 @@ export default function SwapRunScreen() {
             {run.notice ? (
               <Card padding={14} gap={8} backgroundColor={run.notice.tone === "amber" ? c.chips.amber.bg : c.chips.blue.bg} borderColor='transparent'>
                 <UiText fontSize={13} color={run.notice.tone === "amber" ? c.chips.amber.color : c.ink2} lineHeight={19}>{run.notice.text}</UiText>
-                {run.notice.affordable ? <PillButton label={`Use ${run.notice.affordable} ${spec.from}`} onPress={() => router.back()} /> : null}
+                {run.notice.affordable ? <PrimaryButton label={requoting ? "Getting a fresh quote…" : `Use ${run.notice.affordable} ${spec.from}`} onPress={() => void useAffordable(run.notice!.affordable!)} loading={requoting} /> : null}
               </Card>
             ) : null}
 
@@ -388,7 +409,7 @@ export default function SwapRunScreen() {
             ) : null}
 
             <YStack gap={8}>
-              {run.status === "idle" ? <PrimaryButton label='Start swap' onPress={() => void start()} /> : null}
+              {run.status === "idle" ? <PrimaryButton label='Start swap' onPress={() => void start()} disabled={requoting} /> : null}
               {run.status === "running" ? <PrimaryButton label={(steps.find((s) => s.id === active)?.label ?? "Working") + "…"} loading /> : null}
               {done && run.result ? (
                 <>
@@ -425,7 +446,7 @@ export default function SwapRunScreen() {
     return (
       <Screen>
         <ScrollView contentContainerStyle={{ paddingBottom: 48 }}>
-          <YStack paddingHorizontal={space.gutter} paddingTop={56} gap={20}>
+          <YStack paddingHorizontal={space.gutter} paddingTop={topPad} gap={20}>
             {header(spec.from, spec.to, spec.amount || "—", receiveText)}
             <Card padding={14} gap={12}>
               <StepList title={finished ? "Swap complete" : terminal ? (row.status === "REFUNDED" ? "Refunded" : "Did not complete") : "Swap in progress"} timing='' steps={finished ? [...steps, { id: "done", label: "Done", sub: `${spec.to} received` }] : steps} activeId={finished || terminal ? null : stage} allDone={finished} />
@@ -460,7 +481,7 @@ export default function SwapRunScreen() {
   }
 
   return (
-    <Screen>
+    <Screen paddingTop={topPad}>
       <YStack flex={1} alignItems='center' justifyContent='center' padding={space.gutter} gap={12}>
         <UiText fontSize={14} color={c.muted}>{rowQ.isLoading ? "Loading…" : "This swap is no longer available."}</UiText>
         <PillButton label='Back' onPress={() => router.back()} />
