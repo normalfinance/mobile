@@ -154,7 +154,7 @@ const ARRIVAL_CAP_MS = 15_000;
 
 export const trackLifiSwap = async (
   tx: LifiTrackedTx,
-  h: { onStage: (s: LifiStage) => void; onRecorded?: () => void; onArrival?: () => Promise<void> | void; stop?: () => boolean; stellarAddress?: string }
+  h: { onStage: (s: LifiStage) => void; onRecorded?: () => void; onArrival?: () => Promise<void> | void; stop?: () => boolean; stellarAddress?: string; skipRecord?: boolean }
 ): Promise<LifiStage> => {
   const stop = h.stop ?? (() => false);
   h.onStage("confirming");
@@ -163,7 +163,7 @@ export const trackLifiSwap = async (
     h.onStage("failed");
     return "failed";
   }
-  await recordLifiSwap(tx, h.stellarAddress);
+  if (!h.skipRecord) await recordLifiSwap(tx, h.stellarAddress);
   h.onRecorded?.();
 
   h.onStage("bridging");

@@ -6,14 +6,15 @@
 import type { QueryClient } from "@tanstack/react-query";
 
 import type { TurnkeyWallet } from "@/hooks/use-turnkey-wallet";
-import { NATIVE_CHAIN } from "@/lib/cctp/config";
+import { NATIVE_CHAIN, NATIVE_DECIMALS } from "@/lib/cctp/config";
 import { CalmEndError, OutboundError, fetchCctpTransfer, refundOutbound, runInboundSwap, runOutboundSwap } from "@/lib/cctp/engine";
 import { refreshAfterStellarAction } from "@/lib/data/after-action";
 import { GasShortfallError, LIFI_CHAIN_IDS, executeLifiSwap, maxAffordableEth } from "@/lib/lifi/execute";
-import { trackLifiSwap } from "@/lib/lifi/tracker";
+import { addPendingLifi, loadPendingLifi, markLifiRecorded, removePendingLifi, type PendingLifi } from "@/lib/lifi/pending-lifi";
+import { trackLifiSwap, type LifiTrackedTx } from "@/lib/lifi/tracker";
 import { executeSoroswap } from "@/lib/swap/soroswap";
 import { describeTurnkeyError, isUserCancelledError } from "@/lib/turnkey/client";
-import { getRun, updateRun, type RunSpec } from "./run-store";
+import { getRun, restoreRun, updateRun, type RunSpec } from "./run-store";
 
 export interface RunDeps {
   queryClient: QueryClient;
@@ -85,40 +86,19 @@ export const startRun = async (id: string, deps: RunDeps): Promise<void> => {
       const addresses = { ethereumAddress: wallet.ethereumAddress, solanaAddress: wallet.solanaAddress, bitcoinAddress: wallet.bitcoinAddress };
       const txHash = await executeLifiSwap(spec.quote, addresses, wallet.subOrgId);
       updateRun(id, { broadcastStarted: true, sourceTxHash: txHash, stage: "confirming" });
-      const toChain = NATIVE_CHAIN[spec.to];
-      const toAddress = wallet[toChain === "ethereum" ? "ethereumAddress" : toChain === "solana" ? "solanaAddress" : "bitcoinAddress"] ?? undefined;
-      const final = await trackLifiSwap(
-        {
-          txHash,
-          fromChainId: spec.quote.action.fromChainId,
-          toChainId: spec.quote.action.toChainId,
-          fromSymbol: spec.from,
-          toSymbol: spec.to,
-          amountIn: spec.amount,
-          amountOut: String(spec.toAmount),
-          feeAmount: spec.feePercent > 0 ? (parseFloat(spec.amount) * spec.feePercent).toFixed(8) : undefined
-        },
-        {
-          stellarAddress,
-          onStage: (s) => updateRun(id, { stage: s }),
-          onRecorded: () => void queryClient.invalidateQueries({ queryKey: ["activity"] }),
-          // Hard rule 14: the destination chain's balance is refetched BEFORE "Done".
-          onArrival: () => refreshAfterStellarAction(queryClient, { userId, stellarAddress, chain: toChain, chainAddress: toAddress, expectMove: [spec.to] })
-        }
-      );
-      if (final === "done") {
-        updateRun(id, { status: "done", stage: "done", result: { hash: txHash, verdict: "DONE" } });
-      } else if (final === "refunded") {
-        // Source chain moved back — refresh it so the balance is honest.
-        const fromChain = NATIVE_CHAIN[spec.from];
-        await race15(refreshAfterStellarAction(queryClient, { userId, stellarAddress, chain: fromChain, chainAddress: wallet[fromChain === "ethereum" ? "ethereumAddress" : fromChain === "solana" ? "solanaAddress" : "bitcoinAddress"] ?? undefined, expectMove: [spec.from] }));
-        updateRun(id, { status: "calm", stage: null, refundedStage: "bridging", result: { hash: txHash, verdict: "REFUNDED" }, notice: { text: `The bridge couldn’t complete this swap and returned your ${spec.from}. No funds were lost — small swaps are sometimes refunded.`, tone: "blue" } });
-      } else if (final === "failed") {
-        updateRun(id, { status: "error", failedStage: "confirming", result: { hash: txHash, verdict: "FAILED" }, notice: { text: `The ${spec.from} transaction didn’t confirm. If it never left your wallet nothing was spent; if it did, the bridge returns it automatically — check Activity for the final state.`, tone: "amber" } });
-      } else {
-        // ~20 min without a verdict: some routes legitimately take longer.
-        updateRun(id, { status: "calm", stage: null, result: { hash: txHash, verdict: "PENDING" }, notice: { text: `Your ${spec.to} is still on its way — this route can take a while. It arrives automatically at your own address; the Activity row keeps tracking it.`, tone: "blue" } });
-      }
+      const tx: LifiTrackedTx = {
+        txHash,
+        fromChainId: spec.quote.action.fromChainId,
+        toChainId: spec.quote.action.toChainId,
+        fromSymbol: spec.from,
+        toSymbol: spec.to,
+        amountIn: spec.amount,
+        amountOut: String(spec.toAmount),
+        feeAmount: spec.feePercent > 0 ? (parseFloat(spec.amount) * spec.feePercent).toFixed(8) : undefined
+      };
+      // Persist BEFORE tracking: a killed app finishes the record on next launch.
+      addPendingLifi({ ...tx, fromSymbol: spec.from, toSymbol: spec.to, toAmountMin: spec.quote.estimate.toAmountMin, feePercent: spec.feePercent, etaMin: spec.etaMin, tool: spec.tool });
+      await trackLifiRun(id, tx, deps, false);
       return;
     }
 
@@ -190,4 +170,82 @@ export const startRun = async (id: string, deps: RunDeps): Promise<void> => {
     void queryClient.invalidateQueries({ queryKey: ["cctp", "in-flight"] });
     void queryClient.invalidateQueries({ queryKey: ["activity"] });
   }
+};
+
+const nativeAddress = (wallet: TurnkeyWallet, chain: "bitcoin" | "ethereum" | "solana") =>
+  wallet[chain === "ethereum" ? "ethereumAddress" : chain === "solana" ? "solanaAddress" : "bitcoinAddress"] ?? undefined;
+
+/** Track a broadcast LI.FI swap to its end and write the outcome into the run (live or restored). */
+const trackLifiRun = async (id: string, tx: LifiTrackedTx, deps: RunDeps, alreadyRecorded: boolean): Promise<void> => {
+  const run = getRun(id);
+  if (!run || run.spec.kind !== "lifi") return;
+  const spec = run.spec;
+  const { queryClient, userId, wallet } = deps;
+  const stellarAddress = wallet.stellarAddress ?? undefined;
+  const toChain = NATIVE_CHAIN[spec.to];
+  const final = await trackLifiSwap(tx, {
+    stellarAddress,
+    skipRecord: alreadyRecorded,
+    onStage: (s) => updateRun(id, { stage: s }),
+    onRecorded: () => {
+      markLifiRecorded(tx.txHash);
+      void queryClient.invalidateQueries({ queryKey: ["activity"] });
+    },
+    // Hard rule 14: the destination chain's balance is refetched BEFORE "Done".
+    onArrival: () => refreshAfterStellarAction(queryClient, { userId, stellarAddress: stellarAddress!, chain: toChain, chainAddress: nativeAddress(wallet, toChain), expectMove: [spec.to] })
+  });
+  if (final === "done") {
+    removePendingLifi(tx.txHash);
+    updateRun(id, { status: "done", stage: "done", result: { hash: tx.txHash, verdict: "DONE" } });
+  } else if (final === "refunded") {
+    removePendingLifi(tx.txHash);
+    // Source chain moved back — refresh it so the balance is honest.
+    const fromChain = NATIVE_CHAIN[spec.from];
+    await race15(refreshAfterStellarAction(queryClient, { userId, stellarAddress: stellarAddress!, chain: fromChain, chainAddress: nativeAddress(wallet, fromChain), expectMove: [spec.from] }));
+    updateRun(id, { status: "calm", stage: null, refundedStage: "bridging", result: { hash: tx.txHash, verdict: "REFUNDED" }, notice: { text: `The bridge couldn’t complete this swap and returned your ${spec.from}. No funds were lost — small swaps are sometimes refunded.`, tone: "blue" } });
+  } else if (final === "failed") {
+    removePendingLifi(tx.txHash);
+    updateRun(id, { status: "error", failedStage: "confirming", result: { hash: tx.txHash, verdict: "FAILED" }, notice: { text: `The ${spec.from} transaction didn’t confirm. If it never left your wallet nothing was spent; if it did, the bridge returns it automatically — check Activity for the final state.`, tone: "amber" } });
+  } else {
+    // No verdict within the destination's window: keep the ledger entry so the
+    // next launch resumes tracking; Activity keeps its Pending row meanwhile.
+    updateRun(id, { status: "calm", stage: null, result: { hash: tx.txHash, verdict: "PENDING" }, notice: { text: `Your ${spec.to} is still on its way — this route can take a while. It arrives automatically at your own address; the Activity row keeps tracking it.`, tone: "blue" } });
+  }
+};
+
+const resumed = new Set<string>();
+/** On launch: restore every unsettled LI.FI swap from the ledger as a live run and track it. */
+export const resumePendingLifiRuns = async (deps: RunDeps): Promise<void> => {
+  const entries = await loadPendingLifi();
+  for (const p of entries) {
+    if (resumed.has(p.txHash)) continue;
+    resumed.add(p.txHash);
+    void resumeOne(p, deps);
+  }
+};
+
+const resumeOne = async (p: PendingLifi, deps: RunDeps) => {
+  const id = `lifi-${p.txHash}`;
+  const decimals = NATIVE_DECIMALS[p.toSymbol];
+  const toAmount = parseFloat(p.amountOut) || 0;
+  const spec: RunSpec = {
+    kind: "lifi",
+    from: p.fromSymbol,
+    to: p.toSymbol,
+    amount: p.amountIn,
+    // A stub quote: only the fields the header, details and tracker read.
+    quote: {
+      tool: p.tool ?? undefined,
+      action: { fromChainId: p.fromChainId, toChainId: p.toChainId, fromAmount: "0" },
+      estimate: { toAmount: String(Math.round(toAmount * 10 ** decimals)), toAmountMin: p.toAmountMin, executionDuration: (p.etaMin ?? 1) * 60 },
+      transactionRequest: { data: "" }
+    },
+    feePercent: p.feePercent,
+    etaMin: p.etaMin,
+    toAmount,
+    tool: p.tool
+  };
+  restoreRun({ id, spec, status: "running", stage: "confirming", flags: {}, broadcastStarted: true, sourceTxHash: p.txHash, startedAt: p.createdAt });
+  const { txHash, fromChainId, toChainId, fromSymbol, toSymbol, amountIn, amountOut, feeAmount } = p;
+  await trackLifiRun(id, { txHash, fromChainId, toChainId, fromSymbol, toSymbol, amountIn, amountOut, feeAmount }, deps, p.recorded);
 };

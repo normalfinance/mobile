@@ -59,6 +59,15 @@ export const setPendingRun = (spec: RunSpec): string => {
 };
 
 export const getRun = (id: string): RunState | undefined => runs.get(id);
+
+/** Re-create a run from persisted facts (LI.FI ledger) — no-op if it already exists. */
+export const restoreRun = (state: RunState): RunState => {
+  const existing = runs.get(state.id);
+  if (existing) return existing;
+  runs.set(state.id, state);
+  notify();
+  return state;
+};
 export const runByTransfer = (transferId: string): RunState | undefined => [...runs.values()].find((r) => r.transferId === transferId);
 
 export const updateRun = (id: string, patch: Partial<RunState> | ((r: RunState) => Partial<RunState>)): void => {

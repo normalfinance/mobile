@@ -17,6 +17,7 @@ import {
 
 import { Skeleton, UiText } from "@/components/home/primitives";
 import { useTurnkeyWallet } from "@/hooks/use-turnkey-wallet";
+import { LifiResume } from "@/components/swap/LifiResume";
 import { useColors } from "@/lib/theme/appearance";
 import { space } from "@/lib/theme/tokens";
 import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
@@ -142,6 +143,7 @@ export default function TabLayout() {
 
   return (
     <YStack flex={1} backgroundColor={c.surface}>
+      <LifiResume />
       <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
         <YStack flex={1} paddingBottom={barHeight}>
           {renderTabContent()}
