@@ -60,15 +60,18 @@ export const setPendingRun = (spec: RunSpec): string => {
 
 export const getRun = (id: string): RunState | undefined => runs.get(id);
 
-/** Re-create a run from persisted facts (LI.FI ledger) — no-op if it already exists. */
+/** Re-create a run from persisted facts (LI.FI ledger) — returns the existing
+ *  run when one with the same id OR the same source tx is already here (the
+ *  live run that broadcast it), so a swap is never shown twice. */
 export const restoreRun = (state: RunState): RunState => {
-  const existing = runs.get(state.id);
+  const existing = runs.get(state.id) ?? (state.sourceTxHash ? runBySourceTx(state.sourceTxHash) : undefined);
   if (existing) return existing;
   runs.set(state.id, state);
   notify();
   return state;
 };
 export const runByTransfer = (transferId: string): RunState | undefined => [...runs.values()].find((r) => r.transferId === transferId);
+export const runBySourceTx = (txHash: string): RunState | undefined => [...runs.values()].find((r) => r.sourceTxHash?.toLowerCase() === txHash.toLowerCase());
 
 export const updateRun = (id: string, patch: Partial<RunState> | ((r: RunState) => Partial<RunState>)): void => {
   const cur = runs.get(id);

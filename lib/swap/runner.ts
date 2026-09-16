@@ -14,7 +14,7 @@ import { addPendingLifi, loadPendingLifi, markLifiRecorded, removePendingLifi, t
 import { trackLifiSwap, type LifiTrackedTx } from "@/lib/lifi/tracker";
 import { executeSoroswap } from "@/lib/swap/soroswap";
 import { describeTurnkeyError, isUserCancelledError } from "@/lib/turnkey/client";
-import { getRun, restoreRun, updateRun, type RunSpec } from "./run-store";
+import { getRun, restoreRun, runBySourceTx, updateRun, type RunSpec } from "./run-store";
 
 export interface RunDeps {
   queryClient: QueryClient;
@@ -98,6 +98,7 @@ export const startRun = async (id: string, deps: RunDeps): Promise<void> => {
       };
       // Persist BEFORE tracking: a killed app finishes the record on next launch.
       addPendingLifi({ ...tx, fromSymbol: spec.from, toSymbol: spec.to, toAmountMin: spec.quote.estimate.toAmountMin, feePercent: spec.feePercent, etaMin: spec.etaMin, tool: spec.tool });
+      resumed.add(txHash); // never restore what this session is already tracking
       await trackLifiRun(id, tx, deps, false);
       return;
     }
@@ -218,7 +219,9 @@ const resumed = new Set<string>();
 export const resumePendingLifiRuns = async (deps: RunDeps): Promise<void> => {
   const entries = await loadPendingLifi();
   for (const p of entries) {
-    if (resumed.has(p.txHash)) continue;
+    // Already tracked here — by an earlier resume, or by the live run that
+    // broadcast it this session (the ledger is written at broadcast).
+    if (resumed.has(p.txHash) || runBySourceTx(p.txHash)) continue;
     resumed.add(p.txHash);
     void resumeOne(p, deps);
   }
