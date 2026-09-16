@@ -7,7 +7,7 @@ import type { QueryClient } from "@tanstack/react-query";
 
 import type { TurnkeyWallet } from "@/hooks/use-turnkey-wallet";
 import { NATIVE_CHAIN } from "@/lib/cctp/config";
-import { CalmEndError, OutboundError, runInboundSwap, runOutboundSwap } from "@/lib/cctp/engine";
+import { CalmEndError, OutboundError, fetchCctpTransfer, refundOutbound, runInboundSwap, runOutboundSwap } from "@/lib/cctp/engine";
 import { refreshAfterStellarAction } from "@/lib/data/after-action";
 import { GasShortfallError, LIFI_CHAIN_IDS, executeLifiSwap, maxAffordableEth } from "@/lib/lifi/execute";
 import { trackLifiSwap } from "@/lib/lifi/tracker";
@@ -31,7 +31,7 @@ export const startRun = async (id: string, deps: RunDeps): Promise<void> => {
   const spec: RunSpec = run.spec;
   const { queryClient, userId, wallet } = deps;
   const stellarAddress = wallet.stellarAddress!;
-  updateRun(id, { status: "running", stage: null, notice: undefined, startedAt: Date.now(), flags: { autopilot: deps.autopilotHint() } });
+  updateRun(id, { status: "running", stage: null, notice: undefined, failedStage: undefined, refundedStage: undefined, startedAt: Date.now(), flags: { autopilot: deps.autopilotHint(), refunding: false } });
   void queryClient.invalidateQueries({ queryKey: ["activity"] });
 
   try {
@@ -112,9 +112,9 @@ export const startRun = async (id: string, deps: RunDeps): Promise<void> => {
         // Source chain moved back — refresh it so the balance is honest.
         const fromChain = NATIVE_CHAIN[spec.from];
         await race15(refreshAfterStellarAction(queryClient, { userId, stellarAddress, chain: fromChain, chainAddress: wallet[fromChain === "ethereum" ? "ethereumAddress" : fromChain === "solana" ? "solanaAddress" : "bitcoinAddress"] ?? undefined, expectMove: [spec.from] }));
-        updateRun(id, { status: "calm", stage: null, result: { hash: txHash, verdict: "REFUNDED" }, notice: { text: `The bridge couldn’t complete this swap and returned your ${spec.from}. No funds were lost — small swaps are sometimes refunded.`, tone: "blue" } });
+        updateRun(id, { status: "calm", stage: null, refundedStage: "bridging", result: { hash: txHash, verdict: "REFUNDED" }, notice: { text: `The bridge couldn’t complete this swap and returned your ${spec.from}. No funds were lost — small swaps are sometimes refunded.`, tone: "blue" } });
       } else if (final === "failed") {
-        updateRun(id, { status: "error", result: { hash: txHash, verdict: "FAILED" }, notice: { text: `The ${spec.from} transaction didn’t confirm. If it never left your wallet nothing was spent; if it did, the bridge returns it automatically — check Activity for the final state.`, tone: "amber" } });
+        updateRun(id, { status: "error", failedStage: "confirming", result: { hash: txHash, verdict: "FAILED" }, notice: { text: `The ${spec.from} transaction didn’t confirm. If it never left your wallet nothing was spent; if it did, the bridge returns it automatically — check Activity for the final state.`, tone: "amber" } });
       } else {
         // ~20 min without a verdict: some routes legitimately take longer.
         updateRun(id, { status: "calm", stage: null, result: { hash: txHash, verdict: "PENDING" }, notice: { text: `Your ${spec.to} is still on its way — this route can take a while. It arrives automatically at your own address; the Activity row keeps tracking it.`, tone: "blue" } });
@@ -151,12 +151,29 @@ export const startRun = async (id: string, deps: RunDeps): Promise<void> => {
         const from = spec.from;
         await race15(refreshAfterStellarAction(queryClient, { userId, stellarAddress, chain: NATIVE_CHAIN[from], chainAddress: wallet[NATIVE_CHAIN[from] === "ethereum" ? "ethereumAddress" : NATIVE_CHAIN[from] === "solana" ? "solanaAddress" : "bitcoinAddress"], expectMove: [from] }));
       }
-      updateRun(id, { status: "calm", stage: null, notice: { text: e.message, tone: "blue" } });
+      updateRun(id, { status: "calm", stage: null, refundedStage: /refund|returned|back/i.test(e.message) ? getRun(id)?.stage ?? undefined : undefined, notice: { text: e.message, tone: "blue" } });
+    } else if (e instanceof OutboundError && e.optionsExhausted && spec.kind === "cctp-out") {
+      // Web doc 93 0b: no dead-end errors — the refund starts ITSELF.
+      // Autopilot users see zero prompts; others get the one burn confirmation.
+      updateRun(id, { status: "running", transferId: e.transferId, broadcastStarted: true, stage: "refund-topup", flags: { refunding: true }, notice: { text: "The exchange route kept failing on Base — bringing your USDC back to Stellar automatically.", tone: "blue" } });
+      try {
+        const row = await fetchCctpTransfer(e.transferId, false);
+        if (!row) throw new Error("Could not load the transfer.");
+        const r = await refundOutbound({ subOrgId: wallet.subOrgId, row, autopilotHint: deps.autopilotHint(), onStage: (s) => updateRun(id, { stage: s === "topup" ? "refund-topup" : "refund-burn" }) });
+        updateRun(id, { status: "calm", stage: null, refundedStage: "refund-bridging", result: { hash: r.burnTxHash }, notice: { text: "Your USDC is on its way back to your Stellar wallet — completes automatically in about 20 minutes. Nothing else to do.", tone: "blue" } });
+      } catch (re) {
+        updateRun(id, {
+          status: "error",
+          failedStage: getRun(id)?.stage ?? "pivot-swap",
+          notice: { text: isUserCancelledError(re) ? "The refund needs one confirmation — reopen this swap from In flight and tap “Bring back as USDC” when ready. Your USDC is safe at your own Base address." : `${re instanceof Error ? re.message : describeTurnkeyError(re)} — your USDC is safe at your own Base address; use “Bring back as USDC” under In flight.`, tone: "amber" }
+        });
+      }
     } else if (e instanceof OutboundError) {
       updateRun(id, {
         status: "error",
         transferId: e.transferId,
         broadcastStarted: e.broadcastStarted,
+        failedStage: e.stage,
         notice: {
           text: e.optionsExhausted
             ? "The exchange route on Base kept failing. Your USDC is safe at your own Base address — use “Bring back as USDC” under In flight to return it to Stellar."
@@ -167,7 +184,7 @@ export const startRun = async (id: string, deps: RunDeps): Promise<void> => {
         }
       });
     } else {
-      updateRun(id, { status: "error", notice: { text: e instanceof Error ? e.message : describeTurnkeyError(e), tone: "amber" } });
+      updateRun(id, { status: "error", failedStage: getRun(id)?.stage ?? undefined, notice: { text: e instanceof Error ? e.message : describeTurnkeyError(e), tone: "amber" } });
     }
   } finally {
     void queryClient.invalidateQueries({ queryKey: ["cctp", "in-flight"] });

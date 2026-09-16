@@ -380,7 +380,16 @@ export default function SwapRunScreen() {
             ) : null}
 
             <Card padding={14} gap={12}>
-              <StepList title={done ? "Swap complete" : "What happens when you swap"} timing={done ? "" : timingFor(spec)} steps={done ? [...steps, { id: "done", label: "Done", sub: `${spec.to} received` }] : steps} activeId={active} allDone={done} />
+              <StepList
+                title={done ? "Swap complete" : run.refundedStage ? "Swap refunded" : run.failedStage ? "Swap did not complete" : run.flags.refunding ? "Bringing your USDC back" : "What happens when you swap"}
+                timing={done || run.failedStage || run.refundedStage ? "" : timingFor(spec)}
+                steps={done ? [...steps, { id: "done", label: "Done", sub: `${spec.to} received` }] : steps}
+                activeId={active}
+                allDone={done}
+                failedId={run.status === "error" ? run.failedStage ?? null : null}
+                refundedId={run.status === "calm" ? run.refundedStage ?? null : null}
+                refundedLabel={`Refunded — ${spec.kind === "cctp-out" ? "USDC" : spec.from} returned`}
+              />
               {!done ? (
                 <UiText fontSize={12} color={c.muted} lineHeight={17}>
                   {spec.kind === "soroswap"
@@ -449,7 +458,16 @@ export default function SwapRunScreen() {
           <YStack paddingHorizontal={space.gutter} paddingTop={topPad} gap={20}>
             {header(spec.from, spec.to, spec.amount || "—", receiveText)}
             <Card padding={14} gap={12}>
-              <StepList title={finished ? "Swap complete" : terminal ? (row.status === "REFUNDED" ? "Refunded" : "Did not complete") : "Swap in progress"} timing='' steps={finished ? [...steps, { id: "done", label: "Done", sub: `${spec.to} received` }] : steps} activeId={finished || terminal ? null : stage} allDone={finished} />
+              <StepList
+                title={finished ? "Swap complete" : terminal ? (row.status === "REFUNDED" ? "Swap refunded" : "Swap did not complete") : "Swap in progress"}
+                timing=''
+                steps={finished ? [...steps, { id: "done", label: "Done", sub: `${spec.to} received` }] : steps}
+                activeId={finished || terminal ? null : stage}
+                allDone={finished}
+                failedId={row.status === "FAILED" ? (outbound ? (row.burnTxHash ? "pivot-swap" : "burn") : row.srcSwapTxHash ? "arriving" : "lifi") : null}
+                refundedId={row.status === "REFUNDED" ? (outbound ? "pivot-swap" : "arriving") : null}
+                refundedLabel={`Refunded — ${outbound ? "USDC" : spec.from} returned`}
+              />
               {row.errorDetail ? <UiText fontSize={12} color={c.muted} lineHeight={17}>{row.errorDetail}</UiText> : null}
               {!finished && !terminal ? (
                 <UiText fontSize={12} color={c.muted} lineHeight={17}>

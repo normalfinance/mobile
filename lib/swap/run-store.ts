@@ -30,7 +30,11 @@ export interface RunState {
   status: "idle" | "running" | "done" | "error" | "calm";
   stage: string | null;
   /** Soroswap: one or two signatures; CCTP: autopilot on for this run. */
-  flags: { embedded?: boolean; degradedAfterSign?: boolean; autopilot?: boolean; priceMoved?: boolean };
+  flags: { embedded?: boolean; degradedAfterSign?: boolean; autopilot?: boolean; priceMoved?: boolean; refunding?: boolean };
+  /** The step that failed (red ✕ on the list) — set with status "error". */
+  failedStage?: string;
+  /** The step where funds were returned (amber ↶) — set with status "calm". */
+  refundedStage?: string;
   transferId?: string;
   result?: { hash: string; verdict?: string | null; dstAmount?: string };
   /** LI.FI: the source tx hash the moment it is broadcast (for explorer / In flight). */

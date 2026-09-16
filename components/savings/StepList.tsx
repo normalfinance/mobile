@@ -7,7 +7,7 @@
 import React from "react";
 import { ActivityIndicator } from "react-native";
 import { XStack, YStack } from "tamagui";
-import { Check } from "lucide-react-native";
+import { Check, Undo2, X } from "lucide-react-native";
 
 import { Mono, UiText } from "@/components/home/primitives";
 import { useColors } from "@/lib/theme/appearance";
@@ -23,7 +23,10 @@ export const StepList = ({
   timing,
   steps,
   activeId,
-  allDone
+  allDone,
+  failedId,
+  refundedId,
+  refundedLabel
 }: {
   title: string;
   timing: string;
@@ -31,9 +34,15 @@ export const StepList = ({
   /** id of the step in progress; null = idle (nothing highlighted). */
   activeId: string | null;
   allDone?: boolean;
+  /** The step that failed — red ✕, steps before it done, after it faded. */
+  failedId?: string | null;
+  /** The step where funds were returned — amber ↶ and `refundedLabel`. */
+  refundedId?: string | null;
+  refundedLabel?: string;
 }) => {
   const c = useColors();
-  const activeIdx = activeId ? steps.findIndex((s) => s.id === activeId) : -1;
+  const markedId = failedId ?? refundedId ?? null;
+  const activeIdx = markedId ? steps.findIndex((s) => s.id === markedId) : activeId ? steps.findIndex((s) => s.id === activeId) : -1;
   return (
     <YStack gap={10}>
       <XStack justifyContent='space-between' alignItems='center'>
@@ -47,8 +56,12 @@ export const StepList = ({
       <YStack>
         {steps.map((step, idx) => {
           const done = allDone || (activeIdx >= 0 && idx < activeIdx);
-          const active = !allDone && idx === activeIdx;
-          const pending = !done && !active;
+          const failed = !!failedId && step.id === failedId;
+          const refunded = !!refundedId && !failedId && step.id === refundedId;
+          const active = !allDone && !failed && !refunded && idx === activeIdx;
+          const pending = !done && !active && !failed && !refunded;
+          const markerBg = done ? c.positive : failed ? c.failed : refunded ? c.chips.amber.color : active ? c.cta : c.iconBg;
+          const labelColor = done ? c.positive : failed ? c.failed : refunded ? c.chips.amber.color : active ? c.ink : c.muted;
           return (
             <XStack key={step.id} alignItems='center' gap={10} paddingVertical={6} opacity={pending ? 0.45 : 1}>
               <YStack
@@ -57,13 +70,17 @@ export const StepList = ({
                 borderRadius={9}
                 alignItems='center'
                 justifyContent='center'
-                backgroundColor={done ? c.positive : active ? c.cta : c.iconBg}
+                backgroundColor={markerBg}
                 borderWidth={pending ? 1 : 0}
                 borderColor={c.borderStrong}
                 borderStyle='dashed'
               >
                 {done ? (
                   <Check size={10} color='#FFFFFF' strokeWidth={3} />
+                ) : failed ? (
+                  <X size={10} color='#FFFFFF' strokeWidth={3} />
+                ) : refunded ? (
+                  <Undo2 size={10} color='#FFFFFF' strokeWidth={3} />
                 ) : active ? (
                   <ActivityIndicator size='small' color={c.ctaText} style={{ transform: [{ scale: 0.5 }] }} />
                 ) : (
@@ -71,8 +88,8 @@ export const StepList = ({
                 )}
               </YStack>
               <YStack flex={1}>
-                <UiText fontSize={13} fontWeight='500' color={done ? c.positive : active ? c.ink : c.muted}>
-                  {step.label}
+                <UiText fontSize={13} fontWeight='500' color={labelColor}>
+                  {refunded && refundedLabel ? refundedLabel : step.label}
                   {active ? "…" : ""}
                 </UiText>
                 <Mono fontSize={11} color={c.faint} marginTop={1}>

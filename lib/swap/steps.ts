@@ -32,6 +32,19 @@ export const stepsFor = (spec: RunSpec, flags: RunState["flags"], stage: string 
       { id: "bridging", label: `Bridging to ${chainOf(spec.to)}`, sub: `${spec.tool ? `Via ${spec.tool} · ` : ""}${spec.etaMin ? `~${spec.etaMin} min` : "a few minutes"} — automatic, safe to close` }
     ];
   }
+  if (spec.kind === "cctp-out" && flags.refunding) {
+    // Both automatic pivot attempts reverted — web doc 93 0b: the refund starts
+    // ITSELF; the list becomes the refund track (Circle bridge back to Stellar).
+    return [
+      { id: "burn-prepare", label: "Preparing the bridge transaction", sub: "Done" },
+      { id: "burn", label: "Starting the Circle bridge", sub: "Done" },
+      { id: "bridging", label: "Bridging to Base", sub: "Done — USDC arrived at your own Base address" },
+      { id: "pivot-swap", label: `Swapping USDC to ${spec.to}`, sub: "The exchange route kept failing on Base" },
+      { id: "refund-topup", label: "Covering network fees", sub: "Normal sends gas to your Base address" },
+      { id: "refund-burn", label: "Sending your USDC back", sub: flags.autopilot ? "Automatic — no signature needed" : "Confirm with passkey · 1–2 confirmations" },
+      { id: "refund-bridging", label: "Bridging back to Stellar", sub: "Circle attestation ~20 min — safe to close" }
+    ];
+  }
   if (spec.kind === "cctp-out") {
     return [
       { id: "burn-prepare", label: "Preparing the bridge transaction", sub: "A few seconds — no action needed yet" },
