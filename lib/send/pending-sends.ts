@@ -46,13 +46,22 @@ export const addPendingSend = (entry: Omit<PendingSend, "createdAt">) => {
   void persist();
 };
 
+const settledListeners = new Set<(sends: PendingSend[]) => void>();
+/** Fires with the sends a feed has just confirmed (notifications). */
+export const onSendsSettled = (l: (sends: PendingSend[]) => void) => {
+  settledListeners.add(l);
+  return () => settledListeners.delete(l);
+};
+
 /** Drop entries a feed now carries (case-insensitive hash match) or that expired. */
 export const reconcilePendingSends = (knownHashes: ReadonlySet<string>) => {
+  const confirmed = cache.filter((p) => knownHashes.has(p.txHash.toLowerCase()));
   const next = cache.filter((p) => !knownHashes.has(p.txHash.toLowerCase()) && Date.now() - p.createdAt < TTL_MS);
   if (next.length !== cache.length) {
     cache = next;
     notify();
     void persist();
+    if (confirmed.length) settledListeners.forEach((l) => l(confirmed));
   }
 };
 

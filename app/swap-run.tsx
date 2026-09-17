@@ -29,6 +29,7 @@ import { startRun } from "@/lib/swap/runner";
 import { activeStepFor, explorerFor, stepsFor, timingFor } from "@/lib/swap/steps";
 import { useColors } from "@/lib/theme/appearance";
 import { radius, space, tracking } from "@/lib/theme/tokens";
+import { maybeAskForNotifications } from "@/lib/notifications";
 import { autopilotAvailable, fetchAutopilotStatus, grantAutopilotConsent } from "@/lib/turnkey/autopilot";
 import { describeTurnkeyError, isUserCancelledError } from "@/lib/turnkey/client";
 import { ensureDeviceReady } from "@/lib/turnkey/device-check";
@@ -229,6 +230,7 @@ export default function SwapRunScreen() {
       return;
     }
     if (run.spec.kind === "cctp-out" || run.spec.kind === "cctp-in") await offerConsent();
+    if (run.spec.kind !== "soroswap") await maybeAskForNotifications(); // once; a bridge can outlive the screen
     void Haptics.selectionAsync().catch(() => undefined);
     void startRun(run.id, { queryClient, userId: user?.id, wallet, autopilotHint: () => grantedRef.current || autopilotQ.data?.active === true });
   };

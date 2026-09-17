@@ -21,6 +21,7 @@ import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { loadFonts } from "@/lib/fonts";
 import { AppearanceProvider, useAppearance } from "@/lib/theme/appearance";
 import { CaptchaProvider } from "@/lib/auth/captcha";
+import { configureNotifications, listenForNotificationTaps } from "@/lib/notifications";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
 
@@ -105,6 +106,10 @@ export default function RootLayout() {
     loadFonts().then(() => {
       SplashScreen.hideAsync();
     });
+  }, []);
+  useEffect(() => {
+    configureNotifications();
+    return listenForNotificationTaps();
   }, []);
 
   return (

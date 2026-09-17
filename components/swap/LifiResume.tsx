@@ -8,6 +8,7 @@ import React from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { useTurnkeyWallet } from "@/hooks/use-turnkey-wallet";
+import { registerPushToken } from "@/lib/notifications";
 import { resumePendingLifiRuns } from "@/lib/swap/runner";
 import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
 
@@ -23,6 +24,7 @@ export function LifiResume() {
     if (!wallet || started) return;
     started = true;
     void resumePendingLifiRuns({ queryClient, userId: user?.id, wallet, autopilotHint: () => false });
+    void registerPushToken(); // no-op until permission is granted / the route exists
   }, [wallet, user?.id, queryClient]);
   return null;
 }

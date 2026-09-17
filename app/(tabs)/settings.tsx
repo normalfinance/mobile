@@ -1,7 +1,7 @@
 // Settings — account, appearance (light / dark / system), about, sign out.
 
 import React from "react";
-import { Alert, ScrollView } from "react-native";
+import { Alert, Linking, ScrollView } from "react-native";
 import Constants from "expo-constants";
 import * as Clipboard from "expo-clipboard";
 import { XStack, YStack } from "tamagui";
@@ -31,11 +31,12 @@ import {
 } from "@/components/home/primitives";
 import { CHAIN_META, useTurnkeyWallet, type WalletChain } from "@/hooks/use-turnkey-wallet";
 import { supabase } from "@/lib/supabase";
+import { getNotificationPermission, requestNotificationPermission, unregisterPushToken, type NotificationPermission } from "@/lib/notifications";
 import { useAppearance, useColors, type AppearanceMode } from "@/lib/theme/appearance";
 import { space } from "@/lib/theme/tokens";
 import { shortenAddress } from "@/lib/utils/number-format.utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Zap } from "lucide-react-native";
+import { Bell, Zap } from "lucide-react-native";
 import { Chip } from "@/components/home/primitives";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { autopilotAvailable, fetchAutopilotStatus, grantAutopilotConsent, revokeAutopilotConsent } from "@/lib/turnkey/autopilot";
@@ -52,6 +53,17 @@ const APPEARANCE: { key: AppearanceMode; label: string; Icon: typeof Sun }[] = [
 export default function SettingsScreen() {
   const c = useColors();
   const { mode, setMode } = useAppearance();
+  const [notif, setNotif] = React.useState<NotificationPermission | null>(null);
+  React.useEffect(() => {
+    void getNotificationPermission().then(setNotif);
+  }, []);
+  const enableNotifications = async () => {
+    if (notif === "denied") {
+      Alert.alert("Notifications are off", "Turn them on for Normal in your phone's Settings app.", [{ text: "Cancel", style: "cancel" }, { text: "Open Settings", onPress: () => void Linking.openSettings() }]);
+      return;
+    }
+    setNotif(await requestNotificationPermission());
+  };
   const { user } = useSupabaseAuth();
   const { addresses, wallet } = useTurnkeyWallet();
   const router = useRouter();
@@ -140,6 +152,7 @@ export default function SettingsScreen() {
         text: "Sign out",
         style: "destructive",
         onPress: async () => {
+          await unregisterPushToken();
           const { error } = await supabase.auth.signOut();
           if (error) Alert.alert("Sign out failed", error.message);
         }
@@ -233,6 +246,14 @@ export default function SettingsScreen() {
                 label={testing ? "Testing…" : "Test signing"}
                 sub='Signs a random digest with your passkey and verifies it. Nothing is sent.'
                 onPress={testing ? undefined : testSigning}
+              />
+              <Divider />
+              <ListRow
+                icon={<Bell size={16} color={c.ink} strokeWidth={1.8} />}
+                label='Notifications'
+                sub={notif === "granted" ? "Swaps, refunds and sends as they settle" : "Get told when a swap, refund or send settles"}
+                right={<Chip tone={notif === "granted" ? "green" : "neutral"} label={notif === null ? "…" : notif === "granted" ? "On" : "Off"} />}
+                onPress={notif === "granted" ? undefined : () => void enableNotifications()}
               />
               {autopilotAvailable() ? (
                 <>

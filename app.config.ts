@@ -14,6 +14,8 @@
 // Developer → Associated Domains Development). Live failure without that
 // opt-in: "Application with identifier … is not associated with domain".
 
+import fs from "fs";
+import path from "path";
 import type { ConfigContext, ExpoConfig } from "expo/config";
 
 const IS_PRODUCTION = process.env.APP_VARIANT === "production";
@@ -30,6 +32,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   userInterfaceStyle: "automatic",
   plugins: [
     ...(config.plugins ?? []),
+    // Local + remote notifications. iOS: adds the aps-environment entitlement.
+    // Android: real push additionally needs google-services.json (Firebase).
+    ["expo-notifications", { color: "#0A0A0F", defaultChannel: "money" }],
     // Send → scan a recipient's QR code. Camera only; no microphone entry.
     [
       "expo-camera",
@@ -52,6 +57,10 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   android: {
     ...config.android,
-    package: "io.normalfinance.app"
+    package: "io.normalfinance.app",
+    // Real push on Android needs Firebase Cloud Messaging: drop the Firebase
+    // console's google-services.json at the repo root and it is picked up on
+    // the next prebuild. Absent = local notifications only (no FCM token).
+    ...(fs.existsSync(path.join(__dirname, "google-services.json")) ? { googleServicesFile: "./google-services.json" } : {})
   }
 });

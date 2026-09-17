@@ -73,12 +73,22 @@ export const restoreRun = (state: RunState): RunState => {
 export const runByTransfer = (transferId: string): RunState | undefined => [...runs.values()].find((r) => r.transferId === transferId);
 export const runBySourceTx = (txHash: string): RunState | undefined => [...runs.values()].find((r) => r.sourceTxHash?.toLowerCase() === txHash.toLowerCase());
 
+const TERMINAL = new Set<RunState["status"]>(["done", "calm", "error"]);
+const settledListeners = new Set<(run: RunState) => void>();
+/** Fires once when a run leaves "running" for a terminal state (notifications). */
+export const onRunSettled = (l: (run: RunState) => void) => {
+  settledListeners.add(l);
+  return () => settledListeners.delete(l);
+};
+
 export const updateRun = (id: string, patch: Partial<RunState> | ((r: RunState) => Partial<RunState>)): void => {
   const cur = runs.get(id);
   if (!cur) return;
   const p = typeof patch === "function" ? patch(cur) : patch;
-  runs.set(id, { ...cur, ...p, flags: { ...cur.flags, ...(p.flags ?? {}) } });
+  const next: RunState = { ...cur, ...p, flags: { ...cur.flags, ...(p.flags ?? {}) } };
+  runs.set(id, next);
   notify();
+  if (cur.status === "running" && TERMINAL.has(next.status)) settledListeners.forEach((l) => l(next));
 };
 
 export const clearPendingRun = () => {
