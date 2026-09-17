@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "994442734977",
+    "project_id": "normal-3116b",
+    "storage_bucket": "normal-3116b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:994442734977:android:643571f6d0ed26aee48c80",
+        "android_client_info": {
+          "package_name": "io.normalfinance.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCr4U1gDv-UONK_Hswfs9LAMf_1Yk7EZ10"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

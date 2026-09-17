@@ -12,7 +12,7 @@
 // leg — suppressed by hash so each action shows once (web use-user-activity.ts).
 // There is no pagination anywhere (Q21).
 
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
 
 import { apiFetch } from "@/lib/api";
@@ -219,12 +219,21 @@ export const useActivityFeed = (priceOf: (symbol: string) => number = () => 0) =
 
   // Fixed-length memo key: the number of queries changes with the wallet.
   const dataKey = queries.map((q) => q.dataUpdatedAt).join(",") + "|" + walletQuery.dataUpdatedAt + "|" + rampsQuery.dataUpdatedAt + "|" + pendingSends.length + "|" + cctpQuery.dataUpdatedAt + "|" + lifiStatusQuery.dataUpdatedAt;
-  const transactions = useMemo(() => {
-    // Every hash the feeds know this render — a pending send it covers is retired.
-    const known = new Set<string>();
-    queries.forEach((q) => (q.data?.items ?? []).forEach((i) => i.txHash && known.add(i.txHash.toLowerCase())));
-    (walletQuery.data?.items ?? []).forEach((i) => i.txHash && known.add(i.txHash.toLowerCase()));
+  // Every hash the feeds know this render — a pending send it covers is retired.
+  const known = useMemo(() => {
+    const set = new Set<string>();
+    queries.forEach((q) => (q.data?.items ?? []).forEach((i) => i.txHash && set.add(i.txHash.toLowerCase())));
+    (walletQuery.data?.items ?? []).forEach((i) => i.txHash && set.add(i.txHash.toLowerCase()));
+    return set;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataKey]);
+  // Retiring a pending send notifies its subscribers (a setState) — that must
+  // happen in an effect, never during render ("Cannot update a component while
+  // rendering a different component", live 2026-09-17 after a confirmed send).
+  useEffect(() => {
     reconcilePendingSends(known);
+  }, [known]);
+  const transactions = useMemo(() => {
     const pendingRows: Transaction[] = pendingSends
       .filter((p) => !known.has(p.txHash.toLowerCase()))
       .map((p) => ({
