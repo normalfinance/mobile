@@ -104,33 +104,44 @@ export const useAuthStatus = (): AuthStatus => {
 };
 
 /**
- * Sign in with Apple (iOS): the OS returns an identity token bound to a nonce
- * we generated; Supabase verifies it against Apple and creates/links the user.
+ * Sign in with Apple (iOS): the OS returns an identity token; Supabase verifies
+ * it against Apple's keys and creates/links the user. Exactly the flow Supabase
+ * documents for Expo (no nonce): with a nonce the hosted auth server rejected a
+ * token whose audience and issuer were correct with a bare "Bad ID token"
+ * (live 2026-09-21), and the nonce is optional on the native path.
  * Requires the Apple provider in Supabase → Authentication → Providers with
  * the bundle ids (io.normalfinance.app, io.normalfinance.app.dev) as client IDs.
  */
 export const signInWithApple = async (): Promise<boolean> => {
   const AppleAuthentication = await import("expo-apple-authentication");
-  const Crypto = await import("expo-crypto");
   if (!(await AppleAuthentication.isAvailableAsync())) {
     throw new Error("Sign in with Apple isn’t available on this device.");
   }
-  const rawNonce = Crypto.randomUUID();
-  const hashedNonce = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, rawNonce);
   const credential = await AppleAuthentication.signInAsync({
     requestedScopes: [
       AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
       AppleAuthentication.AppleAuthenticationScope.EMAIL
-    ],
-    nonce: hashedNonce
+    ]
   });
   if (!credential.identityToken) throw new Error("Apple returned no identity token.");
   const { error } = await supabase.auth.signInWithIdToken({
     provider: "apple",
-    token: credential.identityToken,
-    nonce: rawNonce
+    token: credential.identityToken
   });
-  if (error) throw error;
+  if (error) {
+    // "Bad ID token" is Supabase's one-size message for audience, issuer and
+    // nonce failures — name what the token actually carries so the fix is obvious.
+    let detail = "";
+    try {
+      const part = credential.identityToken.split(".")[1] ?? "";
+      const b64 = part.replace(/-/g, "+").replace(/_/g, "/");
+      const claims = JSON.parse(Buffer.from(b64 + "=".repeat((4 - (b64.length % 4)) % 4), "base64").toString("utf8")) as { aud?: string; iss?: string };
+      detail = ` (token audience ${claims.aud ?? "?"}, issuer ${claims.iss ?? "?"} — Supabase → Providers → Apple → Client IDs must contain that audience)`;
+    } catch {
+      /* diagnostics only */
+    }
+    throw new Error(`${error.message}${detail}`);
+  }
   return true;
 };
 

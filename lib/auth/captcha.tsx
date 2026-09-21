@@ -35,7 +35,9 @@ const CAPTCHA_REASONS: Record<string, string> = {
   "error:110200": "this app's domain is not on the Turnstile allow-list (Cloudflare 110200)",
   expired: "the check expired — try again",
   timeout: "the check timed out — try again",
-  "missing-site-key": "the server has no Turnstile site key configured"
+  "missing-site-key": "the server has no Turnstile site key configured",
+  "error:110100": "the Turnstile site key is invalid (Cloudflare 110100)",
+  "not-loaded": "the check did not load in time — check your connection and try again"
 };
 
 export class CaptchaFailed extends Error {
@@ -84,6 +86,17 @@ export const CaptchaProvider = ({ children }: { children: React.ReactNode }) => 
     setPending(null);
     setLoaded(false);
   }, []);
+
+  // Watchdog: a page that never renders the widget (bad site key, blocked
+  // script, offline) must reject, never hang the sheet (live 2026-09-21).
+  React.useEffect(() => {
+    if (!pending) return;
+    const t = setTimeout(() => {
+      pending.reject(new CaptchaFailed("not-loaded"));
+      close();
+    }, 25_000);
+    return () => clearTimeout(t);
+  }, [pending, close]);
 
   const onMessage = (event: WebViewMessageEvent) => {
     if (!pending) return;
@@ -150,6 +163,8 @@ export const CaptchaProvider = ({ children }: { children: React.ReactNode }) => 
                     close();
                   }}
                   javaScriptEnabled
+                  // Page-side exceptions (e.g. turnstile.render throwing on a bad key) become a reason we can show.
+                  injectedJavaScriptBeforeContentLoaded={`window.onerror = function (m) { try { window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'turnstile-error', reason: 'page: ' + m })); } catch (e) {} }; true;`}
                   originWhitelist={["https://*"]}
                   style={{ backgroundColor: "transparent", opacity: loaded ? 1 : 0 }}
                   containerStyle={{ backgroundColor: "transparent" }}
