@@ -12,8 +12,10 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import type { TurnkeyWallet, WalletChain } from "@/hooks/use-turnkey-wallet";
+import { fetchTurnkeyWallet } from "@/hooks/use-turnkey-wallet";
 import { apiFetch } from "@/lib/api";
-import { ensureChainAddress } from "./accounts";
+import { CHAIN_ACCOUNT_SPECS, ensureChainAddress } from "./accounts";
+import { createPasskeyClient } from "./client";
 import { invalidateCredentials } from "./credentials";
 import { markDeviceReady } from "./device-ready";
 import { registerPasskey } from "./passkey";
@@ -32,8 +34,22 @@ export class WalletLimitError extends Error {
 // created (WalletBackupGate). Mobile records the same fact so the export gate
 // can enforce it once the export screen ships; nothing reads it for UI yet.
 const NEEDS_BACKUP_KEY = "wallet_needs_backup_v1";
-export const markWalletNeedsBackup = (subOrgId: string) => AsyncStorage.setItem(NEEDS_BACKUP_KEY, subOrgId).catch(() => undefined);
-export const markWalletBackedUp = () => AsyncStorage.removeItem(NEEDS_BACKUP_KEY).catch(() => undefined);
+const BACKED_UP_KEY = (subOrgId: string) => `wallet_backed_up_v1:${subOrgId}`;
+const backupListeners = new Set<() => void>();
+export const onBackupStateChange = (l: () => void) => {
+  backupListeners.add(l);
+  return () => backupListeners.delete(l);
+};
+export const markWalletNeedsBackup = async (subOrgId: string) => {
+  if ((await AsyncStorage.getItem(BACKED_UP_KEY(subOrgId)).catch(() => null)) != null) return; // confirmed once → never nagged again
+  await AsyncStorage.setItem(NEEDS_BACKUP_KEY, subOrgId).catch(() => undefined);
+  backupListeners.forEach((l) => l());
+};
+export const markWalletBackedUp = async (subOrgId: string) => {
+  await AsyncStorage.setItem(BACKED_UP_KEY(subOrgId), String(Date.now())).catch(() => undefined);
+  await AsyncStorage.removeItem(NEEDS_BACKUP_KEY).catch(() => undefined);
+  backupListeners.forEach((l) => l());
+};
 export const walletNeedsBackup = async (subOrgId: string) => (await AsyncStorage.getItem(NEEDS_BACKUP_KEY).catch(() => null)) === subOrgId;
 
 interface WalletResponse {
@@ -59,7 +75,11 @@ const createFirstChain = async (user: { id: string; email?: string | null }, cha
   const created = await apiFetch<WalletResponse>("/api/turnkey/wallet", {
     body: { challenge: attestation.challenge, attestation: attestation.attestation, chain }
   });
-  const w = created?.wallet;
+  // 201 carries subOrgId + walletId; the idempotent 200 for an already
+  // provisioned account carries addresses only — re-read the row (web
+  // add-account.ts re-reads GET /api/turnkey/wallet strictly after creating).
+  let w = created?.wallet ?? null;
+  if (!w?.subOrgId) w = await fetchTurnkeyWallet();
   if (!w?.subOrgId) throw new Error(created?.error ?? "The server did not create the wallet.");
   const wallet: TurnkeyWallet = {
     subOrgId: w.subOrgId,
@@ -80,18 +100,40 @@ const createFirstChain = async (user: { id: string; email?: string | null }, cha
   return wallet;
 };
 
+/** A sub-org that exists but holds no wallet (e.g. an abandoned import):
+ *  create the wallet with the existing passkey, then let the server read
+ *  the addresses (web add-account.ts:150-180). Never a new passkey. */
+const createWalletInSubOrg = async (wallet: TurnkeyWallet, chain: WalletChain): Promise<TurnkeyWallet> => {
+  const client = await createPasskeyClient();
+  const activity = await client.createWallet({
+    type: "ACTIVITY_TYPE_CREATE_WALLET",
+    timestampMs: String(Date.now()),
+    organizationId: wallet.subOrgId,
+    parameters: { walletName: "Normal Wallet", accounts: CHAIN_ACCOUNT_SPECS[chain] }
+  });
+  const walletId = activity?.activity?.result?.createWalletResult?.walletId;
+  if (!walletId) throw new Error("Turnkey did not create the wallet");
+  const data = await apiFetch<{ wallet?: Partial<TurnkeyWallet> }>("/api/turnkey/import", { body: { walletId, chain } });
+  if (!data?.wallet?.[ADDRESS_FIELD[chain]]) throw new Error(`The server did not return a ${chain} address.`);
+  await markWalletNeedsBackup(wallet.subOrgId); // a brand-new seed
+  return { ...wallet, walletId, ...data.wallet };
+};
+
 /**
  * Ensure `chain` has an address; returns the updated wallet. One passkey
- * prompt either way (registration for a new account, a signed
- * CREATE_WALLET_ACCOUNTS for an existing one); a no-op if it already exists.
+ * prompt either way — registration ONLY when the account has no wallet row
+ * at all; a signed CREATE_WALLET / CREATE_WALLET_ACCOUNTS otherwise (a
+ * second passkey on an existing account is never minted). No-op if the
+ * address already exists.
  */
 export const provisionChain = async (p: { user: { id: string; email?: string | null } | null | undefined; wallet: TurnkeyWallet | null | undefined; chain: WalletChain }): Promise<TurnkeyWallet> => {
   if (!p.user) throw new Error("Sign in first.");
   if (!p.wallet) return createFirstChain(p.user, p.chain);
   if (p.wallet[ADDRESS_FIELD[p.chain]]) return p.wallet;
-  if (!p.wallet.stellarAddress && !p.wallet.walletId) {
-    // A row without a walletId cannot take more chains — treat as first chain.
-    return createFirstChain(p.user, p.chain);
-  }
-  return ensureChainAddress(p.wallet, p.chain);
+  if (!p.wallet.walletId) return createWalletInSubOrg(p.wallet, p.chain);
+  const added = await ensureChainAddress(p.wallet, p.chain);
+  // Same seed, new address depending on it — ask for the backup again if it
+  // was never confirmed (no-op once confirmed; web add-account.ts:139-146).
+  await markWalletNeedsBackup(p.wallet.subOrgId);
+  return added;
 };

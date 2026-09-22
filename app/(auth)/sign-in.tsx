@@ -6,7 +6,7 @@
 import React from "react";
 import { Alert, Platform } from "react-native";
 import { Image } from "expo-image";
-import * as AppleAuthentication from "expo-apple-authentication";
+import Svg, { Path } from "react-native-svg";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { XStack, YStack } from "tamagui";
 
@@ -19,6 +19,13 @@ import { BRAND_ASSETS } from "@/lib/utils/cdn.utils";
 import { signInWithApple, signInWithGoogle } from "@/services";
 
 const BUTTON_HEIGHT = 48;
+
+/** The Apple logo (Simple Icons path, CC0) — drawn as a vector so it scales and tints cleanly. */
+const AppleLogo = ({ color, size = 18 }: { color: string; size?: number }) => (
+  <Svg width={size} height={size} viewBox='0 0 24 24'>
+    <Path fill={color} d='M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701' />
+  </Svg>
+);
 
 export default function SignInScreen() {
   const c = useColors();
@@ -109,14 +116,25 @@ export default function SignInScreen() {
       </XStack>
 
       {Platform.OS === "ios" ? (
-        // Apple's own button: draws the logo itself and follows the HIG.
-        <AppleAuthentication.AppleAuthenticationButton
-          buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
-          buttonStyle={scheme === "dark" ? AppleAuthentication.AppleAuthenticationButtonStyle.WHITE : AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
-          cornerRadius={radius.cta}
-          style={{ height: BUTTON_HEIGHT, width: "100%", opacity: busy === "apple" ? 0.6 : 1 }}
-          onPress={() => (busy ? undefined : void apple())}
-        />
+        // Same height, radius and 15/700 label as the Google button; Apple's
+        // logo and wording per the HIG. (Apple's native button fixes its own
+        // label size, which is why it looked bigger.)
+        <XStack
+          onPress={busy ? undefined : () => void apple()}
+          opacity={busy === "apple" ? 0.6 : 1}
+          height={BUTTON_HEIGHT}
+          borderRadius={radius.cta}
+          backgroundColor={scheme === "dark" ? "#FFFFFF" : "#000000"}
+          pressStyle={{ opacity: 0.85 }}
+          alignItems='center'
+          justifyContent='center'
+          gap={8}
+          accessibilityRole='button'
+          accessibilityLabel='Continue with Apple'
+        >
+          <AppleLogo color={scheme === "dark" ? "#000000" : "#FFFFFF"} />
+          <UiText fontSize={15} fontWeight='700' letterSpacing={tracking(15)} color={scheme === "dark" ? "#000000" : "#FFFFFF"}>Continue with Apple</UiText>
+        </XStack>
       ) : null}
       <XStack
         onPress={busy ? undefined : () => void google()}

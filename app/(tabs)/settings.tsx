@@ -36,7 +36,7 @@ import { useAppearance, useColors, type AppearanceMode } from "@/lib/theme/appea
 import { space } from "@/lib/theme/tokens";
 import { shortenAddress } from "@/lib/utils/number-format.utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bell, Zap } from "lucide-react-native";
+import { Bell, KeyRound, Zap } from "lucide-react-native";
 import { Chip } from "@/components/home/primitives";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { autopilotAvailable, fetchAutopilotStatus, grantAutopilotConsent, revokeAutopilotConsent } from "@/lib/turnkey/autopilot";
@@ -239,6 +239,13 @@ export default function SettingsScreen() {
                 label='Set up this phone'
                 sub='Add a passkey for this device to your wallet'
                 onPress={() => router.push("/setup-device")}
+              />
+              <Divider />
+              <ListRow
+                icon={<KeyRound size={16} color={c.ink} strokeWidth={1.8} />}
+                label='Recovery phrase'
+                sub='Reveal the 12 words that restore this wallet — one passkey confirmation'
+                onPress={() => router.push("/backup")}
               />
               <Divider />
               <ListRow

@@ -59,12 +59,20 @@ export default function GetStartedScreen() {
     setBusy(flow);
     try {
       let w = wallet;
-      if (!hasChain(picked.chain)) {
+      const created = !hasChain(picked.chain);
+      if (created) {
         w = await provisionChain({ user, wallet, chain: picked.chain });
         queryClient.setQueryData(turnkeyWalletQueryKey(user.id), w);
         await refetch();
       }
       skipOnboarding(); // the tabs gate must not bounce back here mid-flow
+      if (created && !wallet) {
+        // A brand-new seed: show the recovery phrase first (web's backup
+        // gate), then continue into the flow the user chose.
+        router.replace("/(tabs)");
+        router.push({ pathname: "/backup", params: flow === "buy" ? { next: "buy", asset: picked.symbol } : { next: "receive", chain: picked.chain } });
+        return;
+      }
       if (flow === "buy") {
         router.replace("/(tabs)");
         router.push({ pathname: "/buy", params: { asset: picked.symbol } });
@@ -134,7 +142,7 @@ export default function GetStartedScreen() {
                 {picked
                   ? hasChain(picked.chain)
                     ? `Your ${picked.chainName} address is ready. Buy ${picked.symbol} with a card, or receive it from another wallet.`
-                    : `Your ${picked.chainName} wallet is created on the way — one passkey confirmation, secured by this phone. No seed phrase to write down.`
+                    : `Your ${picked.chainName} wallet is created on the way — one passkey confirmation, secured by this phone. You’ll get a 12-word recovery phrase to write down.`
                   : `Signed in as ${user?.email ?? "you"}. Pick an asset — its wallet is created when you first buy or receive it.`}
               </UiText>
             </YStack>

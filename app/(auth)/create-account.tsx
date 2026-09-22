@@ -12,8 +12,10 @@ export default function CreateAccountScreen() {
   const router = useRouter();
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
+  const [confirm, setConfirm] = React.useState("");
   const [busy, setBusy] = React.useState(false);
-  const ready = looksLikeEmail(email) && password.length >= MIN_PASSWORD;
+  const mismatch = confirm.length > 0 && confirm !== password;
+  const ready = looksLikeEmail(email) && password.length >= MIN_PASSWORD && confirm === password;
 
   const submit = async () => {
     if (!ready || busy) return;
@@ -51,9 +53,23 @@ export default function CreateAccountScreen() {
         value={password}
         onChangeText={setPassword}
         editable={!busy}
+        returnKeyType='next'
+        hint={password.length > 0 && password.length < MIN_PASSWORD ? `${MIN_PASSWORD - password.length} more character${MIN_PASSWORD - password.length === 1 ? "" : "s"}` : undefined}
+      />
+      <Field
+        label='Confirm password'
+        placeholder='Type it again'
+        secureTextEntry
+        autoCapitalize='none'
+        autoCorrect={false}
+        autoComplete='new-password'
+        textContentType='newPassword'
+        value={confirm}
+        onChangeText={setConfirm}
+        editable={!busy}
         onSubmitEditing={submit}
         returnKeyType='go'
-        hint={password.length > 0 && password.length < MIN_PASSWORD ? `${MIN_PASSWORD - password.length} more character${MIN_PASSWORD - password.length === 1 ? "" : "s"}` : undefined}
+        hint={mismatch ? "Passwords don’t match" : undefined}
       />
       <PrimaryButton label={busy ? "Creating…" : "Create account"} onPress={submit} disabled={!ready} loading={busy} />
     </AuthScreen>
