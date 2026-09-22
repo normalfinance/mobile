@@ -130,7 +130,7 @@ export function CctpOutboundPanel({ to, amount, setAmount, fromPill, toPill, onF
 
   // Gates, in time-to-resolve order.
   let button: { label: string; onPress?: () => void; disabled?: boolean; loading?: boolean };
-  if (!stellarAddress) button = { label: "Stellar wallet required", disabled: true };
+  if (!stellarAddress) button = { label: addingChain === "stellar" ? "Confirm with your passkey…" : "Add Stellar to your wallet", onPress: () => void addChain("stellar"), loading: addingChain === "stellar" };
   else if (!evmAddress) button = { label: addingChain === "ethereum" ? "Adding…" : "Add Ethereum to your wallet", onPress: () => void addChain("ethereum"), loading: addingChain === "ethereum" };
   else if (!toAddress) button = { label: addingChain === toChain ? "Adding…" : `Add ${SEND_ASSETS[to].name} to your wallet`, onPress: () => void addChain(toChain), loading: addingChain === toChain };
   else if (lowXlm) button = { label: "Receive XLM for the network fee", onPress: () => router.push("/(tabs)/savings") };

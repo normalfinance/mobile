@@ -166,7 +166,7 @@ export function CctpInboundPanel({ from, amount, setAmount, fromPill, toPill, on
   };
 
   let button: { label: string; onPress?: () => void; disabled?: boolean; loading?: boolean };
-  if (!stellarAddress) button = { label: "Stellar wallet required", disabled: true };
+  if (!stellarAddress) button = { label: addingChain === "stellar" ? "Confirm with your passkey…" : "Add Stellar to your wallet", onPress: () => void addChain("stellar"), loading: addingChain === "stellar" };
   else if (needsActivation) button = { label: "Activate your Stellar account first", onPress: () => router.push("/(tabs)/savings") };
   else if (needsTrustline) button = { label: "Add USDC trustline first", onPress: () => router.push("/(tabs)/savings") };
   else if (!fromAddress) button = { label: addingChain === fromChain ? "Adding…" : `Add ${SEND_ASSETS[from].name} to your wallet`, onPress: () => void addChain(fromChain), loading: addingChain === fromChain };

@@ -16,7 +16,8 @@ import { AmountInput, ReceiveBox, SwapMiddle } from "@/components/swap/AmountInp
 import { ReceiveSheet } from "@/components/home/ReceiveSheet";
 import { useBackendPortfolio } from "@/hooks/use-backend-portfolio";
 import { useSavingsPosition, useStellarAccountProbe } from "@/hooks/use-savings";
-import { useTurnkeyWallet, walletAddresses } from "@/hooks/use-turnkey-wallet";
+import { turnkeyWalletQueryKey, useTurnkeyWallet, walletAddresses } from "@/hooks/use-turnkey-wallet";
+import { provisionChain } from "@/lib/turnkey/provision";
 import { refreshAfterStellarAction } from "@/lib/data/after-action";
 import { addUsdcTrustline } from "@/lib/savings/engine";
 import { canPaySorobanFee, maxXlmForSorobanSwap, spendableXlmForOutflow } from "@/lib/stellar/send";
@@ -50,7 +51,7 @@ export function SoroswapPanel({ from, to, amount, setAmount, fromPill, toPill, o
   const router = useRouter();
   const queryClient = useQueryClient();
   const { user } = useSupabaseAuth();
-  const { wallet } = useTurnkeyWallet();
+  const { wallet, refetch: refetchWallet } = useTurnkeyWallet();
   const address = wallet?.stellarAddress ?? null;
   const { ready: deviceReady } = useDeviceReady(wallet?.subOrgId);
   const { portfolioData } = useBackendPortfolio();
@@ -63,6 +64,21 @@ export function SoroswapPanel({ from, to, amount, setAmount, fromPill, toPill, o
   const [receiveOpen, setReceiveOpen] = React.useState(false);
   const [addingTrustline, setAddingTrustline] = React.useState(false);
   const [priceMoved, setPriceMoved] = React.useState(false);
+  // Lazy creation: no Stellar address yet (or no wallet at all) → one passkey.
+  const [addingStellar, setAddingStellar] = React.useState(false);
+  const addStellar = async () => {
+    if (!user) return;
+    setAddingStellar(true);
+    try {
+      const updated = await provisionChain({ user, wallet, chain: "stellar" });
+      queryClient.setQueryData(turnkeyWalletQueryKey(user.id), updated);
+      await refetchWallet();
+    } catch (e) {
+      if (!isUserCancelledError(e)) Alert.alert("Couldn’t add Stellar", describeTurnkeyError(e));
+    } finally {
+      setAddingStellar(false);
+    }
+  };
 
   // Account state (Horizon): activation, trustline, XLM for the Soroban fee.
   // Watched only while a gate is open and this tab is on screen.
@@ -191,7 +207,7 @@ export function SoroswapPanel({ from, to, amount, setAmount, fromPill, toPill, o
 
   // Button (web order).
   let button: { label: string; onPress?: () => void; disabled?: boolean; loading?: boolean };
-  if (!address) button = { label: "Stellar wallet required", disabled: true };
+  if (!address) button = { label: addingStellar ? "Confirm with your passkey…" : "Add Stellar to your wallet", onPress: () => void addStellar(), loading: addingStellar };
   else if (needsActivation) button = { label: "Add XLM to activate", onPress: () => setReceiveOpen(true) };
   else if (needsTrustline) button = { label: addingTrustline ? "Adding trustline…" : "Add USDC trustline", onPress: handleAddTrustline, loading: addingTrustline };
   else if (!amountOk) button = { label: "Enter an amount", disabled: true };

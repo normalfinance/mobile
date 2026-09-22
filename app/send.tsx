@@ -308,10 +308,10 @@ export default function SendScreen() {
                 })}
               </XStack>
 
-              {wallet && !from ? (
+              {!from ? (
                 <YStack gap={10} paddingTop={4}>
                   <UiText fontSize={13} color={c.muted} lineHeight={18}>
-                    Your Normal wallet has no {meta.name} address yet. One passkey confirmation adds it on the same wallet.
+                    {wallet ? `Your Normal wallet has no ${meta.name} address yet. One passkey confirmation adds it on the same wallet.` : `You don’t have a Normal wallet yet. One passkey confirmation creates it with a ${meta.name} address.`}
                   </UiText>
                   <PrimaryButton label={addingChain ? "Adding…" : `Add ${meta.name}`} onPress={addChain} loading={addingChain} />
                 </YStack>

@@ -4,16 +4,22 @@
 // funds sent on the wrong network are unrecoverable.
 
 import React from "react";
-import { Modal } from "react-native";
+import { Alert, Modal } from "react-native";
+import { useQueryClient } from "@tanstack/react-query";
 import { XStack, YStack } from "tamagui";
 import QRCode from "react-native-qrcode-svg";
 import * as Clipboard from "expo-clipboard";
 import { Check, Copy, TriangleAlert, X } from "lucide-react-native";
 
-import { CHAIN_META, type WalletAddress, type WalletChain } from "@/hooks/use-turnkey-wallet";
+import { CHAIN_META, turnkeyWalletQueryKey, useTurnkeyWallet, type WalletAddress, type WalletChain } from "@/hooks/use-turnkey-wallet";
 import { useColors } from "@/lib/theme/appearance";
 import { radius, space, tracking } from "@/lib/theme/tokens";
-import { IconButton, Mono, SecondaryButton, UiText } from "./primitives";
+import { describeTurnkeyError, isUserCancelledError } from "@/lib/turnkey/client";
+import { provisionChain } from "@/lib/turnkey/provision";
+import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
+import { IconButton, Mono, PrimaryButton, SecondaryButton, UiText } from "./primitives";
+
+const ALL_CHAINS: WalletChain[] = ["stellar", "bitcoin", "ethereum", "solana"];
 
 export const ReceiveSheet = ({
   open,
@@ -27,19 +33,38 @@ export const ReceiveSheet = ({
   onClose: () => void;
 }) => {
   const c = useColors();
+  const queryClient = useQueryClient();
+  const { user } = useSupabaseAuth();
+  const { wallet, refetch: refetchWallet } = useTurnkeyWallet();
   const [chain, setChain] = React.useState<WalletChain | null>(null);
   const [copied, setCopied] = React.useState(false);
+  const [settingUp, setSettingUp] = React.useState(false);
   const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Pick the requested chain when opening, else the first one available.
+  // Pick the requested chain when opening, else the first with an address,
+  // else Stellar. Kept while open, so a just-provisioned chain stays selected.
   React.useEffect(() => {
     if (!open) return;
-    const wanted = initialChain && addresses.some((a) => a.chain === initialChain)
-      ? initialChain
-      : addresses[0]?.chain ?? null;
-    setChain(wanted);
+    setChain(initialChain ?? addresses[0]?.chain ?? "stellar");
     setCopied(false);
-  }, [open, initialChain, addresses]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialChain]);
+
+  // Lazy creation (hard rule 7): no address on this chain yet → one passkey
+  // creates it here, whether or not a Normal wallet exists at all.
+  const setUp = async (k: WalletChain) => {
+    if (!user) return;
+    setSettingUp(true);
+    try {
+      const updated = await provisionChain({ user, wallet, chain: k });
+      queryClient.setQueryData(turnkeyWalletQueryKey(user.id), updated);
+      await refetchWallet();
+    } catch (e) {
+      if (!isUserCancelledError(e)) Alert.alert("Couldn’t set up the chain", describeTurnkeyError(e));
+    } finally {
+      setSettingUp(false);
+    }
+  };
 
   React.useEffect(
     () => () => {
@@ -79,15 +104,11 @@ export const ReceiveSheet = ({
             </IconButton>
           </XStack>
 
-          {addresses.length === 0 ? (
-            <UiText fontSize={14} color={c.muted}>
-              This wallet has no addresses yet.
-            </UiText>
-          ) : (
+          {(
             <>
-              {/* Chain pills — only chains with an address (D: filter pill 12/600) */}
+              {/* Chain pills — every chain; the ones without an address set up on tap (pill 12/600) */}
               <XStack gap={6} flexWrap='wrap'>
-                {addresses.map(({ chain: k }) => {
+                {ALL_CHAINS.map((k) => {
                   const selected = k === chain;
                   return (
                     <XStack
@@ -125,6 +146,15 @@ export const ReceiveSheet = ({
                   );
                 })}
               </XStack>
+
+              {!current && meta ? (
+                <YStack gap={10} paddingTop={4}>
+                  <UiText fontSize={13} color={c.muted} lineHeight={18}>
+                    {wallet ? `Your Normal wallet has no ${meta.name} address yet. One passkey confirmation adds it on the same wallet.` : `You don’t have a Normal wallet yet. One passkey confirmation creates it with a ${meta.name} address — nothing to write down.`}
+                  </UiText>
+                  <PrimaryButton label={settingUp ? "Confirm with your passkey…" : `Set up ${meta.name}`} onPress={() => void setUp(meta ? (chain as WalletChain) : "stellar")} loading={settingUp} />
+                </YStack>
+              ) : null}
 
               {current && meta ? (
                 <>

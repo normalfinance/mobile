@@ -226,7 +226,7 @@ export default function AssetDetailScreen() {
                 {fAssetQuantity(asset?.balance ?? 0, symbol)} {symbol}
               </Mono>
             </XStack>
-            {meta && wallet && !hasChain ? (
+            {meta && !hasChain ? (
               <YStack gap={8} marginTop={8} marginHorizontal={8}>
                 <UiText fontSize={13} color={c.muted} lineHeight={18}>
                   Your Normal wallet has no {meta.name} address yet. One passkey confirmation adds it on the same wallet — nothing new to back up.
