@@ -20,7 +20,7 @@ import { ethGasReserve, fetchLifiQuote, type LifiQuote } from "@/lib/lifi/execut
 import { SEND_ASSETS } from "@/lib/send/registry";
 import { useColors } from "@/lib/theme/appearance";
 import { radius, space } from "@/lib/theme/tokens";
-import { ensureChainAddress } from "@/lib/turnkey/accounts";
+import { provisionChain } from "@/lib/turnkey/provision";
 import { describeTurnkeyError, isUserCancelledError } from "@/lib/turnkey/client";
 import { fCurrency, fNumber } from "@/lib/utils/number-format.utils";
 import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
@@ -121,10 +121,10 @@ export function CctpInboundPanel({ from, amount, setAmount, fromPill, toPill, on
   const etaMin = quote ? Math.max(1, Math.round(quote.q.estimate.executionDuration / 60)) + 20 : null; // + Base finality
 
   const addChain = async (chain: WalletChain) => {
-    if (!wallet) return;
+    if (!user) return;
     setAddingChain(chain);
     try {
-      const updated = await ensureChainAddress(wallet, chain);
+      const updated = await provisionChain({ user, wallet, chain });
       queryClient.setQueryData(turnkeyWalletQueryKey(user?.id), updated);
       await refetchWallet();
     } catch (e) {

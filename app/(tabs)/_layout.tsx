@@ -18,6 +18,7 @@ import {
 import { Skeleton, UiText } from "@/components/home/primitives";
 import { useTurnkeyWallet } from "@/hooks/use-turnkey-wallet";
 import { LifiResume } from "@/components/swap/LifiResume";
+import { hasSkippedOnboarding } from "@/lib/onboarding";
 import { useColors } from "@/lib/theme/appearance";
 import { space } from "@/lib/theme/tokens";
 import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
@@ -111,9 +112,11 @@ export default function TabLayout() {
     );
   }
 
-  if (walletStatus === "none" || walletStatus === "no-stellar") {
-    // No wallet at all, or a wallet without a Stellar account yet (e.g. a
-    // BTC-first web user) — create-wallet handles both (one passkey each).
+  if (walletStatus === "none" && !hasSkippedOnboarding()) {
+    // Brand-new account: the asset-first Get started step (web get-started).
+    // "Skip for now" lands here wallet-less; every money entry point then
+    // provisions its chain on demand. A wallet without a Stellar address is
+    // a normal wallet (lazy creation) — Savings adds Stellar when needed.
     return <Redirect href='/create-wallet' />;
   }
 

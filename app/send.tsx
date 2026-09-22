@@ -29,7 +29,7 @@ import { parseStellarQr } from "@/lib/stellar/qr";
 import { STELLAR_TX_FEE_XLM, fetchMemoRequirement, loadSource, sendStellar, spendableXlmForOutflow, type MemoRequirement } from "@/lib/stellar/send";
 import { useColors } from "@/lib/theme/appearance";
 import { radius, space, tracking } from "@/lib/theme/tokens";
-import { ensureChainAddress } from "@/lib/turnkey/accounts";
+import { provisionChain } from "@/lib/turnkey/provision";
 import { describeTurnkeyError, isUserCancelledError } from "@/lib/turnkey/client";
 import { ensureDeviceReady } from "@/lib/turnkey/device-check";
 import { useDeviceReady } from "@/lib/turnkey/device-ready";
@@ -155,10 +155,10 @@ export default function SendScreen() {
   };
 
   const addChain = async () => {
-    if (!wallet) return;
+    if (!user) return;
     setAddingChain(true);
     try {
-      const updated = await ensureChainAddress(wallet, meta.chain);
+      const updated = await provisionChain({ user, wallet, chain: meta.chain });
       queryClient.setQueryData(turnkeyWalletQueryKey(user?.id), updated);
       await refetchWallet();
     } catch (e) {

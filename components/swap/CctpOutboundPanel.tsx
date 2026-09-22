@@ -22,7 +22,7 @@ import { SEND_ASSETS } from "@/lib/send/registry";
 import { MIN_XLM_FOR_SOROBAN_TX, xlmAvailableForFees } from "@/lib/stellar/send";
 import { useColors } from "@/lib/theme/appearance";
 import { radius, space } from "@/lib/theme/tokens";
-import { ensureChainAddress } from "@/lib/turnkey/accounts";
+import { provisionChain } from "@/lib/turnkey/provision";
 import { describeTurnkeyError, isUserCancelledError } from "@/lib/turnkey/client";
 import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
 
@@ -107,10 +107,10 @@ export function CctpOutboundPanel({ to, amount, setAmount, fromPill, toPill, onF
   }, [amount6, amountOk, tooSmall, to, evmAddress, toAddress]);
 
   const addChain = async (chain: WalletChain) => {
-    if (!wallet) return;
+    if (!user) return;
     setAddingChain(chain);
     try {
-      const updated = await ensureChainAddress(wallet, chain);
+      const updated = await provisionChain({ user, wallet, chain });
       queryClient.setQueryData(turnkeyWalletQueryKey(user?.id), updated);
       await refetchWallet();
     } catch (e) {

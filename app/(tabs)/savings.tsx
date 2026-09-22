@@ -28,14 +28,15 @@ import { ReceiveSheet } from "@/components/home/ReceiveSheet";
 import { FeeLight } from "@/components/savings/FeeLight";
 import { SetupCard } from "@/components/savings/SetupCard";
 import { useSavingsPosition, useStellarAccountProbe, useVaultInfo } from "@/hooks/use-savings";
-import { useTurnkeyWallet, walletAddresses } from "@/hooks/use-turnkey-wallet";
+import { turnkeyWalletQueryKey, useTurnkeyWallet, walletAddresses } from "@/hooks/use-turnkey-wallet";
 import { refreshAfterStellarAction } from "@/lib/data/after-action";
 import { addUsdcTrustline, deriveSetupStep } from "@/lib/savings/engine";
+import { provisionChain } from "@/lib/turnkey/provision";
 import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
 import { xlmAvailableForFees } from "@/lib/stellar/send";
 import { useColors } from "@/lib/theme/appearance";
 import { space, tracking } from "@/lib/theme/tokens";
-import { describeTurnkeyError } from "@/lib/turnkey/client";
+import { describeTurnkeyError, isUserCancelledError } from "@/lib/turnkey/client";
 import { ensureDeviceReady } from "@/lib/turnkey/device-check";
 import { useDeviceReady } from "@/lib/turnkey/device-ready";
 import { fCurrency, fPercent } from "@/lib/utils/number-format.utils";
@@ -52,7 +53,7 @@ export default function SavingsScreen() {
   const vault = useVaultInfo();
   const queryClient = useQueryClient();
   const { user } = useSupabaseAuth();
-  const { wallet } = useTurnkeyWallet();
+  const { wallet, refetch: refetchWallet } = useTurnkeyWallet();
   const address = wallet?.stellarAddress ?? null;
   const { ready: deviceReady } = useDeviceReady(wallet?.subOrgId);
   const savings = useSavingsPosition(address);
@@ -69,6 +70,22 @@ export default function SavingsScreen() {
 
   const [receiveOpen, setReceiveOpen] = React.useState(false);
   const [addingTrustline, setAddingTrustline] = React.useState(false);
+  // Lazy creation: a BTC/ETH/SOL-first account has no Stellar address yet.
+  // Savings runs on Stellar, so the first step here is adding it (one passkey).
+  const [addingStellar, setAddingStellar] = React.useState(false);
+  const addStellar = async () => {
+    if (!user) return;
+    setAddingStellar(true);
+    try {
+      const updated = await provisionChain({ user, wallet, chain: "stellar" });
+      queryClient.setQueryData(turnkeyWalletQueryKey(user.id), updated);
+      await refetchWallet();
+    } catch (e) {
+      if (!isUserCancelledError(e)) Alert.alert("Couldn’t add Stellar", describeTurnkeyError(e));
+    } finally {
+      setAddingStellar(false);
+    }
+  };
 
   const handleAddTrustline = async () => {
     if (!wallet?.subOrgId || !address) return;
@@ -175,6 +192,14 @@ export default function SavingsScreen() {
             </Card>
           )}
 
+          {!address && !vault.isError ? (
+            <EmptyState
+              icon={<PiggyBank size={24} color={c.ink} strokeWidth={1.8} />}
+              title='Savings runs on Stellar'
+              body='Add Stellar to your wallet to start saving — one passkey confirmation, no seed phrase.'
+              action={<PrimaryButton label={addingStellar ? "Confirm with your passkey…" : "Add Stellar to your wallet"} onPress={() => void addStellar()} loading={addingStellar} />}
+            />
+          ) : null}
           {address && step && step !== "ready" ? (
             <SetupCard
               step={step}

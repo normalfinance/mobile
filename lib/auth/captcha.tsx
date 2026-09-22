@@ -11,7 +11,8 @@
 // rejects with CaptchaCancelled / CaptchaFailed.
 
 import React from "react";
-import { ActivityIndicator, Modal } from "react-native";
+import { ActivityIndicator, Modal, Platform } from "react-native";
+import * as WebBrowser from "expo-web-browser";
 import { WebView, type WebViewMessageEvent } from "react-native-webview";
 import { XStack, YStack } from "tamagui";
 import { X } from "lucide-react-native";
@@ -52,15 +53,43 @@ type Pending = { resolve: (token: string) => void; reject: (e: Error) => void };
 
 let opener: ((p: Pending) => void) | null = null;
 
-/** Show the captcha sheet and resolve with a Turnstile token. */
-export const requestCaptchaToken = (): Promise<string> =>
-  new Promise((resolve, reject) => {
+/** Where the hosted page sends the token back to (iOS Safari sheet). */
+const CAPTCHA_RETURN_URL = "normalapp://captcha";
+
+/**
+ * Show the captcha and resolve with a Turnstile token.
+ *
+ * iOS: a real Safari sheet (ASWebAuthenticationSession). Inside a WKWebView
+ * Cloudflare scored every attempt "likely bot" and left the challenge unsolved
+ * (widget analytics 2026-09-21); a spoofed Safari UA failed with 300031. Safari
+ * proper is an ordinary browser to Cloudflare, and the page hands the token
+ * back via `redirect=normalapp://captcha?token=…` (web turnstile-page.ts).
+ * Android: the WebView sheet (Chrome-based WebViews pass as themselves).
+ */
+export const requestCaptchaToken = async (): Promise<string> => {
+  if (Platform.OS === "ios") {
+    const url = `${API_BASE_URL}${TURNSTILE_PATH}?theme=${currentScheme()}&redirect=${encodeURIComponent(CAPTCHA_RETURN_URL)}`;
+    const result = await WebBrowser.openAuthSessionAsync(url, CAPTCHA_RETURN_URL);
+    if (result.type !== "success") throw new CaptchaCancelled();
+    const returned = new URL(result.url);
+    const token = returned.searchParams.get("token");
+    const error = returned.searchParams.get("error");
+    if (token) return token;
+    throw new CaptchaFailed(error ?? "no token returned");
+  }
+  return new Promise((resolve, reject) => {
     if (!opener) {
       reject(new CaptchaFailed("captcha provider not mounted"));
       return;
     }
     opener({ resolve, reject });
   });
+};
+
+// The provider mirrors the current scheme here so the Safari path (outside
+// the React tree) can pass ?theme= too.
+let schemeRef: "light" | "dark" = "light";
+const currentScheme = () => schemeRef;
 
 type TurnstileMessage =
   | { type: "turnstile"; token: string }
@@ -69,6 +98,7 @@ type TurnstileMessage =
 export const CaptchaProvider = ({ children }: { children: React.ReactNode }) => {
   const c = useColors();
   const { scheme } = useAppearance();
+  schemeRef = scheme;
   const [pending, setPending] = React.useState<Pending | null>(null);
   const [loaded, setLoaded] = React.useState(false);
 
@@ -94,7 +124,7 @@ export const CaptchaProvider = ({ children }: { children: React.ReactNode }) => 
     const t = setTimeout(() => {
       pending.reject(new CaptchaFailed("not-loaded"));
       close();
-    }, 25_000);
+    }, 60_000);
     return () => clearTimeout(t);
   }, [pending, close]);
 
@@ -147,7 +177,7 @@ export const CaptchaProvider = ({ children }: { children: React.ReactNode }) => 
               Confirming you’re not a robot. This usually takes a second.
             </UiText>
             <YStack
-              height={140}
+              height={160}
               borderRadius={radius.input}
               overflow='hidden'
               backgroundColor={c.inputBg}
@@ -163,6 +193,8 @@ export const CaptchaProvider = ({ children }: { children: React.ReactNode }) => 
                     close();
                   }}
                   javaScriptEnabled
+                  sharedCookiesEnabled
+                  thirdPartyCookiesEnabled
                   // Page-side exceptions (e.g. turnstile.render throwing on a bad key) become a reason we can show.
                   injectedJavaScriptBeforeContentLoaded={`window.onerror = function (m) { try { window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'turnstile-error', reason: 'page: ' + m })); } catch (e) {} }; true;`}
                   originWhitelist={["https://*"]}

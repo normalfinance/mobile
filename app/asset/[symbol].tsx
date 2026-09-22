@@ -32,7 +32,7 @@ import { Alert } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { PrimaryButton } from "@/components/home/primitives";
 import { SEND_ASSETS, type SendSymbol } from "@/lib/send/registry";
-import { ensureChainAddress } from "@/lib/turnkey/accounts";
+import { provisionChain } from "@/lib/turnkey/provision";
 import { describeTurnkeyError, isUserCancelledError } from "@/lib/turnkey/client";
 import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
 import { turnkeyWalletQueryKey, useTurnkeyWallet, walletAddresses } from "@/hooks/use-turnkey-wallet";
@@ -78,10 +78,10 @@ export default function AssetDetailScreen() {
   const hasChain = !!meta && addresses.some((a) => a.chain === meta.chain);
   const [addingChain, setAddingChain] = React.useState(false);
   const addChain = async () => {
-    if (!wallet || !meta) return;
+    if (!user || !meta) return;
     setAddingChain(true);
     try {
-      const updated = await ensureChainAddress(wallet, meta.chain);
+      const updated = await provisionChain({ user, wallet, chain: meta.chain });
       queryClient.setQueryData(turnkeyWalletQueryKey(user?.id), updated);
       await refetchWallet();
     } catch (e) {

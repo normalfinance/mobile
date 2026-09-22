@@ -1,0 +1,55 @@
+<!-- Supabase Auth email template — Confirm signup (new users). Subject: Your Normal sign-up code: {{ .Token }}.
+     Paste into Supabase → Authentication → Emails → Body (Source). Variables: {{ .Token }}, {{ .Email }}.
+     Table layout + inline styles on purpose: email clients (Outlook, Gmail) ignore <style> and flex/grid. -->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F4F4F6;margin:0;padding:0;">
+  <tr>
+    <td align="center" style="padding:40px 16px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:480px;">
+        <!-- brand -->
+        <tr>
+          <td align="left" style="padding:0 4px 20px 4px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td style="vertical-align:middle;padding-right:10px;">
+                  <img src="https://cdn.normalapi.com/logo/logo-single.png" width="32" height="32" alt="Normal" style="display:block;width:32px;height:32px;border:0;border-radius:8px;">
+                </td>
+                <td style="vertical-align:middle;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:18px;font-weight:700;color:#0A0A0F;letter-spacing:-0.02em;">
+                  Normal
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <!-- card -->
+        <tr>
+          <td style="background:#FFFFFF;border:1px solid #E6E6EA;border-radius:16px;padding:32px 28px;">
+            <h1 style="margin:0 0 8px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:22px;line-height:28px;font-weight:700;color:#0A0A0F;letter-spacing:-0.02em;">
+              Welcome to Normal
+            </h1>
+            <p style="margin:0 0 24px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:15px;line-height:22px;color:#6B6B76;">
+              Enter this code in the app to finish creating your account.
+            </p>
+            <!-- the code -->
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td align="center" style="background:#F7F7F9;border:1px solid #E6E6EA;border-radius:12px;padding:22px 16px;">
+                  <span style="font-family:'SF Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;font-size:34px;line-height:40px;font-weight:600;letter-spacing:0.28em;color:#0A0A0F;">{{ .Token }}</span>
+                </td>
+              </tr>
+            </table>
+            <p style="margin:20px 0 0 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:13px;line-height:19px;color:#6B6B76;">
+              The code expires in 10 minutes and works once. Never share it &mdash; Normal will never ask you for it by phone, chat or email.
+            </p>
+          </td>
+        </tr>
+        <!-- footer -->
+        <tr>
+          <td style="padding:20px 4px 0 4px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:12px;line-height:18px;color:#9A9AA3;">
+            This email was sent to {{ .Email }} because someone entered it in the Normal app. If that wasn&rsquo;t you, you can ignore it &mdash; nothing happens without the code.<br>
+            &copy; Normal Finance, Inc. &middot; <a href="https://www.normalfinance.io" style="color:#9A9AA3;text-decoration:underline;">normalfinance.io</a>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>

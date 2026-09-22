@@ -29,7 +29,7 @@ import {
 } from "@/lib/ramp/coinbase";
 import { useColors } from "@/lib/theme/appearance";
 import { radius, space, tracking } from "@/lib/theme/tokens";
-import { ensureChainAddress } from "@/lib/turnkey/accounts";
+import { provisionChain } from "@/lib/turnkey/provision";
 import { describeTurnkeyError, isUserCancelledError } from "@/lib/turnkey/client";
 import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
 
@@ -66,10 +66,10 @@ export default function BuyScreen() {
   const amountOk = Number.isFinite(amountNum) && amountNum >= 5;
 
   const addChain = async () => {
-    if (!wallet) return;
+    if (!user) return;
     setAddingChain(true);
     try {
-      const updated = await ensureChainAddress(wallet, meta.chain);
+      const updated = await provisionChain({ user, wallet, chain: meta.chain });
       queryClient.setQueryData(turnkeyWalletQueryKey(user?.id), updated);
       await refetch();
     } catch (e) {
