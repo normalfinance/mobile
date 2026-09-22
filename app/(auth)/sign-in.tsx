@@ -1,148 +1,124 @@
-// Sign in: email code (Supabase OTP) or Google (PKCE, services/auth.service.ts).
-// On success the auth layout redirects to the tabs; nothing is stored locally.
+// Welcome — the signed-out entry. Two clear paths (Create account / Sign in)
+// and the social options, which create or sign in transparently. The auth
+// layout redirects to the tabs the moment a session exists.
 
 import React from "react";
-import { Alert, KeyboardAvoidingView, Platform, ScrollView } from "react-native";
+import { Alert, Platform } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Image } from "expo-image";
+import { useRouter } from "expo-router";
 import { XStack, YStack } from "tamagui";
 
-import PasswordlessSignIn from "@/components/passwordless-signin";
-import { Divider, Screen, SecondaryButton, UiText } from "@/components/home/primitives";
+import { Divider, PrimaryButton, Screen, SecondaryButton, UiText } from "@/components/home/primitives";
 import { useColors } from "@/lib/theme/appearance";
 import { radius, space, tracking } from "@/lib/theme/tokens";
 import { BRAND_ASSETS } from "@/lib/utils/cdn.utils";
-import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
 import { signInWithApple, signInWithGoogle } from "@/services";
 
-export default function SignInScreen() {
+export default function WelcomeScreen() {
   const c = useColors();
-  const { isLoading: authLoading } = useSupabaseAuth();
-  const [isGoogleLoading, setIsGoogleLoading] = React.useState(false);
+  const router = useRouter();
+  const [busy, setBusy] = React.useState<"google" | "apple" | null>(null);
 
-  const handleGoogleSignIn = React.useCallback(async () => {
-    setIsGoogleLoading(true);
+  const google = async () => {
+    setBusy("google");
     try {
-      // Exchanges the PKCE code itself; the session change redirects us.
       await signInWithGoogle();
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "We couldn’t complete Google sign-in.";
-      Alert.alert("Google sign-in failed", message);
+    } catch (e) {
+      Alert.alert("Google sign-in failed", e instanceof Error ? e.message : "We couldn’t complete Google sign-in.");
     } finally {
-      setIsGoogleLoading(false);
+      setBusy(null);
     }
-  }, []);
-
-  const [isAppleLoading, setIsAppleLoading] = React.useState(false);
-  const handleAppleSignIn = React.useCallback(async () => {
-    setIsAppleLoading(true);
+  };
+  const apple = async () => {
+    setBusy("apple");
     try {
       await signInWithApple();
-    } catch (error) {
-      // ERR_REQUEST_CANCELED = the user dismissed the sheet; say nothing.
-      const code = (error as { code?: string })?.code;
-      if (code === "ERR_REQUEST_CANCELED") return;
-      Alert.alert("Apple sign-in failed", error instanceof Error ? error.message : "We couldn’t complete Apple sign-in.");
+    } catch (e) {
+      if ((e as { code?: string })?.code === "ERR_REQUEST_CANCELED") return;
+      Alert.alert("Apple sign-in failed", e instanceof Error ? e.message : "We couldn’t complete Apple sign-in.");
     } finally {
-      setIsAppleLoading(false);
+      setBusy(null);
     }
-  }, []);
+  };
 
   return (
     <Screen>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
-        <ScrollView
-          contentContainerStyle={{ flexGrow: 1, justifyContent: "center" }}
-          keyboardShouldPersistTaps='handled'
-          showsVerticalScrollIndicator={false}
-        >
-          <YStack paddingHorizontal={space.gutter} paddingVertical={40} gap={28}>
-            <YStack alignItems='center' gap={14}>
-              <YStack
-                width={64}
-                height={64}
-                borderRadius={32}
-                overflow='hidden'
-                backgroundColor={c.iconBg}
-              >
-                <Image
-                  source={{ uri: BRAND_ASSETS.logoSinglePng() }}
-                  style={{ width: 64, height: 64 }}
-                  contentFit='cover'
-                  cachePolicy='memory-disk'
-                />
-              </YStack>
-              <YStack alignItems='center' gap={4}>
-                <UiText fontSize={22} fontWeight='600' letterSpacing={tracking(22)}>
-                  Sign in or create your account
-                </UiText>
-                <UiText fontSize={14} color={c.muted}>
-                  {authLoading
-                    ? "Checking your session…"
-                    : "New here? Enter your email — that’s the whole sign-up."}
-                </UiText>
-              </YStack>
+      <SafeAreaView style={{ flex: 1 }}>
+        <YStack flex={1} paddingHorizontal={space.gutter} paddingBottom={24}>
+          {/* brand */}
+          <YStack flex={1} justifyContent='center' alignItems='center' gap={18}>
+            <YStack width={72} height={72} borderRadius={36} overflow='hidden' backgroundColor={c.iconBg}>
+              <Image source={{ uri: BRAND_ASSETS.logoSinglePng() }} style={{ width: 72, height: 72 }} contentFit='cover' cachePolicy='memory-disk' />
             </YStack>
-
-            <PasswordlessSignIn />
-
-            <XStack alignItems='center' gap={12}>
-              <YStack flex={1}>
-                <Divider inset={0} />
-              </YStack>
-              <UiText fontSize={12} color={c.faint}>
-                or
+            <YStack alignItems='center' gap={6}>
+              <UiText fontSize={28} fontWeight='700' letterSpacing={tracking(28)} textAlign='center'>
+                Save. Hold. Swap.
               </UiText>
-              <YStack flex={1}>
-                <Divider inset={0} />
-              </YStack>
+              <UiText fontSize={15} color={c.muted} textAlign='center' lineHeight={21}>
+                Earn on your dollars and hold Bitcoin, Ethereum and Solana — secured by a passkey, not a seed phrase.
+              </UiText>
+            </YStack>
+          </YStack>
+
+          {/* actions */}
+          <YStack gap={10}>
+            <PrimaryButton label='Create account' onPress={() => router.push("/(auth)/create-account")} disabled={!!busy} />
+            <SecondaryButton label='Sign in' onPress={() => router.push("/(auth)/log-in")} disabled={!!busy} borderRadius={radius.cta} />
+
+            <XStack alignItems='center' gap={12} paddingVertical={6}>
+              <YStack flex={1}><Divider inset={0} /></YStack>
+              <UiText fontSize={12} color={c.faint}>or continue with</UiText>
+              <YStack flex={1}><Divider inset={0} /></YStack>
             </XStack>
 
-            <YStack gap={10}>
-              <SecondaryButton
-                label={isGoogleLoading ? "Signing in…" : "Continue with Google"}
-                onPress={handleGoogleSignIn}
-                disabled={isGoogleLoading}
-                icon={
-                  <Image
-                    source={require("@/assets/icons/auth/google.png")}
-                    style={{ width: 18, height: 18 }}
-                  />
-                }
-              />
+            <XStack gap={10}>
               {Platform.OS === "ios" ? (
+                <XStack
+                  flex={1}
+                  onPress={busy ? undefined : () => void apple()}
+                  opacity={busy === "apple" ? 0.6 : 1}
+                  height={48}
+                  borderRadius={radius.cta}
+                  backgroundColor={c.cta}
+                  pressStyle={{ backgroundColor: c.ctaPressed }}
+                  alignItems='center'
+                  justifyContent='center'
+                  gap={8}
+                  accessibilityRole='button'
+                  accessibilityLabel='Continue with Apple'
+                >
+                  <Image source={require("@/assets/icons/auth/apple.png")} style={{ width: 18, height: 18, tintColor: c.ctaText }} />
+                  <UiText fontSize={14} fontWeight='600' color={c.ctaText}>Apple</UiText>
+                </XStack>
+              ) : null}
               <XStack
-                onPress={isAppleLoading ? undefined : handleAppleSignIn}
-                opacity={isAppleLoading ? 0.6 : 1}
-                height={44}
-                borderRadius={radius.smallButton}
-                backgroundColor={c.cta}
-                pressStyle={{ backgroundColor: c.ctaPressed }}
+                flex={1}
+                onPress={busy ? undefined : () => void google()}
+                opacity={busy === "google" ? 0.6 : 1}
+                height={48}
+                borderRadius={radius.cta}
+                borderWidth={1}
+                borderColor={c.border}
+                backgroundColor={c.surface}
+                pressStyle={{ backgroundColor: c.pressTint }}
                 alignItems='center'
                 justifyContent='center'
                 gap={8}
                 accessibilityRole='button'
+                accessibilityLabel='Continue with Google'
               >
-                <Image
-                  source={require("@/assets/icons/auth/apple.png")}
-                  style={{ width: 18, height: 18, tintColor: c.ctaText }}
-                />
-                <UiText fontSize={13} fontWeight='500' color={c.ctaText}>
-                  {isAppleLoading ? "Signing in…" : "Continue with Apple"}
-                </UiText>
+                <Image source={require("@/assets/icons/auth/google.png")} style={{ width: 18, height: 18 }} />
+                <UiText fontSize={14} fontWeight='600'>Google</UiText>
               </XStack>
-              ) : null}
-            </YStack>
+            </XStack>
 
-            <UiText fontSize={11} color={c.faint} textAlign='center' lineHeight={16}>
+            <UiText fontSize={11} color={c.faint} textAlign='center' lineHeight={16} paddingTop={8}>
               By continuing you agree to Normal’s Terms and Privacy Policy.
             </UiText>
           </YStack>
-        </ScrollView>
-      </KeyboardAvoidingView>
+        </YStack>
+      </SafeAreaView>
     </Screen>
   );
 }
