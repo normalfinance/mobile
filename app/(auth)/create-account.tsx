@@ -26,7 +26,7 @@ export default function CreateAccountScreen() {
     } catch (e) {
       const msg = friendlyAuthError(e, "Please try again.");
       if (/already an account/i.test(msg)) {
-        Alert.alert("Account exists", msg, [{ text: "Cancel", style: "cancel" }, { text: "Sign in", onPress: () => router.replace({ pathname: "/(auth)/log-in", params: { email: normalizeEmail(email) } }) }]);
+        Alert.alert("Account exists", msg, [{ text: "Cancel", style: "cancel" }, { text: "Sign in", onPress: () => router.replace({ pathname: "/sign-in", params: { email: normalizeEmail(email) } }) }]);
       } else Alert.alert("Couldn’t create your account", msg);
     } finally {
       setBusy(false);
@@ -37,7 +37,7 @@ export default function CreateAccountScreen() {
     <AuthScreen
       title='Create your account'
       subtitle='We’ll email you a 6-digit code to confirm it’s you.'
-      footer={<SwitchLine text='Already have an account?' action='Sign in' onPress={() => router.replace("/(auth)/log-in")} />}
+      footer={<SwitchLine text='Already have an account?' action='Sign in' onPress={() => router.replace("/sign-in")} />}
     >
       <Field label='Email' placeholder='you@example.com' keyboardType='email-address' autoCapitalize='none' autoCorrect={false} autoComplete='email' textContentType='emailAddress' value={email} onChangeText={setEmail} editable={!busy} returnKeyType='next' />
       <Field

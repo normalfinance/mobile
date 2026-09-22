@@ -174,7 +174,7 @@ export const PrimaryButton = ({
       justifyContent='center'
       flexDirection='row'
       gap={8}
-      minHeight={space.touchTarget}
+      minHeight={48}
       accessibilityRole='button'
     >
       {loading ? <ActivityIndicator size='small' color={c.ctaDisabledText} /> : null}

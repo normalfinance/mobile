@@ -42,7 +42,7 @@ export default function ForgotPasswordScreen() {
         <UiText fontSize={13} color={c.muted} textAlign='center' lineHeight={19}>
           Open the link on any device, choose a new password, then come back here and sign in.
         </UiText>
-        <PrimaryButton label='Back to sign in' onPress={() => router.replace("/(auth)/log-in")} />
+        <PrimaryButton label='Back to sign in' onPress={() => router.replace("/sign-in")} />
       </AuthScreen>
     );
   }
