@@ -83,7 +83,11 @@ export default function GetStartedScreen() {
       if (e instanceof WalletLimitError) {
         const when = e.reset ? new Date(e.reset).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }) : "later";
         Alert.alert("Please try again later", `Wallet creation is limited to a few attempts per day. Try again after ${when}.`);
-      } else if (!isUserCancelledError(e)) {
+      } else if (isUserCancelledError(e)) {
+        // Also what iOS reports when a third-party passkey provider (e.g. Google
+        // Password Manager) closes without creating one — say so, don't go silent.
+        Alert.alert("Passkey not created", "The passkey prompt was closed before a passkey was saved, so nothing was set up. Tip: choose iCloud Keychain when iOS asks where to save it — it syncs to your other Apple devices.");
+      } else {
         Alert.alert("Couldn’t set up your wallet", describeTurnkeyError(e));
       }
     } finally {

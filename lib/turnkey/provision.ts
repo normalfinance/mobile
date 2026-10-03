@@ -52,6 +52,16 @@ export const markWalletBackedUp = async (subOrgId: string) => {
 };
 export const walletNeedsBackup = async (subOrgId: string) => (await AsyncStorage.getItem(NEEDS_BACKUP_KEY).catch(() => null)) === subOrgId;
 
+/** Fired after provisionChain creates a wallet or adds a chain — one listener
+ *  (components/wallet/WalletEvents.tsx) offers the recovery phrase. */
+export type ProvisionEvent = { kind: "created" | "added"; chain: WalletChain; subOrgId: string };
+const provisionListeners = new Set<(e: ProvisionEvent) => void>();
+export const onWalletProvisioned = (l: (e: ProvisionEvent) => void) => {
+  provisionListeners.add(l);
+  return () => provisionListeners.delete(l);
+};
+const emitProvisioned = (e: ProvisionEvent) => provisionListeners.forEach((l) => l(e));
+
 interface WalletResponse {
   wallet?: Partial<TurnkeyWallet> | null;
   error?: string;
@@ -128,12 +138,21 @@ const createWalletInSubOrg = async (wallet: TurnkeyWallet, chain: WalletChain): 
  */
 export const provisionChain = async (p: { user: { id: string; email?: string | null } | null | undefined; wallet: TurnkeyWallet | null | undefined; chain: WalletChain }): Promise<TurnkeyWallet> => {
   if (!p.user) throw new Error("Sign in first.");
-  if (!p.wallet) return createFirstChain(p.user, p.chain);
+  if (!p.wallet) {
+    const w = await createFirstChain(p.user, p.chain);
+    emitProvisioned({ kind: "created", chain: p.chain, subOrgId: w.subOrgId });
+    return w;
+  }
   if (p.wallet[ADDRESS_FIELD[p.chain]]) return p.wallet;
-  if (!p.wallet.walletId) return createWalletInSubOrg(p.wallet, p.chain);
+  if (!p.wallet.walletId) {
+    const w = await createWalletInSubOrg(p.wallet, p.chain);
+    emitProvisioned({ kind: "created", chain: p.chain, subOrgId: w.subOrgId });
+    return w;
+  }
   const added = await ensureChainAddress(p.wallet, p.chain);
   // Same seed, new address depending on it — ask for the backup again if it
   // was never confirmed (no-op once confirmed; web add-account.ts:139-146).
   await markWalletNeedsBackup(p.wallet.subOrgId);
+  emitProvisioned({ kind: "added", chain: p.chain, subOrgId: p.wallet.subOrgId });
   return added;
 };
