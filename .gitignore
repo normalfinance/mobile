@@ -84,3 +84,6 @@ yarn-error.*
 *.tsbuildinfo
 
 # @end expo-cli
+
+# Local signing material (never committed): the per-machine Android debug keystore
+/credentials/

@@ -32,6 +32,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   userInterfaceStyle: "automatic",
   plugins: [
     ...(config.plugins ?? []),
+    // Debug builds sign with our own (gitignored) keystore so its fingerprint
+    // can be published in assetlinks.json for passkeys — see plugins/with-dev-keystore.js.
+    "./plugins/with-dev-keystore.js",
     // Local + remote notifications. iOS: adds the aps-environment entitlement.
     // Android: real push additionally needs google-services.json (Firebase).
     ["expo-notifications", { color: "#0A0A0F", defaultChannel: "money" }],
