@@ -16,10 +16,11 @@ import { Card, IconBox, PrimaryButton, SecondaryButton, UiText } from "./primiti
 
 export const DeviceSetupCard = ({
   subOrgId,
-  stellarAddress
+  address
 }: {
   subOrgId: string;
-  stellarAddress: string;
+  /** Any of the wallet's addresses — the check signs with that key. */
+  address: string;
 }) => {
   const c = useColors();
   const router = useRouter();
@@ -31,7 +32,7 @@ export const DeviceSetupCard = ({
   const verify = async () => {
     setBusy(true);
     try {
-      const { outcome, error } = await ensureDeviceReady(subOrgId, stellarAddress, false);
+      const { outcome, error } = await ensureDeviceReady(subOrgId, address, false);
       if (outcome === "ready") return; // the flag flips; Home stops rendering the card
       if (outcome === "needs-setup") {
         router.push("/setup-device");

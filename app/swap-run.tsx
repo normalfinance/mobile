@@ -32,7 +32,7 @@ import { radius, space, tracking } from "@/lib/theme/tokens";
 import { maybeAskForNotifications } from "@/lib/notifications";
 import { autopilotAvailable, fetchAutopilotStatus, grantAutopilotConsent } from "@/lib/turnkey/autopilot";
 import { describeTurnkeyError, isUserCancelledError } from "@/lib/turnkey/client";
-import { ensureDeviceReady } from "@/lib/turnkey/device-check";
+import { ensureDeviceReady, signingAddressOf } from "@/lib/turnkey/device-check";
 import { useDeviceReady } from "@/lib/turnkey/device-ready";
 import { fCurrency, fNumber } from "@/lib/utils/number-format.utils";
 import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
@@ -218,8 +218,9 @@ export default function SwapRunScreen() {
   };
 
   const start = async () => {
-    if (!run || !wallet?.subOrgId || !wallet.stellarAddress) return;
-    const gate = await ensureDeviceReady(wallet.subOrgId, wallet.stellarAddress, deviceReady);
+    const signWith = signingAddressOf(wallet);
+    if (!run || !wallet?.subOrgId || !signWith) return;
+    const gate = await ensureDeviceReady(wallet.subOrgId, signWith, deviceReady);
     if (gate.outcome === "needs-setup") {
       router.push("/setup-device");
       return;

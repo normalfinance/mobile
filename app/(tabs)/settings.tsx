@@ -41,7 +41,7 @@ import { Chip } from "@/components/home/primitives";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { autopilotAvailable, fetchAutopilotStatus, grantAutopilotConsent, revokeAutopilotConsent } from "@/lib/turnkey/autopilot";
 import { describeTurnkeyError, isNoPasskeyError, isUserCancelledError } from "@/lib/turnkey/client";
-import { verifyDevicePasskey } from "@/lib/turnkey/device-check";
+import { signingAddressOf, verifyDevicePasskey } from "@/lib/turnkey/device-check";
 import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
 
 const APPEARANCE: { key: AppearanceMode; label: string; Icon: typeof Sun }[] = [
@@ -112,13 +112,14 @@ export default function SettingsScreen() {
   // Proves passkey → Turnkey → ed25519 end to end. Signs a no-op Stellar
   // transaction and verifies the signature locally; nothing is submitted.
   const testSigning = async () => {
-    if (!wallet?.subOrgId || !wallet.stellarAddress) {
-      Alert.alert("No Stellar wallet", "This account has no Stellar address to sign with.");
+    const signWith = signingAddressOf(wallet);
+    if (!wallet?.subOrgId || !signWith) {
+      Alert.alert("No wallet yet", "Add an asset first — the test signs with one of your wallet’s keys.");
       return;
     }
     setTesting(true);
     try {
-      const r = await verifyDevicePasskey(wallet.subOrgId, wallet.stellarAddress);
+      const r = await verifyDevicePasskey(wallet.subOrgId, signWith);
       Alert.alert(r.ok ? "Signature valid ✓" : "Signature check failed", `${r.detail}\n\n${r.ms} ms`);
     } catch (e) {
       if (isNoPasskeyError(e)) {

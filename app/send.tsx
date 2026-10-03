@@ -192,7 +192,7 @@ export default function SendScreen() {
     setBusy(true);
     try {
       // Device gate: the first signature on this phone proves the passkey.
-      const gate = await ensureDeviceReady(wallet.subOrgId, wallet.stellarAddress ?? from, deviceReady);
+      const gate = await ensureDeviceReady(wallet.subOrgId, from, deviceReady);
       if (gate.outcome === "needs-setup") {
         setConfirming(false);
         router.push("/setup-device");

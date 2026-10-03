@@ -5,6 +5,7 @@
 // (lazy CREATE_WALLET_ACCOUNTS, one passkey) — a new user's first funding.
 
 import React from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Alert, ScrollView } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -20,7 +21,11 @@ import { turnkeyWalletQueryKey, useTurnkeyWallet, type WalletChain } from "@/hoo
 import { refreshAfterStellarAction } from "@/lib/data/after-action";
 import {
   BUY_ASSETS,
+  BUY_FIATS,
   BUY_PRESETS_USD,
+  FIAT_SYMBOL,
+  defaultBuyFiat,
+  type BuyFiat,
   BUY_RETURN_URL,
   createCoinbasePayOnrampURL,
   createCoinbaseSession,
@@ -53,6 +58,14 @@ export default function BuyScreen() {
   const initial = BUY_ASSETS.find((a) => a.asset === (params.asset ?? "").toUpperCase())?.asset ?? "USDC";
   const [asset, setAsset] = React.useState<BuyAsset>(initial);
   const [amount, setAmount] = React.useState(String(BUY_PRESETS_USD[1]));
+  const [fiat, setFiat] = React.useState<BuyFiat>(defaultBuyFiat());
+  React.useEffect(() => {
+    void AsyncStorage.getItem("buy_fiat_v1").then((v) => v && (BUY_FIATS as readonly string[]).includes(v) && setFiat(v as BuyFiat)).catch(() => undefined);
+  }, []);
+  const chooseFiat = (f: BuyFiat) => {
+    setFiat(f);
+    void AsyncStorage.setItem("buy_fiat_v1", f).catch(() => undefined);
+  };
   const [busy, setBusy] = React.useState(false);
   const [addingChain, setAddingChain] = React.useState(false);
   const [handedOff, setHandedOff] = React.useState(false);
@@ -89,10 +102,12 @@ export default function BuyScreen() {
       await recordOnrampHandoff({ asset, chain: meta.chain, walletAddress: address, amountUsd: amountNum, baselineBalance: baseline });
       // The session token is SINGLE-USE: mint it last and open it immediately.
       const token = await createCoinbaseSession(address, asset, meta.chain);
-      const url = createCoinbasePayOnrampURL({ amountUsd: amountNum, assetSymbol: asset, sessionToken: token, redirectUrl: BUY_RETURN_URL });
+      const url = createCoinbasePayOnrampURL({ amountUsd: amountNum, assetSymbol: asset, sessionToken: token, fiat, redirectUrl: BUY_RETURN_URL });
       setHandedOff(true);
       // Returns when Coinbase redirects to normalapp://buy or the user closes the sheet.
-      await WebBrowser.openAuthSessionAsync(url, BUY_RETURN_URL, { preferEphemeralSession: false });
+      // Ephemeral: no iOS "wants to use pay.coinbase.com to sign in" alert.
+      // Trade-off: Coinbase's own login isn't remembered between purchases.
+      await WebBrowser.openAuthSessionAsync(url, BUY_RETURN_URL, { preferEphemeralSession: true });
       void refreshAfterStellarAction(queryClient, { userId: user?.id, stellarAddress: wallet?.stellarAddress });
       void queryClient.invalidateQueries({ queryKey: ["activity", "ramps"] });
     } catch (e) {
@@ -142,7 +157,16 @@ export default function BuyScreen() {
             </XStack>
             <UiText fontSize={12} color={c.faint}>{meta.label}</UiText>
 
-            <UiText fontSize={12} color={c.muted} marginTop={4}>Amount (USD)</UiText>
+            <XStack justifyContent='space-between' alignItems='center' marginTop={4}>
+              <UiText fontSize={12} color={c.muted}>Amount</UiText>
+              <XStack gap={4}>
+                {BUY_FIATS.map((f) => (
+                  <XStack key={f} onPress={() => chooseFiat(f)} paddingHorizontal={10} height={26} alignItems='center' borderRadius={radius.pill} borderWidth={1} borderColor={fiat === f ? c.ink : c.border} backgroundColor={fiat === f ? c.ink : "transparent"} accessibilityRole='button' accessibilityState={{ selected: fiat === f }}>
+                    <UiText fontSize={11} fontWeight='600' color={fiat === f ? c.ctaText : c.ink}>{f}</UiText>
+                  </XStack>
+                ))}
+              </XStack>
+            </XStack>
             <XStack gap={6}>
               {BUY_PRESETS_USD.map((p) => {
                 const selected = Number(amount) === p;
@@ -159,7 +183,7 @@ export default function BuyScreen() {
                     borderColor={selected ? c.ink : c.border}
                     backgroundColor={selected ? c.ink : "transparent"}
                   >
-                    <Mono fontSize={13} color={selected ? c.ctaText : c.ink}>${p}</Mono>
+                    <Mono fontSize={13} color={selected ? c.ctaText : c.ink}>{FIAT_SYMBOL[fiat]}{p}</Mono>
                   </XStack>
                 );
               })}

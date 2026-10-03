@@ -17,6 +17,7 @@ import { SavingsRow } from "@/components/home/SavingsRow";
 import { useSavingsPosition, useVaultInfo } from "@/hooks/use-savings";
 import { BackupCard } from "@/components/home/BackupCard";
 import { DeviceSetupCard } from "@/components/home/DeviceSetupCard";
+import { signingAddressOf } from "@/lib/turnkey/device-check";
 import { useDeviceReady } from "@/lib/turnkey/device-ready";
 import { HomeTabs, type HomeTab } from "@/components/home/HomeTabs";
 import {
@@ -142,8 +143,8 @@ export default function HomeScreen() {
             />
           ) : (
             <>
-              {deviceReady === false && wallet?.subOrgId && wallet.stellarAddress ? (
-                <DeviceSetupCard subOrgId={wallet.subOrgId} stellarAddress={wallet.stellarAddress} />
+              {deviceReady === false && wallet?.subOrgId && signingAddressOf(wallet) ? (
+                <DeviceSetupCard subOrgId={wallet.subOrgId} address={signingAddressOf(wallet)!} />
               ) : null}
               {wallet?.subOrgId ? <BackupCard subOrgId={wallet.subOrgId} /> : null}
               <BalanceCard

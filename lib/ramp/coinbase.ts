@@ -30,6 +30,26 @@ export const BUY_ASSETS: { asset: BuyAsset; chain: WalletChain; label: string }[
 export const BUY_PRESETS_USD = [20, 50, 100, 250];
 export const BUY_RETURN_URL = "normalapp://buy";
 
+/** Fiat currencies the Buy screen offers; Coinbase rejects an amount whose
+ *  currency differs from the user's payment method (live 2026-10-03: a EUR
+ *  account showed "please enter a EUR amount" for a USD preset). */
+export const BUY_FIATS = ["USD", "EUR", "GBP"] as const;
+export type BuyFiat = (typeof BUY_FIATS)[number];
+export const FIAT_SYMBOL: Record<BuyFiat, string> = { USD: "$", EUR: "€", GBP: "£" };
+const EURO_AREA = new Set(["AT", "BE", "HR", "CY", "EE", "FI", "FR", "DE", "GR", "IE", "IT", "LV", "LT", "LU", "MT", "NL", "PT", "SK", "SI", "ES", "AD", "MC", "SM", "VA", "ME", "XK"]);
+/** Best guess from the device locale's region (Hermes Intl); the user can change it. */
+export const defaultBuyFiat = (): BuyFiat => {
+  try {
+    const locale = Intl.DateTimeFormat().resolvedOptions().locale ?? "";
+    const region = locale.split(/[-_]/).find((p) => /^[A-Z]{2}$/.test(p)) ?? "";
+    if (region === "GB") return "GBP";
+    if (EURO_AREA.has(region)) return "EUR";
+  } catch {
+    /* fall through */
+  }
+  return "USD";
+};
+
 export const createCoinbaseSession = async (address: string, asset: BuyAsset, blockchain: WalletChain): Promise<string> => {
   const data = await apiFetch<{ token?: string; error?: unknown }>("/api/coinbase/session", {
     body: { address, asset, blockchain }
