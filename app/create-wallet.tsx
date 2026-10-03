@@ -186,10 +186,12 @@ export default function GetStartedScreen() {
               </XStack>
             ) : null}
 
-            <YStack alignItems='center' gap={10} paddingTop={8}>
+            <YStack gap={10} paddingTop={8}>
               {!wallet ? <PrimaryButton label='Skip for now' onPress={skip} disabled={!!busy} /> : null}
               <UiText fontSize={12} color={c.faint} textAlign='center'>You can add any asset later from the Assets tab.</UiText>
-              <PillButton label='Sign out' onPress={() => void signOut()} />
+              <XStack justifyContent='center'>
+                <PillButton label='Sign out' onPress={() => void signOut()} />
+              </XStack>
             </YStack>
           </YStack>
         </ScrollView>

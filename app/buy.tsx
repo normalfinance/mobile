@@ -184,13 +184,15 @@ export default function BuyScreen() {
             {!amountOk && amount ? <UiText fontSize={12} color={c.failed}>Minimum purchase is $5.</UiText> : null}
           </Card>
 
-          {wallet && !address ? (
+          {!address ? (
             <Card padding={14} gap={10}>
-              <UiText fontSize={14} fontWeight='500'>Add {meta.chain} to your wallet</UiText>
+              <UiText fontSize={14} fontWeight='500'>{wallet ? `Add ${meta.chain} to your wallet` : `Set up your ${meta.chain} wallet`}</UiText>
               <UiText fontSize={13} color={c.muted} lineHeight={18}>
-                Your Normal wallet has no {meta.label} address yet. One passkey confirmation creates it on the same wallet — nothing new to back up.
+                {wallet
+                  ? `Your Normal wallet has no ${meta.label} address yet. One passkey confirmation creates it on the same wallet — nothing new to back up.`
+                  : `Coinbase delivers ${asset} to your own ${meta.chain} address. One passkey confirmation creates your Normal wallet with it — you’ll get a recovery phrase to write down.`}
               </UiText>
-              <PrimaryButton label={addingChain ? "Adding…" : `Add ${meta.chain}`} onPress={addChain} loading={addingChain} />
+              <PrimaryButton label={addingChain ? "Confirm with your passkey…" : wallet ? `Add ${meta.chain}` : `Set up ${meta.chain} wallet`} onPress={addChain} loading={addingChain} />
             </Card>
           ) : usdcBlocked ? (
             <Card padding={14} gap={10}>

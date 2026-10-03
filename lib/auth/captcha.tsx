@@ -69,7 +69,10 @@ const CAPTCHA_RETURN_URL = "normalapp://captcha";
 export const requestCaptchaToken = async (): Promise<string> => {
   if (Platform.OS === "ios") {
     const url = `${API_BASE_URL}${TURNSTILE_PATH}?theme=${currentScheme()}&redirect=${encodeURIComponent(CAPTCHA_RETURN_URL)}`;
-    const result = await WebBrowser.openAuthSessionAsync(url, CAPTCHA_RETURN_URL);
+    // Ephemeral: iOS then skips its "<app> wants to use <host> to sign in"
+    // consent alert (confusing for a bot check — Niko 2026-10-03). Cloudflare
+    // still sees real Safari; we only lose cookie reuse between checks.
+    const result = await WebBrowser.openAuthSessionAsync(url, CAPTCHA_RETURN_URL, { preferEphemeralSession: true });
     if (result.type !== "success") throw new CaptchaCancelled();
     const returned = new URL(result.url);
     const token = returned.searchParams.get("token");
