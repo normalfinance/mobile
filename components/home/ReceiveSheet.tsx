@@ -5,13 +5,19 @@
 
 import React from "react";
 import { Alert, Modal } from "react-native";
+import { useRouter } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { XStack, YStack } from "tamagui";
 import QRCode from "react-native-qrcode-svg";
 import * as Clipboard from "expo-clipboard";
 import { Check, Copy, TriangleAlert, X } from "lucide-react-native";
 
+import { useStellarAccountProbe } from "@/hooks/use-savings";
 import { CHAIN_META, turnkeyWalletQueryKey, useTurnkeyWallet, type WalletAddress, type WalletChain } from "@/hooks/use-turnkey-wallet";
+import { refreshAfterStellarAction } from "@/lib/data/after-action";
+import { addUsdcTrustline, deriveSetupStep } from "@/lib/savings/engine";
+import { ensureDeviceReady } from "@/lib/turnkey/device-check";
+import { useDeviceReady } from "@/lib/turnkey/device-ready";
 import { useColors } from "@/lib/theme/appearance";
 import { radius, space, tracking } from "@/lib/theme/tokens";
 import { describeTurnkeyError, isUserCancelledError } from "@/lib/turnkey/client";
@@ -25,17 +31,24 @@ export const ReceiveSheet = ({
   open,
   addresses,
   initialChain,
+  asset,
   onClose
 }: {
   open: boolean;
   addresses: WalletAddress[];
   initialChain?: WalletChain;
+  /** "USDC" = the Stellar address must also be activated and hold a USDC trustline
+   *  (web receive gates: deriveSetupStep) — anything sent before that is rejected. */
+  asset?: string;
   onClose: () => void;
 }) => {
   const c = useColors();
+  const router = useRouter();
   const queryClient = useQueryClient();
   const { user } = useSupabaseAuth();
   const { wallet, refetch: refetchWallet } = useTurnkeyWallet();
+  const { ready: deviceReady } = useDeviceReady(wallet?.subOrgId);
+  const usdc = asset === "USDC";
   const [chain, setChain] = React.useState<WalletChain | null>(null);
   const [copied, setCopied] = React.useState(false);
   const [settingUp, setSettingUp] = React.useState(false);
@@ -45,10 +58,43 @@ export const ReceiveSheet = ({
   // else Stellar. Kept while open, so a just-provisioned chain stays selected.
   React.useEffect(() => {
     if (!open) return;
-    setChain(initialChain ?? addresses[0]?.chain ?? "stellar");
+    setChain(usdc ? "stellar" : initialChain ?? addresses[0]?.chain ?? "stellar");
     setCopied(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, initialChain]);
+  }, [open, initialChain, usdc]);
+
+  // USDC on Stellar: the account must exist (funded with XLM) and carry the
+  // USDC trustline before anyone sends USDC to it. Probed only while this
+  // sheet is open for USDC and the step isn't done.
+  const stellarAddress = addresses.find((a) => a.chain === "stellar")?.address ?? null;
+  const [watchProbe, setWatchProbe] = React.useState(true);
+  const probe = useStellarAccountProbe(usdc && open ? stellarAddress : null, usdc && open && watchProbe);
+  const usdcStep = usdc ? deriveSetupStep(probe.data ?? null) : null;
+  React.useEffect(() => {
+    setWatchProbe(usdcStep !== "ready");
+  }, [usdcStep]);
+  const [addingTrustline, setAddingTrustline] = React.useState(false);
+  const addTrustline = async () => {
+    if (!wallet?.subOrgId || !stellarAddress) return;
+    setAddingTrustline(true);
+    try {
+      const gate = await ensureDeviceReady(wallet.subOrgId, stellarAddress, deviceReady);
+      if (gate.outcome === "needs-setup") {
+        onClose();
+        router.push("/setup-device");
+        return;
+      }
+      if (gate.outcome === "cancelled") return;
+      if (gate.outcome === "failed") throw gate.error;
+      await addUsdcTrustline({ subOrgId: wallet.subOrgId, address: stellarAddress });
+      await probe.refetch();
+      void refreshAfterStellarAction(queryClient, { userId: user?.id, stellarAddress });
+    } catch (e) {
+      if (!isUserCancelledError(e)) Alert.alert("Couldn’t add the trustline", e instanceof Error ? e.message : describeTurnkeyError(e));
+    } finally {
+      setAddingTrustline(false);
+    }
+  };
 
   // Lazy creation (hard rule 7): no address on this chain yet → one passkey
   // creates it here, whether or not a Normal wallet exists at all.
@@ -97,7 +143,7 @@ export const ReceiveSheet = ({
         >
           <XStack justifyContent='space-between' alignItems='center'>
             <UiText fontSize={16} fontWeight='600'>
-              Receive
+              {usdc ? "Receive USDC" : "Receive"}
             </UiText>
             <IconButton onPress={onClose} label='Close'>
               <X size={20} color={c.muted} strokeWidth={2} />
@@ -106,9 +152,9 @@ export const ReceiveSheet = ({
 
           {(
             <>
-              {/* Chain pills — every chain; the ones without an address set up on tap (pill 12/600) */}
+              {/* Chain pills — every chain; the ones without an address set up on tap (pill 12/600). USDC lives on Stellar only. */}
               <XStack gap={6} flexWrap='wrap'>
-                {ALL_CHAINS.map((k) => {
+                {(usdc ? (["stellar"] as WalletChain[]) : ALL_CHAINS).map((k) => {
                   const selected = k === chain;
                   return (
                     <XStack
@@ -156,7 +202,33 @@ export const ReceiveSheet = ({
                 </YStack>
               ) : null}
 
-              {current && meta ? (
+              {current && meta && usdc && usdcStep !== "ready" ? (
+                // USDC gates, in the web's order: activate (fund with XLM) → trustline → ready.
+                <YStack gap={10}>
+                  {usdcStep === null ? (
+                    <UiText fontSize={13} color={c.muted}>Checking your Stellar account…</UiText>
+                  ) : usdcStep === "activate" ? (
+                    <>
+                      <XStack alignItems='flex-start' gap={8} padding={12} borderRadius={radius.input} backgroundColor={c.chips.amber.bg}>
+                        <TriangleAlert size={16} color={c.chips.amber.color} strokeWidth={2} />
+                        <UiText fontSize={13} color={c.chips.amber.color} flex={1} lineHeight={18}>
+                          Don’t send USDC yet — it would be rejected. Your Stellar account needs a little XLM first: receive about 3 XLM to the address below (1 activates it, 0.5 is reserved for the USDC trustline, the rest pays fees). It activates by itself when the XLM lands.
+                        </UiText>
+                      </XStack>
+                      <PrimaryButton label='Buy XLM with a card' onPress={() => { onClose(); router.push({ pathname: "/buy", params: { asset: "XLM" } }); }} />
+                    </>
+                  ) : (
+                    <>
+                      <UiText fontSize={13} color={c.muted} lineHeight={18}>
+                        Your Stellar account is active. Add the USDC trustline so it can hold USDC — one passkey confirmation, a tiny network fee. Until then, USDC sent here is rejected.
+                      </UiText>
+                      <PrimaryButton label={addingTrustline ? "Confirm with your passkey…" : "Add USDC trustline"} onPress={() => void addTrustline()} loading={addingTrustline} />
+                    </>
+                  )}
+                </YStack>
+              ) : null}
+
+              {current && meta && (!usdc || usdcStep === "activate" || usdcStep === "ready") ? (
                 <>
                   <XStack
                     alignItems='flex-start'
@@ -167,7 +239,7 @@ export const ReceiveSheet = ({
                   >
                     <TriangleAlert size={16} color={c.chips.amber.color} strokeWidth={2} />
                     <UiText fontSize={13} color={c.chips.amber.color} flex={1} lineHeight={18}>
-                      {meta.warning} Anything else will be lost.
+                      {usdc && usdcStep === "activate" ? "Send XLM only to this address for now." : usdc ? "Send USDC on the Stellar network only — not Ethereum, Solana or Base USDC." : `${meta.warning} Anything else will be lost.`}
                     </UiText>
                   </XStack>
 
@@ -182,7 +254,7 @@ export const ReceiveSheet = ({
 
                   <YStack gap={6}>
                     <UiText fontSize={12} color={c.muted}>
-                      {meta.name} address · {meta.assets}
+                      {usdc ? (usdcStep === "ready" ? "Stellar address · USDC trustline ready" : "Stellar address · XLM to activate") : `${meta.name} address · ${meta.assets}`}
                     </UiText>
                     <YStack
                       padding={12}

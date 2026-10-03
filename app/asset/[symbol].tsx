@@ -274,6 +274,7 @@ export default function AssetDetailScreen() {
         open={receiveOpen}
         addresses={addresses}
         initialChain={asset?.chain}
+        asset={symbol}
         onClose={() => setReceiveOpen(false)}
       />
     </Screen>

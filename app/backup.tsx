@@ -160,6 +160,7 @@ export default function BackupScreen() {
         open={receiveOpen}
         addresses={addresses}
         initialChain={(params.chain as WalletChain | undefined) ?? addresses[0]?.chain}
+        asset={params.asset}
         onClose={() => {
           setReceiveOpen(false);
           router.replace("/(tabs)");

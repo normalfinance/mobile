@@ -20,6 +20,10 @@ export function WalletEvents() {
     const off = onWalletProvisioned(async (e) => {
         if (pathRef.current.startsWith("/create-wallet")) return; // Get started shows /backup itself
         if (!(await walletNeedsBackup(e.subOrgId))) return;
+        // The passkey sheet is still dismissing when this fires; an alert
+        // presented during that transition is silently dropped by iOS
+        // (live 2026-10-03: no offer after adding Stellar from the asset page).
+        await new Promise((r) => setTimeout(r, 900));
         const chainName = e.chain.charAt(0).toUpperCase() + e.chain.slice(1);
         Alert.alert(
           e.kind === "created" ? "Back up your new wallet?" : `${chainName} added — back up your wallet?`,

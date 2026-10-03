@@ -70,7 +70,7 @@ export default function GetStartedScreen() {
         // A brand-new seed: show the recovery phrase first (web's backup
         // gate), then continue into the flow the user chose.
         router.replace("/(tabs)");
-        router.push({ pathname: "/backup", params: flow === "buy" ? { next: "buy", asset: picked.symbol } : { next: "receive", chain: picked.chain } });
+        router.push({ pathname: "/backup", params: flow === "buy" ? { next: "buy", asset: picked.symbol } : { next: "receive", chain: picked.chain, asset: picked.symbol } });
         return;
       }
       if (flow === "buy") {
@@ -205,6 +205,7 @@ export default function GetStartedScreen() {
         open={receiveOpen}
         addresses={walletAddresses(wallet)}
         initialChain={picked?.chain}
+        asset={picked?.symbol}
         onClose={() => {
           setReceiveOpen(false);
           if (hasSkippedOnboarding()) router.replace("/(tabs)");
