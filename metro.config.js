@@ -9,6 +9,13 @@ config.resolver.platforms = ["ios", "android", "native", "web"];
 // Add polyfill mappings for Node.js modules
 config.resolver.extraNodeModules = {
   crypto: require.resolve("crypto-browserify"),
+  // @turnkey/api-key-stamper's own "react-native" field maps `crypto` →
+  // `react-native-crypto` (deleted here 2026-09-15); Metro honours a package's
+  // field map before extraNodeModules, so its never-executed nodecrypto.mjs
+  // branch only resolves if that name exists. Release bundles (expo export /
+  // EAS) bundle every dynamic import eagerly and failed on it (2026-10-05);
+  // dev bundles were lazy and never hit it. Point the name at the same shim.
+  "react-native-crypto": require.resolve("crypto-browserify"),
   stream: require.resolve("stream-browserify"),
   buffer: require.resolve("buffer"),
   process: require.resolve("process/browser"),
