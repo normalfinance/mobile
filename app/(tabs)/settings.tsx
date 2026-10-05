@@ -36,7 +36,9 @@ import { useAppearance, useColors, type AppearanceMode } from "@/lib/theme/appea
 import { space } from "@/lib/theme/tokens";
 import { shortenAddress } from "@/lib/utils/number-format.utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bell, FileText, Import, KeyRound, LifeBuoy, Megaphone, Zap } from "lucide-react-native";
+import { Bell, FileText, Import, KeyRound, LifeBuoy, Link2, Megaphone, Unplug, Zap } from "lucide-react-native";
+import { externalWalletLabel, setExternalWallet } from "@/lib/external-wallet/store";
+import { disconnectWalletConnect } from "@/lib/external-wallet/walletconnect";
 import { LEGAL, getMarketingOptIn, setMarketingOptIn } from "@/lib/auth/marketing";
 import { Chip } from "@/components/home/primitives";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -66,7 +68,7 @@ export default function SettingsScreen() {
     setNotif(await requestNotificationPermission());
   };
   const { user } = useSupabaseAuth();
-  const { addresses, wallet } = useTurnkeyWallet();
+  const { addresses, wallet, normalWallet, externalStellar } = useTurnkeyWallet();
   const router = useRouter();
   const [testing, setTesting] = React.useState(false);
 
@@ -214,6 +216,63 @@ export default function SettingsScreen() {
             </Card>
           </YStack>
 
+          {/* Web wallet slot: which Stellar wallet the app reads and signs for. */}
+          <YStack gap={10}>
+            <UiText fontSize={13} color={c.muted}>
+              Stellar wallet
+            </UiText>
+            <Card>
+              <ListRow
+                icon={<Link2 size={16} color={c.ink} strokeWidth={1.8} />}
+                label={externalStellar ? `Using ${externalWalletLabel(externalStellar)}` : "Using your Normal wallet"}
+                sub={externalStellar ? `${shortenAddress(externalStellar.address, 6, 6)} · savings, sends and swaps are signed in ${externalWalletLabel(externalStellar)}` : normalWallet?.stellarAddress ? `${shortenAddress(normalWallet.stellarAddress, 6, 6)} · signed with your passkey` : "No Stellar address yet"}
+              />
+              {externalStellar ? (
+                <>
+                  <Divider />
+                  <ListRow
+                    label='Use Normal wallet instead'
+                    sub='Keeps the connection; switch back any time'
+                    onPress={() => {
+                      void setExternalWallet(null).then(() => queryClient.invalidateQueries());
+                    }}
+                  />
+                  <Divider />
+                  <ListRow
+                    icon={<Unplug size={16} color={c.ink} strokeWidth={1.8} />}
+                    label={`Disconnect ${externalWalletLabel(externalStellar)}`}
+                    sub='Ends the WalletConnect session and returns to your Normal wallet'
+                    onPress={() =>
+                      Alert.alert(`Disconnect ${externalWalletLabel(externalStellar)}?`, "Your funds stay in that wallet. Normal goes back to your Normal wallet.", [
+                        { text: "Cancel", style: "cancel" },
+                        {
+                          text: "Disconnect",
+                          style: "destructive",
+                          onPress: () => {
+                            void disconnectWalletConnect(externalStellar.topic).then(() => setExternalWallet(null)).then(() => queryClient.invalidateQueries());
+                          }
+                        }
+                      ])
+                    }
+                  />
+                </>
+              ) : null}
+              <Divider />
+              <ListRow
+                icon={<Link2 size={16} color={c.ink} strokeWidth={1.8} />}
+                label={externalStellar?.walletType === "lobstr" ? "Reconnect LOBSTR" : "Connect LOBSTR"}
+                sub='Use the LOBSTR app as your Stellar wallet in Normal'
+                onPress={() => router.push({ pathname: "/connect-wallet", params: { wallet: "lobstr" } })}
+              />
+              <Divider />
+              <ListRow
+                label='Connect another wallet'
+                sub='Any Stellar wallet that supports WalletConnect'
+                onPress={() => router.push({ pathname: "/connect-wallet", params: { wallet: "wallet-connect" } })}
+              />
+            </Card>
+          </YStack>
+
           {/* One row per chain the wallet has an address for (lazy creation: a
               chain appears here the first time it is used). Tap to copy. */}
           <YStack gap={10}>
@@ -267,20 +326,26 @@ export default function SettingsScreen() {
               Security
             </UiText>
             <Card>
-              <ListRow
-                icon={<Fingerprint size={16} color={c.ink} strokeWidth={1.8} />}
-                label='Set up this phone'
-                sub='Add a passkey for this device to your wallet'
-                onPress={() => router.push("/setup-device")}
-              />
-              <Divider />
-              <ListRow
-                icon={<KeyRound size={16} color={c.ink} strokeWidth={1.8} />}
-                label='Recovery phrase'
-                sub='Reveal the 12 words that restore this wallet — one passkey confirmation'
-                onPress={() => router.push("/backup")}
-              />
-              {!wallet?.walletId ? (
+              {normalWallet ? (
+                <>
+                  <ListRow
+                    icon={<Fingerprint size={16} color={c.ink} strokeWidth={1.8} />}
+                    label='Set up this phone'
+                    sub='Add a passkey for this device to your wallet'
+                    onPress={() => router.push("/setup-device")}
+                  />
+                  <Divider />
+                  <ListRow
+                    icon={<KeyRound size={16} color={c.ink} strokeWidth={1.8} />}
+                    label='Recovery phrase'
+                    sub='Reveal the 12 words that restore this wallet — one passkey confirmation'
+                    onPress={() => router.push("/backup")}
+                  />
+                </>
+              ) : (
+                <ListRow icon={<KeyRound size={16} color={c.ink} strokeWidth={1.8} />} label='No Normal wallet yet' sub='Create one from Assets or Get started, or import a recovery phrase below.' />
+              )}
+              {!normalWallet?.walletId ? (
                 <>
                   <Divider />
                   <ListRow
@@ -291,13 +356,17 @@ export default function SettingsScreen() {
                   />
                 </>
               ) : null}
-              <Divider />
-              <ListRow
-                icon={<ShieldCheck size={16} color={c.ink} strokeWidth={1.8} />}
-                label={testing ? "Testing…" : "Test signing"}
-                sub='Signs a random digest with your passkey and verifies it. Nothing is sent.'
-                onPress={testing ? undefined : testSigning}
-              />
+              {normalWallet ? (
+                <>
+                  <Divider />
+                  <ListRow
+                    icon={<ShieldCheck size={16} color={c.ink} strokeWidth={1.8} />}
+                    label={testing ? "Testing…" : "Test signing"}
+                    sub='Signs a random digest with your passkey and verifies it. Nothing is sent.'
+                    onPress={testing ? undefined : testSigning}
+                  />
+                </>
+              ) : null}
               <Divider />
               <ListRow
                 icon={<Bell size={16} color={c.ink} strokeWidth={1.8} />}

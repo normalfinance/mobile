@@ -9,9 +9,11 @@
 // A null address means that chain has not been set up for the user yet
 // (lazy asset creation) — it is NOT an error.
 
+import React from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { ApiError, apiFetch } from "@/lib/api";
+import { EXTERNAL_SUB_ORG, useExternalWallet, type ExternalWallet } from "@/lib/external-wallet/store";
 import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
 
 export interface TurnkeyWallet {
@@ -107,10 +109,29 @@ export const useTurnkeyWallet = (enabled: boolean = true) => {
       !(error instanceof ApiError && error.status === 401) && failureCount < 2
   });
 
-  const wallet = query.data ?? null;
+  const normalWallet = query.data ?? null;
+  // Web wallet slot: a connected external Stellar wallet (LOBSTR …) replaces
+  // the Normal wallet's Stellar address everywhere; the other chains stay.
+  // lib/stellar/signer.ts routes that address to WalletConnect for signing.
+  const external: ExternalWallet | null = useExternalWallet();
+  const wallet: TurnkeyWallet | null = React.useMemo(
+    () =>
+      external
+        ? {
+            subOrgId: normalWallet?.subOrgId ?? EXTERNAL_SUB_ORG,
+            walletId: normalWallet?.walletId ?? "",
+            bitcoinAddress: normalWallet?.bitcoinAddress ?? null,
+            ethereumAddress: normalWallet?.ethereumAddress ?? null,
+            solanaAddress: normalWallet?.solanaAddress ?? null,
+            stellarAddress: external.address
+          }
+        : normalWallet,
+    [normalWallet, external]
+  );
 
   let status: TurnkeyWalletStatus = "unknown";
-  if (!isAuthLoading && query.isSuccess) {
+  if (external) status = "ready";
+  else if (!isAuthLoading && query.isSuccess) {
     if (wallet === null) status = "none";
     else if (!wallet.stellarAddress) status = "no-stellar";
     else status = "ready";
@@ -118,6 +139,10 @@ export const useTurnkeyWallet = (enabled: boolean = true) => {
 
   return {
     wallet,
+    /** The Turnkey row itself (null when the account has no Normal wallet). */
+    normalWallet,
+    /** The connected external Stellar wallet occupying the slot, if any. */
+    externalStellar: external,
     status,
     stellarAddress: wallet?.stellarAddress ?? null,
     addresses: walletAddresses(wallet),

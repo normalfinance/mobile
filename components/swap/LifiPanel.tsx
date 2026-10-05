@@ -42,7 +42,7 @@ const ADDRESS_OF: Record<WalletChain, "stellarAddress" | "bitcoinAddress" | "eth
 
 const toBaseUnits = (amount: number, decimals: number): string => {
   const [w, f = ""] = amount.toFixed(decimals).split(".");
-  return (BigInt(w) * BigInt(10) ** BigInt(decimals) + BigInt(f.padEnd(decimals, "0"))).toString();
+  return (BigInt(w) * BigInt("1" + "0".repeat(decimals)) + BigInt(f.padEnd(decimals, "0"))).toString();
 };
 const fromBase = (v: string, decimals: number) => Number(v) / 10 ** decimals;
 

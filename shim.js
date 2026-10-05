@@ -1,6 +1,8 @@
 // Modern React Native polyfill setup for Node.js modules
 import "react-native-get-random-values";
 import "react-native-url-polyfill/auto";
+// WalletConnect sign-client on React Native (patches AppState/netinfo hooks; must load first).
+import "@walletconnect/react-native-compat";
 import { getRandomValues } from "expo-crypto";
 
 // Global polyfills

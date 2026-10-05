@@ -195,6 +195,7 @@ export default function GetStartedScreen() {
               <UiText fontSize={12} color={c.faint} textAlign='center'>You can add any asset later from the Assets tab.</UiText>
               <XStack justifyContent='center' gap={8}>
                 {!wallet ? <PillButton label='I already have a recovery phrase' onPress={() => router.push("/import-wallet")} /> : null}
+                {!wallet ? <PillButton label='Connect LOBSTR wallet' onPress={() => router.push({ pathname: "/connect-wallet", params: { wallet: "lobstr" } })} /> : null}
                 <PillButton label='Sign out' onPress={() => void signOut()} />
               </XStack>
             </YStack>

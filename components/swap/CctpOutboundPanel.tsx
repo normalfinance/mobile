@@ -10,6 +10,7 @@ import { useRouter } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { XStack, YStack } from "tamagui";
 
+import { ExternalWalletNotice } from "@/components/swap/ExternalWalletNotice";
 import { Card, Mono, PrimaryButton, UiText } from "@/components/home/primitives";
 import { AmountInput, ReceiveBox, SwapMiddle } from "@/components/swap/AmountInput";
 import { setPendingRun } from "@/lib/swap/run-store";
@@ -45,7 +46,7 @@ export function CctpOutboundPanel({ to, amount, setAmount, fromPill, toPill, onF
   const router = useRouter();
   const queryClient = useQueryClient();
   const { user } = useSupabaseAuth();
-  const { wallet, refetch: refetchWallet } = useTurnkeyWallet();
+  const { wallet, refetch: refetchWallet, externalStellar } = useTurnkeyWallet();
   const { portfolioData } = useBackendPortfolio();
   const probe = useStellarAccountProbe(wallet?.stellarAddress, false);
 
@@ -142,6 +143,7 @@ export function CctpOutboundPanel({ to, amount, setAmount, fromPill, toPill, onF
   else if (quoting || !quote) button = { label: quoteError ? "No route right now" : "Fetching quote…", disabled: true };
   else button = { label: "Swap with passkey", onPress: run };
 
+  if (externalStellar) return <ExternalWalletNotice external={externalStellar} />;
   return (
           <YStack gap={20}>
             <Card padding={12} gap={0}>

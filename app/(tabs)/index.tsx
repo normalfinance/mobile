@@ -8,7 +8,8 @@ import { Alert, RefreshControl, ScrollView } from "react-native";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { XStack, YStack } from "tamagui";
-import { Inbox, Settings, Wallet } from "lucide-react-native";
+import { Inbox, Link2, Settings, Wallet } from "lucide-react-native";
+import { externalWalletLabel } from "@/lib/external-wallet/store";
 
 import { ActivityRow, ActivityRowSkeleton } from "@/components/home/ActivityRow";
 import { AssetRow, AssetRowSkeleton } from "@/components/home/AssetRow";
@@ -40,7 +41,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const c = useColors();
   const { user } = useSupabaseAuth();
-  const { wallet } = useTurnkeyWallet();
+  const { wallet, externalStellar } = useTurnkeyWallet();
   const addresses = React.useMemo(() => walletAddresses(wallet), [wallet]);
   const { ready: deviceReady } = useDeviceReady(wallet?.subOrgId);
   const { portfolioData, transactions, isLoading, hasError, errorMessage, refetch, refetchTransactions } =
@@ -157,6 +158,15 @@ export default function HomeScreen() {
             </IconButton>
           </XStack>
 
+          {externalStellar ? (
+            <XStack alignItems='center' gap={8} paddingHorizontal={4}>
+              <Link2 size={14} color={c.muted} strokeWidth={2} />
+              <UiText fontSize={12.5} color={c.muted} flex={1}>
+                Stellar wallet: {externalWalletLabel(externalStellar)} · {externalStellar.address.slice(0, 4)}…{externalStellar.address.slice(-4)}
+              </UiText>
+              <PillButton label='Switch' onPress={() => router.push("/(tabs)/settings")} />
+            </XStack>
+          ) : null}
           {hasError ? (
             <EmptyState
               icon={<Wallet size={24} color={c.ink} strokeWidth={1.8} />}

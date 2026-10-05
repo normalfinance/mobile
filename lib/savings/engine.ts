@@ -31,7 +31,8 @@ import {
   type XlmFeeStatus
 } from "@/lib/stellar/send";
 import { createPasskeyClient, isUserCancelledError } from "@/lib/turnkey/client";
-import { signStellarXdrWithTurnkey } from "@/lib/turnkey/stellar-signer";
+import type { SignStellarParams } from "@/lib/turnkey/stellar-signer";
+import { signStellarXdr } from "@/lib/stellar/signer";
 import { getSavingsDepositFee, getYieldCommission } from "./normal-fees";
 
 // Web build-fee-payment.ts: fee txs of a pair get a 15-minute window so the
@@ -194,7 +195,7 @@ export const addUsdcTrustline = async ({
     .addOperation(Operation.changeTrust({ asset: new Asset(MAINNET_USDC.code, MAINNET_USDC.issuer) }))
     .setTimeout(120)
     .build();
-  const signed = await signStellarXdrWithTurnkey({
+  const signed = await signStellarXdr({
     xdr: tx.toXDR(),
     subOrgId,
     stellarAddress: address,
@@ -357,15 +358,15 @@ export const submitFeePair = async (params: {
 /** Sign, retrying once if the OS passkey sheet fails to open right after the
  *  previous one (web: intermittent "timed out or was not allowed" on the
  *  second ceremony). A user cancel is never retried. */
-export const signWithRetry = async (params: Parameters<typeof signStellarXdrWithTurnkey>[0]): Promise<string> => {
+export const signWithRetry = async (params: SignStellarParams): Promise<string> => {
   try {
-    return await signStellarXdrWithTurnkey(params);
+    return await signStellarXdr(params);
   } catch (e) {
     if (isUserCancelledError(e)) throw e;
     const msg = e instanceof Error ? e.message : String(e);
     if (!/timed out|not allowed|TimedOut/i.test(msg)) throw e;
     await new Promise((r) => setTimeout(r, 600));
-    return signStellarXdrWithTurnkey(params);
+    return signStellarXdr(params);
   }
 };
 

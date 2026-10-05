@@ -12,7 +12,7 @@ import type { RunSpec } from "./run-store";
 
 const toBaseUnits = (amount: number, decimals: number): string => {
   const [w, f = ""] = amount.toFixed(decimals).split(".");
-  return (BigInt(w) * BigInt(10) ** BigInt(decimals) + BigInt(f.padEnd(decimals, "0"))).toString();
+  return (BigInt(w) * BigInt("1" + "0".repeat(decimals)) + BigInt(f.padEnd(decimals, "0"))).toString();
 };
 
 const addressOf = (wallet: TurnkeyWallet, chain: "bitcoin" | "ethereum" | "solana") =>
