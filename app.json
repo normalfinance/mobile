@@ -3,7 +3,6 @@
     "name": "normal",
     "slug": "normal",
     "version": "1.0.0",
-    "projectId": "3526d985-d1a6-4a57-ba43-4f585c763244",
     "owner": "normalfi",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -31,7 +30,10 @@
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
-    "plugins": ["expo-web-browser", "expo-router"],
+    "plugins": [
+      "expo-web-browser",
+      "expo-router"
+    ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true

@@ -1,54 +1,45 @@
-# Dependencies
-node_modules
+# What EAS uploads. When this file exists it REPLACES .gitignore for the
+# upload, so it must repeat every exclusion we rely on. 2026-10-05: the old
+# version excluded assets/icons/crypto-icons (the release bundle failed with
+# "Unable to resolve @/assets/icons/crypto-icons/USDC.webp" on EAS only) and
+# let the local ios/ and android/ folders through (EAS then skipped prebuild).
 
-# Build outputs
+# dependencies / build output
+node_modules/
 .expo/
 .expo-shared/
 dist/
+web-build/
 build/
+expo-env.d.ts
+*.tsbuildinfo
+.metro-health-check*
 
-# iOS
-ios/Pods/**/*
-ios/build/**/*
-*.xcworkspace
-*.xcodeproj
+# generated native folders — EAS runs prebuild itself (CNG)
+/ios
+/android
 
-# Android
-android/app/build/**/*
-android/build/**/*
-*.apk
-*.aab
+# secrets and local config — never uploaded; env comes from EAS environments
+.env
+.env*.local
+credentials/
+credentials
+*.jks
+*.p8
+*.p12
+*.key
+*.pem
+*.mobileprovision
 
-# Caches
-.cache/
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Environment
-.env.local
-.env.*.local
-
-.git
-
-assets/icons/crypto-icons
-
-# IDE
+# git / IDE / OS
+.git/
 .vscode/
 .idea/
-*.swp
-*.swo
-*~
-
-# OS
 .DS_Store
-Thumbs.db
+*.log
+*.swp
+*.orig.*
 
-# Large assets (if you have any)
-# assets/videos/**/*
-# assets/large-images/**/*
-
-# Git
-.git/
-.gitignore
+# repo + caches
+.git
+.tamagui/
