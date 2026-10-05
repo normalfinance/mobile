@@ -4,7 +4,7 @@
 // Deposit / withdraw open app/savings-action.tsx.
 
 import React from "react";
-import { Alert, ScrollView } from "react-native";
+import { Alert, Dimensions, ScrollView } from "react-native";
 import { useRouter } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useIsFocused } from "@react-navigation/native";
@@ -17,6 +17,7 @@ import {
   EmptyState,
   IconBox,
   Mono,
+  PillButton,
   PrimaryButton,
   Screen,
   ScreenTitle,
@@ -25,7 +26,10 @@ import {
   UiText
 } from "@/components/home/primitives";
 import { ReceiveSheet } from "@/components/home/ReceiveSheet";
+import { EarningsChart } from "@/components/savings/EarningsChart";
 import { FeeLight } from "@/components/savings/FeeLight";
+import { HistoryCard } from "@/components/savings/HistoryCard";
+import { OnrampCard } from "@/components/savings/OnrampCard";
 import { SetupCard } from "@/components/savings/SetupCard";
 import { useSavingsPosition, useStellarAccountProbe, useVaultInfo } from "@/hooks/use-savings";
 import { turnkeyWalletQueryKey, useTurnkeyWallet, walletAddresses } from "@/hooks/use-turnkey-wallet";
@@ -112,8 +116,20 @@ export default function SavingsScreen() {
   };
 
   const apy = vault.data?.apy ?? null;
-  const estMonthly = apy !== null ? (savings.value * (apy / 100)) / 12 : null;
+  // Web savings-hero-card.tsx: est. annual / weekly / monthly from the current
+  // value at the live APY; earnings % against what was actually deposited.
+  const estAnnual = apy !== null ? savings.value * (apy / 100) : null;
+  const estMonthly = estAnnual !== null ? estAnnual / 12 : null;
+  const estWeekly = estAnnual !== null ? estAnnual / 52 : null;
+  const totalDeposited = parseFloat(savings.position?.totalDeposited || "0");
+  const earningsPct = totalDeposited > 0 ? (savings.earnings / totalDeposited) * 100 : 0;
   const blocked = probe.data?.feeStatus === "blocked";
+  const [receiveAsset, setReceiveAsset] = React.useState<"USDC" | undefined>(undefined);
+  const openReceive = (asset?: "USDC") => {
+    setReceiveAsset(asset);
+    setReceiveOpen(true);
+  };
+  const chartWidth = Dimensions.get("window").width - space.gutter * 2 - 2 - space.rowX * 2;
   // Loading or failed with nothing cached → skeleton, never a confident $0.
   const positionPending = !!address && !savings.position;
 
@@ -149,7 +165,9 @@ export default function SavingsScreen() {
 
               <Divider />
               <XStack paddingHorizontal={space.rowX} paddingVertical={space.rowY} justifyContent='space-between' alignItems='center'>
-                <UiText fontSize={13.5} color={c.muted}>Earned</UiText>
+                <UiText fontSize={13.5} color={c.muted}>
+                  Earned{earningsPct > 0 ? ` (+${earningsPct.toFixed(2)}%)` : ""}
+                </UiText>
                 {positionPending ? (
                   <Skeleton width={70} height={18} />
                 ) : (
@@ -169,14 +187,27 @@ export default function SavingsScreen() {
                 )}
               </XStack>
               <Divider />
-              <XStack paddingHorizontal={space.rowX} paddingVertical={space.rowY} justifyContent='space-between' alignItems='center'>
-                <UiText fontSize={13.5} color={c.muted}>Est. monthly</UiText>
-                <Mono fontSize={15}>{estMonthly === null ? "—" : fCurrency(estMonthly)}</Mono>
+              <XStack paddingHorizontal={space.rowX} paddingVertical={space.rowY} justifyContent='space-between' alignItems='flex-start'>
+                <UiText fontSize={13.5} color={c.muted}>Est. earnings</UiText>
+                <YStack alignItems='flex-end' gap={3}>
+                  <Mono fontSize={15}>{estAnnual === null ? "—" : `${fCurrency(estAnnual)} / yr`}</Mono>
+                  <Mono fontSize={11.5} color={c.muted}>
+                    {estMonthly === null || estWeekly === null ? "" : `${fCurrency(estMonthly)} / mo · ${fCurrency(estWeekly)} / wk`}
+                  </Mono>
+                </YStack>
               </XStack>
 
               {step === "ready" && probe.data ? (
                 <YStack marginTop={12} marginHorizontal={8} gap={10}>
                   <FeeLight status={probe.data.feeStatus ?? "ok"} available={xlmAvailableForFees(probe.data.xlmBalance, probe.data.subentryCount)} />
+                  {probe.data.feeStatus !== "ok" ? (
+                    // Web savings-xlm-fees-card.tsx actions: swap a little USDC, buy, or receive XLM.
+                    <XStack gap={8} flexWrap='wrap'>
+                      <PillButton label='Get XLM — swap a little USDC' onPress={() => router.push({ pathname: "/(tabs)/swap", params: { from: "USDC", to: "XLM", n: String(Date.now()) } })} />
+                      <PillButton label='Buy XLM' onPress={() => router.push("/buy?asset=XLM")} />
+                      <PillButton label='Receive XLM' onPress={() => openReceive()} />
+                    </XStack>
+                  ) : null}
                   <PrimaryButton
                     label='Deposit USDC'
                     disabled={blocked}
@@ -204,12 +235,22 @@ export default function SavingsScreen() {
             <SetupCard
               step={step}
               probe={probe.data ?? null}
-              onReceiveXlm={() => setReceiveOpen(true)}
+              onReceiveXlm={() => openReceive()}
               onBuyXlm={() => router.push("/buy?asset=XLM")}
               onAddTrustline={handleAddTrustline}
               addingTrustline={addingTrustline}
               checking={probe.isFetching}
             />
+          ) : null}
+
+          {address && step === "ready" ? (
+            <>
+              <Card paddingBottom={12}>
+                <EarningsChart address={address} currentEarnings={savings.earnings} width={chartWidth} />
+              </Card>
+              <OnrampCard onCash={() => router.push("/deposit-cash")} onBuy={() => router.push("/buy?asset=USDC")} onReceive={() => openReceive("USDC")} />
+              <HistoryCard address={address} />
+            </>
           ) : null}
 
           <YStack gap={12}>
@@ -240,6 +281,7 @@ export default function SavingsScreen() {
         open={receiveOpen}
         addresses={walletAddresses(wallet)}
         initialChain='stellar'
+        asset={receiveAsset}
         onClose={() => setReceiveOpen(false)}
       />
     </Screen>

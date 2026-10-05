@@ -16,6 +16,7 @@ import { setPendingRun } from "@/lib/swap/run-store";
 import { useBackendPortfolio } from "@/hooks/use-backend-portfolio";
 import { useStellarAccountProbe } from "@/hooks/use-savings";
 import { turnkeyWalletQueryKey, useTurnkeyWallet, type WalletChain } from "@/hooks/use-turnkey-wallet";
+import { usePendingOutflow } from "@/lib/spendable";
 import { lifiPivotQuote } from "@/lib/cctp/base";
 import { NATIVE_CHAIN, NATIVE_DECIMALS, usdcToWire, type CrosschainSymbol } from "@/lib/cctp/config";
 import { SEND_ASSETS } from "@/lib/send/registry";
@@ -58,7 +59,8 @@ export function CctpOutboundPanel({ to, amount, setAmount, fromPill, toPill, onF
   const toChain = NATIVE_CHAIN[to];
   const toAddress = wallet ? wallet[ADDRESS_OF[toChain]] : null;
 
-  const usdcBalance = probe.data?.usdcBalance ?? Number(portfolioData.assets.find((a) => a.asset_code === "USDC")?.balance ?? 0);
+  const usdcOutflow = usePendingOutflow("stellar", "USDC"); // #62
+  const usdcBalance = Math.max((probe.data?.usdcBalance ?? Number(portfolioData.assets.find((a) => a.asset_code === "USDC")?.balance ?? 0)) - usdcOutflow, 0);
   const xlmFree = probe.data ? xlmAvailableForFees(probe.data.xlmBalance, probe.data.subentryCount) : null;
   const lowXlm = xlmFree !== null && xlmFree < MIN_XLM_FOR_SOROBAN_TX;
   const amountNum = Number(amount.replace(",", "."));

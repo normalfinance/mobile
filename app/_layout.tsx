@@ -22,6 +22,8 @@ import { loadFonts } from "@/lib/fonts";
 import { AppearanceProvider, useAppearance } from "@/lib/theme/appearance";
 import { CaptchaProvider } from "@/lib/auth/captcha";
 import { configureNotifications, listenForNotificationTaps } from "@/lib/notifications";
+import { SessionExpiredBanner } from "@/components/auth/SessionExpiredBanner";
+import { startReferralCapture } from "@/lib/referral";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
 
@@ -91,11 +93,15 @@ function ThemedApp() {
           <Stack.Screen name='send' />
           <Stack.Screen name='savings-action' />
           <Stack.Screen name='buy' />
+          <Stack.Screen name='deposit-cash' />
+          <Stack.Screen name='import-wallet' />
+          <Stack.Screen name='sell' />
+          <Stack.Screen name='tx' />
           <Stack.Screen name='swap-run' />
           <Stack.Screen name='backup' />
-          <Stack.Screen name='verify-magic-link' options={{ presentation: "modal" }} />
         </Stack>
         </CaptchaProvider>
+        <SessionExpiredBanner />
         <StatusBar style={scheme === "dark" ? "light" : "dark"} />
       </NavigationThemeProvider>
     </Theme>
@@ -112,6 +118,7 @@ export default function RootLayout() {
     configureNotifications();
     return listenForNotificationTaps();
   }, []);
+  useEffect(() => startReferralCapture(), []);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

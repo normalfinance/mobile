@@ -17,6 +17,7 @@ import { turnkeyWalletQueryKey, useTurnkeyWallet, type WalletChain } from "@/hoo
 import { NATIVE_CHAIN, NATIVE_DECIMALS, type CrosschainSymbol } from "@/lib/cctp/config";
 import { ethGasReserve, fetchLifiQuote, type LifiQuote } from "@/lib/lifi/execute";
 import { SEND_ASSETS } from "@/lib/send/registry";
+import { usePendingOutflow } from "@/lib/spendable";
 import { useColors } from "@/lib/theme/appearance";
 import { radius, space } from "@/lib/theme/tokens";
 import { provisionChain } from "@/lib/turnkey/provision";
@@ -69,7 +70,8 @@ export function LifiPanel({ from, to, amount, setAmount, fromPill, toPill, onFli
   const balance = Number(asset?.balance ?? 0);
   const price = asset?.usdPrice ?? 0;
   const toPrice = portfolioData.assets.find((a) => a.asset_code === to)?.usdPrice ?? 0;
-  const spendable = Math.max(balance - reserve, 0);
+  const outflow = usePendingOutflow(fromChain, from); // #62: in-flight sends/swaps
+  const spendable = Math.max(balance - reserve - outflow, 0);
   const amountNum = Number(amount.replace(",", "."));
   const amountOk = Number.isFinite(amountNum) && amountNum > 0;
   const insufficient = amountOk && amountNum > spendable + 1e-12;

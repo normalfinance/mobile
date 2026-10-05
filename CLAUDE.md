@@ -257,7 +257,7 @@ Verified at `develop@3bc0217` plus the deletions below. Treat as the starting po
 | Backend | Next.js API, Bearer | ✅ `lib/api.ts` — `apiFetch()`: Bearer, `Cookie: normal-network=mainnet`, 401 → refresh once → retry once → `onSessionExpired`; `ApiError` with `status` and the server's `error`. Reads `EXPO_PUBLIC_API_BASE_URL`. Server-side submit funnel used: `fees/execute-pair` (`lib/savings/engine.ts`). |
 | Prices | backend `wallet/portfolio` + `prices/history` | ✅ Done. `hooks/use-backend-portfolio.ts` (portfolio + 24h change from `wallet/portfolio`, `usePriceHistory` from `prices/history`, Stellar txs from Horizon keyed by the Turnkey address). `lib/types/portfolio.types.ts` is a verbatim copy of web `src/types/portfolio.ts`. **CoinMarketCap and the Reflector oracle are deleted**; `EXPO_PUBLIC_CMC_API_KEY` is no longer read. |
 | Indexes / Invest | not a product | ☠️ deleted. |
-| Buy | Coinbase / MoneyGram | ✅ Coinbase Onramp (`lib/ramp/coinbase.ts`, `app/buy.tsx`): `coinbase/session` (single-use token, minted last) → hosted checkout in `openAuthSessionAsync` → `ramp/transfers` row (baseline for every chain) → pending "Bought" row in Activity, polled 15s only while in flight (the server proves arrival / expires rows on every `?active=1` read). **Return URL `normalapp://buy` must be on the CDP allow-list — untested until then.** MoneyGram not started. |
+| Buy | Coinbase / MoneyGram | ✅ Coinbase Onramp (`lib/ramp/coinbase.ts`, `app/buy.tsx`): `coinbase/session` (single-use token, minted last) → hosted checkout in `openAuthSessionAsync` → `ramp/transfers` row (baseline for every chain) → pending "Bought" row in Activity, polled 15s only while in flight (the server proves arrival / expires rows on every `?active=1` read). `normalapp://buy` and `normalapp://sell` are on the CDP allow-list (Niko, 2026-09). **Sell** = Coinbase off-ramp (`lib/ramp/offramp.ts`, `app/sell.tsx`). **MoneyGram cash deposit** built 2026-10-03 (`lib/ramp/moneygram.ts`, `app/deposit-cash.tsx`: SEP-10 token cached per account, SEP-24 page in the in-app browser, commit learned by polling the proxy while the page is open, rows from `GET mgi/transactions`, detail on `app/tx.tsx`) — untested on a device. Stripe = static link (`lib/ramp/stripe.ts`). |
 | Savings | DeFindex vault | ✅ **Deposit and withdraw live on a device (2026-09-15).** `lib/savings/engine.ts` (port of web `use-defindex-savings` + `fee-pair.ts`: sign-both-first pair → `fees/execute-pair`, 429 resubmit, `servicePending` Horizon poll, ledger-visible Done, USDC trustline, account probe), `lib/savings/normal-fees.ts` (verbatim web copy), `hooks/use-savings.ts` (position with 24h disk cache, #52 epoch guard, web reconciler; vault-info once per launch), `app/(tabs)/savings.tsx` (position, fee light, self-advancing Activate → Add USDC setup card), `app/savings-action.tsx` (always-visible step list, two passkey prompts explained, cancel = nothing charged). Savings composes into Home total and shows as a token row + "Saved/Withdrew" activity rows. |
 | Onboarding | — | ☠️ Removed (Niko, 2026-09-11): no pre-login carousel; unauthenticated users land on sign-in. Bring back later with new art if wanted. |
 
@@ -373,8 +373,7 @@ constants (Horizon, Soroban RPC, USDC issuer/address, XLM address, DeFindex vaul
 
 One mainnet Supabase project across staging and production. Association files are live at
 `https://normalfinance.io/.well-known/apple-app-site-association` (Team `FA938A596N`, both bundle
-ids) and `assetlinks.json` (Android SHA-256 still the all-zero placeholder until
-`eas credentials -p android` produces a keystore). Validator: `web:scripts/check-passkey-association.mjs --live`.
+ids) and `assetlinks.json` (live 2026-10-03 for `io.normalfinance.app` with two fingerprints: the per-machine debug keystore `98:96:DC:…:1C:8A` — remove before launch — and the EAS keystore `27:82:52:…:DD:AB` used by preview/production; Google's Digital Asset Links API confirms both. Still to add: the Play app-signing key once the app is in Play. Android caches the file — reinstall the app before testing passkeys). Validator: `web:scripts/check-passkey-association.mjs --live`.
 
 ## 9. Local setup (verified working 2026-09-10 on Xcode 26.0.1)
 
@@ -453,6 +452,7 @@ ids) and `assetlinks.json` (Android SHA-256 still the all-zero placeholder until
 - **Next money flows:** Swap (Soroswap XLM↔USDC via `swap/quote` → one passkey → `swap/submit-single`;
   409 `embedded_unavailable` → the fee-pair path already built) — settle the per-IP quote limit
   first; then LI.FI / CCTP; ramps.
+- **Web → mobile parity (2026-10-03):** tracked in `docs/parity-audit.md` (web agent's 5-part inventory diffed against this repo; every row is now “have” or “by design”). Built in that pass: Sell, transaction detail, Settings General/legal/support, session banner, referrals (`lib/referral.ts`), Savings chart/history/onramp card, Activity filters + CCTP-delivery dedupe, pending-outflow MAX (`lib/spendable.ts`), Send USD mode + review checkbox, MoneyGram deposit, wallet import (`lib/turnkey/import.ts`), BTC receive watcher.
 - **Distribution:** `eas.json` has development / preview / production profiles (`APP_VARIANT`, Node
   20.19.4, submit team id). Still needs: Expo org access (`normalfi`), `eas build -p ios --profile
   production`, `eas submit` with the App Store Connect app id. Android keystore.

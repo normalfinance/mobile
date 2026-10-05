@@ -1,7 +1,10 @@
 // A just-broadcast send, visible in Activity before the chain's indexer has
 // it (web lib/pending-sends.ts). The row is dropped the moment any feed
-// carries its hash, and expires after 24h regardless. Persisted so a killed
-// app still shows what it just sent. Zero requests of its own.
+// carries its hash, and expires per chain regardless (web EXPIRY_MS: the
+// backstop for a feed outage, not the normal path — Bitcoin's window matches
+// how long a low-fee tx can sit unconfirmed; Ethereum's covers Etherscan
+// indexing lag). Persisted so a killed app still shows what it just sent.
+// Zero requests of its own.
 
 import React from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -18,7 +21,13 @@ export interface PendingSend {
 }
 
 const KEY = "pending_sends_v1";
-const TTL_MS = 24 * 60 * 60 * 1000;
+const EXPIRY_MS: Record<WalletChain, number> = {
+  stellar: 10 * 60_000,
+  solana: 10 * 60_000,
+  ethereum: 2 * 3_600_000,
+  bitcoin: 48 * 3_600_000
+};
+const alive = (p: PendingSend) => Date.now() - p.createdAt < (EXPIRY_MS[p.chain] ?? 3_600_000);
 
 let cache: PendingSend[] = [];
 let loaded = false;
@@ -33,7 +42,7 @@ const load = async () => {
   try {
     const raw = await AsyncStorage.getItem(KEY);
     cache = raw ? (JSON.parse(raw) as PendingSend[]) : [];
-    cache = cache.filter((p) => Date.now() - p.createdAt < TTL_MS);
+    cache = cache.filter(alive);
     notify();
   } catch {
     cache = [];
@@ -56,13 +65,25 @@ export const onSendsSettled = (l: (sends: PendingSend[]) => void) => {
 /** Drop entries a feed now carries (case-insensitive hash match) or that expired. */
 export const reconcilePendingSends = (knownHashes: ReadonlySet<string>) => {
   const confirmed = cache.filter((p) => knownHashes.has(p.txHash.toLowerCase()));
-  const next = cache.filter((p) => !knownHashes.has(p.txHash.toLowerCase()) && Date.now() - p.createdAt < TTL_MS);
+  const next = cache.filter((p) => !knownHashes.has(p.txHash.toLowerCase()) && alive(p));
   if (next.length !== cache.length) {
     cache = next;
     notify();
     void persist();
     if (confirmed.length) settledListeners.forEach((l) => l(confirmed));
   }
+};
+
+/** Current ledger (lib/spendable.ts); loads from disk on first use. */
+export const getPendingSends = (): PendingSend[] => {
+  void load();
+  return cache;
+};
+export const subscribePendingSends = (l: () => void) => {
+  listeners.add(l);
+  return () => {
+    listeners.delete(l);
+  };
 };
 
 export const usePendingSends = (): PendingSend[] => {

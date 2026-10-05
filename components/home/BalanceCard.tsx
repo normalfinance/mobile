@@ -8,15 +8,14 @@ import {
   ArrowLeftRight,
   ArrowUp,
   Plus,
-  type LucideIcon
-} from "lucide-react-native";
+  type LucideIcon, Banknote } from "lucide-react-native";
 
 import { useColors } from "@/lib/theme/appearance";
 import { radius, space, tracking, typeScale as t } from "@/lib/theme/tokens";
 import { fCurrencyTwoDecimals } from "@/lib/utils/number-format.utils";
 import { Card, Divider, Mono, Skeleton, UiText } from "./primitives";
 
-export type HomeAction = "receive" | "send" | "swap" | "buy";
+export type HomeAction = "receive" | "send" | "swap" | "buy" | "sell";
 
 interface BalanceCardProps {
   totalUsd: number;
@@ -31,7 +30,8 @@ const ACTIONS: { key: HomeAction; label: string; Icon: LucideIcon }[] = [
   { key: "receive", label: "Receive", Icon: ArrowDown },
   { key: "send", label: "Send", Icon: ArrowUp },
   { key: "swap", label: "Swap", Icon: ArrowLeftRight },
-  { key: "buy", label: "Buy", Icon: Plus }
+  { key: "buy", label: "Buy", Icon: Plus },
+  { key: "sell", label: "Sell", Icon: Banknote }
 ];
 
 const Row = ({

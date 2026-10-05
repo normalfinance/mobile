@@ -13,6 +13,7 @@ import { Inbox, Settings, Wallet } from "lucide-react-native";
 import { ActivityRow, ActivityRowSkeleton } from "@/components/home/ActivityRow";
 import { AssetRow, AssetRowSkeleton } from "@/components/home/AssetRow";
 import { BalanceCard, type HomeAction } from "@/components/home/BalanceCard";
+import { toTxParams } from "@/lib/activity/tx-params";
 import { SavingsRow } from "@/components/home/SavingsRow";
 import { useSavingsPosition, useVaultInfo } from "@/hooks/use-savings";
 import { BackupCard } from "@/components/home/BackupCard";
@@ -31,7 +32,7 @@ import { ReceiveSheet } from "@/components/home/ReceiveSheet";
 import { useBackendPortfolio } from "@/hooks/use-backend-portfolio";
 import { useTurnkeyWallet, walletAddresses } from "@/hooks/use-turnkey-wallet";
 import { useColors } from "@/lib/theme/appearance";
-import { space } from "@/lib/theme/tokens";
+import { space, radius } from "@/lib/theme/tokens";
 import { BRAND_ASSETS } from "@/lib/utils/cdn.utils";
 import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
 
@@ -53,6 +54,26 @@ export default function HomeScreen() {
   const savingsUsd = savings.position ? savings.value : null; // null = still loading, show "—"
 
   const [tab, setTab] = React.useState<HomeTab>("tokens");
+  // Web activity tabs: All / Swaps / Savings / Transfers.
+  const [filter, setFilter] = React.useState<"all" | "swaps" | "savings" | "transfers">("all");
+  const FILTERS: { key: typeof filter; label: string }[] = [
+    { key: "all", label: "All" },
+    { key: "swaps", label: "Swaps" },
+    { key: "savings", label: "Savings" },
+    { key: "transfers", label: "Transfers" }
+  ];
+  // Web portfolio tabs All / Crypto / DeFi: DeFi = the Normal Savings position.
+  const [tokenFilter, setTokenFilter] = React.useState<"all" | "crypto" | "defi">("all");
+  const TOKEN_FILTERS: { key: typeof tokenFilter; label: string }[] = [
+    { key: "all", label: "All" },
+    { key: "crypto", label: "Crypto" },
+    { key: "defi", label: "DeFi" }
+  ];
+  const showAssets = tokenFilter !== "defi";
+  const showSavings = tokenFilter !== "crypto" && savings.value > 0;
+  const visibleTransactions = transactions.filter((tx) =>
+    filter === "all" ? true : filter === "swaps" ? tx.type === "swap" : filter === "savings" ? tx.type === "savings_deposit" || tx.type === "savings_withdraw" : ["send", "receive", "buy", "sell"].includes(tx.type)
+  );
   const [receiveOpen, setReceiveOpen] = React.useState(false);
   const [refreshing, setRefreshing] = React.useState(false);
 
@@ -75,6 +96,8 @@ export default function HomeScreen() {
         router.push("/send");
       } else if (action === "swap") {
         router.push("/(tabs)/swap");
+      } else if (action === "sell") {
+        router.push("/sell");
       } else {
         router.push("/buy");
       }
@@ -137,7 +160,7 @@ export default function HomeScreen() {
           {hasError ? (
             <EmptyState
               icon={<Wallet size={24} color={c.ink} strokeWidth={1.8} />}
-              title='Couldn’t load your portfolio'
+              title='Couldn’t load your balances — nothing is lost.'
               body={errorMessage ?? "Please check your connection and try again."}
               action={<PillButton label='Try again' onPress={() => void refetch()} />}
             />
@@ -183,21 +206,50 @@ export default function HomeScreen() {
                       </YStack>
                     ) : (
                       <>
-                        {heldAssets
-                          .filter((a) => a.usdValue >= savings.value || savings.value <= 0)
-                          .map((asset) => (
-                            <AssetRow key={asset.asset_code} asset={asset} onPress={() => router.push(`/asset/${asset.asset_code.toLowerCase()}`)} />
-                          ))}
-                        {savings.value > 0 ? (
+                        <XStack gap={6} paddingHorizontal={8} paddingTop={10} paddingBottom={4}>
+                          {TOKEN_FILTERS.map(({ key, label }) => {
+                            const selected = tokenFilter === key;
+                            return (
+                              <XStack
+                                key={key}
+                                onPress={() => setTokenFilter(key)}
+                                paddingHorizontal={12}
+                                height={28}
+                                borderRadius={radius.pill}
+                                alignItems='center'
+                                backgroundColor={selected ? c.ink : c.iconBg}
+                                pressStyle={{ backgroundColor: selected ? c.ctaPressed : c.pressTint }}
+                                accessibilityRole='button'
+                                accessibilityState={{ selected }}
+                              >
+                                <UiText fontSize={12} fontWeight='600' color={selected ? c.ctaText : c.muted}>{label}</UiText>
+                              </XStack>
+                            );
+                          })}
+                        </XStack>
+                        {showAssets
+                          ? heldAssets
+                              .filter((a) => a.usdValue >= savings.value || savings.value <= 0)
+                              .map((asset) => (
+                                <AssetRow key={asset.asset_code} asset={asset} onPress={() => router.push(`/asset/${asset.asset_code.toLowerCase()}`)} />
+                              ))
+                          : null}
+                        {showSavings ? (
                           <SavingsRow value={savings.value} apy={vault.data?.apy ?? null} onPress={() => router.push("/(tabs)/savings")} />
                         ) : null}
-                        {savings.value > 0
+                        {showAssets && savings.value > 0
                           ? heldAssets
                               .filter((a) => a.usdValue < savings.value)
                               .map((asset) => (
                                 <AssetRow key={asset.asset_code} asset={asset} onPress={() => router.push(`/asset/${asset.asset_code.toLowerCase()}`)} />
                               ))
                           : null}
+                        {tokenFilter === "defi" && savings.value <= 0 ? (
+                          <YStack alignItems='center' gap={10} paddingVertical={20}>
+                            <UiText fontSize={13} color={c.muted} textAlign='center'>No savings yet — USDC in Normal Savings earns every day.</UiText>
+                            <PillButton label='Start saving' onPress={() => router.push("/(tabs)/savings")} />
+                          </YStack>
+                        ) : null}
                       </>
                     )
                   ) : isLoading ? (
@@ -214,7 +266,34 @@ export default function HomeScreen() {
                       />
                     </YStack>
                   ) : (
-                    transactions.map((tx) => <ActivityRow key={tx.id} tx={tx} />)
+                    <>
+                      <XStack gap={6} paddingHorizontal={8} paddingTop={10} paddingBottom={4}>
+                        {FILTERS.map(({ key, label }) => {
+                          const selected = filter === key;
+                          return (
+                            <XStack
+                              key={key}
+                              onPress={() => setFilter(key)}
+                              paddingHorizontal={12}
+                              height={28}
+                              borderRadius={radius.pill}
+                              alignItems='center'
+                              backgroundColor={selected ? c.ink : c.iconBg}
+                              pressStyle={{ backgroundColor: selected ? c.ctaPressed : c.pressTint }}
+                              accessibilityRole='button'
+                              accessibilityState={{ selected }}
+                            >
+                              <UiText fontSize={12} fontWeight='600' color={selected ? c.ctaText : c.muted}>{label}</UiText>
+                            </XStack>
+                          );
+                        })}
+                      </XStack>
+                      {visibleTransactions.length === 0 ? (
+                        <UiText fontSize={13} color={c.muted} textAlign='center' paddingVertical={20}>Nothing in this category yet.</UiText>
+                      ) : (
+                        visibleTransactions.map((tx) => <ActivityRow key={tx.id} tx={tx} onPress={() => router.push({ pathname: "/tx", params: toTxParams(tx) })} />)
+                      )}
+                    </>
                   )}
                 </YStack>
               </YStack>

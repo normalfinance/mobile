@@ -15,6 +15,7 @@ import { setPendingRun } from "@/lib/swap/run-store";
 import { useBackendPortfolio } from "@/hooks/use-backend-portfolio";
 import { useStellarAccountProbe } from "@/hooks/use-savings";
 import { turnkeyWalletQueryKey, useTurnkeyWallet, type WalletChain } from "@/hooks/use-turnkey-wallet";
+import { usePendingOutflow } from "@/lib/spendable";
 import { NATIVE_CHAIN, NATIVE_DECIMALS, type CrosschainSymbol } from "@/lib/cctp/config";
 import { ethGasReserve, fetchLifiQuote, type LifiQuote } from "@/lib/lifi/execute";
 import { SEND_ASSETS } from "@/lib/send/registry";
@@ -29,7 +30,20 @@ const MIN_USD = 10;
 const QUOTE_STALE_MS = 10 * 60_000; // a built LI.FI quote carries deadlines (web quote-freshness.ts)
 const MATERIAL_DRIFT = 0.01;
 const SOL_RESERVE = 0.01; // fees + ATA rent (web)
-const BTC_RESERVE = 0.00002; // miner fee for the deposit tx (web feeReserve)
+const BTC_RESERVE = 0.0001; // until mempool answers (web fallback)
+/** Web use-cctp-engine.tsx: deposit-tx miner fee at the half-hour rate for a
+ *  ~210 vB tx with 40% headroom, clamped 0.00003–0.0005 BTC; 0.0001 if
+ *  mempool.space is unreachable. */
+const btcDepositReserve = async (): Promise<number> => {
+  try {
+    const r = await fetch("https://mempool.space/api/v1/fees/recommended", { signal: AbortSignal.timeout(6000) });
+    const f = (await r.json()) as { halfHourFee?: number };
+    const feeSat = (f.halfHourFee || 15) * 210 * 1.4;
+    return Math.min(Math.max(feeSat / 1e8, 0.00003), 0.0005);
+  } catch {
+    return 0.0001;
+  }
+};
 const ADDRESS_OF: Record<WalletChain, "stellarAddress" | "bitcoinAddress" | "ethereumAddress" | "solanaAddress"> = {
   stellar: "stellarAddress",
   bitcoin: "bitcoinAddress",
@@ -67,7 +81,8 @@ export function CctpInboundPanel({ from, amount, setAmount, fromPill, toPill, on
   const asset = portfolioData.assets.find((a) => a.asset_code === from);
   const balance = Number(asset?.balance ?? 0);
   const price = asset?.usdPrice ?? 0;
-  const spendable = Math.max(balance - reserve, 0);
+  const outflow = usePendingOutflow(fromChain, from); // #62: in-flight sends/swaps
+  const spendable = Math.max(balance - reserve - outflow, 0);
   const amountNum = Number(amount.replace(",", "."));
   const amountOk = Number.isFinite(amountNum) && amountNum > 0;
   const insufficient = amountOk && amountNum > spendable + 1e-12;
@@ -75,7 +90,8 @@ export function CctpInboundPanel({ from, amount, setAmount, fromPill, toPill, on
   const needsTrustline = probe.data?.exists === true && !probe.data.hasUsdcTrustline;
   React.useEffect(() => {
     if (from === "ETH") void ethGasReserve().then(setReserve);
-    else setReserve(from === "BTC" ? BTC_RESERVE : SOL_RESERVE);
+    else if (from === "BTC") void btcDepositReserve().then(setReserve);
+    else setReserve(SOL_RESERVE);
   }, [from]);
 
   // Quote: LI.FI native → USDC on Base, delivered to the user's OWN Base address.

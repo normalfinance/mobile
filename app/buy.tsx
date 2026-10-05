@@ -14,7 +14,7 @@ import { Input, XStack, YStack } from "tamagui";
 import { ChevronLeft, ExternalLink } from "lucide-react-native";
 
 import { AssetIcon } from "@/components/ui/AssetIcon";
-import { Card, IconButton, Mono, PrimaryButton, Screen, UiText } from "@/components/home/primitives";
+import { Card, IconButton, Mono, PrimaryButton, Screen, SecondaryButton, UiText } from "@/components/home/primitives";
 import { useBackendPortfolio } from "@/hooks/use-backend-portfolio";
 import { useStellarAccountProbe } from "@/hooks/use-savings";
 import { turnkeyWalletQueryKey, useTurnkeyWallet, type WalletChain } from "@/hooks/use-turnkey-wallet";
@@ -33,6 +33,7 @@ import {
   type BuyAsset
 } from "@/lib/ramp/coinbase";
 import { useColors } from "@/lib/theme/appearance";
+import { createStripeURL } from "@/lib/ramp/stripe";
 import { radius, space, tracking } from "@/lib/theme/tokens";
 import { provisionChain } from "@/lib/turnkey/provision";
 import { describeTurnkeyError, isUserCancelledError } from "@/lib/turnkey/client";
@@ -235,6 +236,11 @@ export default function BuyScreen() {
                 <ExternalLink size={12} color={c.faint} strokeWidth={2} />
                 <UiText fontSize={11} color={c.faint} fontFamily='$mono'>Debit card, Apple Pay, Coinbase balance · delivered to your wallet</UiText>
               </XStack>
+              {asset === "USDC" ? (
+                <SecondaryButton label='Deposit cash at a MoneyGram location' onPress={() => router.push("/deposit-cash")} disabled={busy} />
+              ) : null}
+              <SecondaryButton label='Pay with Stripe' onPress={() => void WebBrowser.openBrowserAsync(createStripeURL(amountNum, asset.toLowerCase(), meta.chain))} disabled={busy || !amountOk} />
+              <UiText fontSize={11} color={c.faint} textAlign='center'>Card, bank or Apple Pay — you enter your wallet address on Stripe’s page.</UiText>
             </YStack>
           )}
 

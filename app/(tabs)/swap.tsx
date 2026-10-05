@@ -8,6 +8,7 @@
 
 import React from "react";
 import { KeyboardAvoidingView, Platform, ScrollView } from "react-native";
+import { useLocalSearchParams } from "expo-router";
 import { XStack, YStack } from "tamagui";
 import { ChevronDown } from "lucide-react-native";
 
@@ -29,6 +30,19 @@ export default function SwapScreen() {
   const [to, setTo] = React.useState<SwapSymbol>("USDC");
   const [amount, setAmount] = React.useState("");
   const [pickerSide, setPickerSide] = React.useState<"from" | "to" | null>(null);
+  // Web /swap?from=USDC (Savings "Get XLM — swap a little USDC"): preselect the
+  // pair when another screen sends us here; `n` makes a repeat tap re-apply.
+  const params = useLocalSearchParams<{ from?: string; to?: string; n?: string }>();
+  React.useEffect(() => {
+    const isSym = (s: string | undefined): s is SwapSymbol => !!s && SWAP_ASSETS.some((a) => a.symbol === s);
+    const f = params.from?.toUpperCase();
+    const t = params.to?.toUpperCase();
+    if (!isSym(f)) return;
+    const next = isSym(t) && t !== f && canPair(f, t) ? t : counterpartOf(f);
+    setFrom(f);
+    setTo(next);
+    setAmount("");
+  }, [params.from, params.to, params.n]);
   // One currency mode for the whole card (web isFiatMode): both boxes follow it.
   const [fiat, setFiat] = React.useState(false);
   const toggleFiat = () => setFiat((p) => !p);

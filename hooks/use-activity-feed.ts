@@ -18,8 +18,11 @@ import { useQueries, useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 import { fetchActiveRamps, type RampTransfer } from "@/lib/ramp/coinbase";
 import { fetchLifiStatuses, getLifiStatusOverride } from "@/lib/lifi/tracker";
+import { fetchFills, fetchOfframpStatus, terminalLabel } from "@/lib/ramp/offramp";
 import { reconcilePendingSends, usePendingSends } from "@/lib/send/pending-sends";
 import { fetchCctpTransfers, type CctpTransfer } from "@/lib/cctp/engine";
+import { useMgiTransactions } from "@/hooks/use-mgi";
+import { FAILED_MGI_STATUSES, PENDING_MGI_STATUSES } from "@/lib/ramp/moneygram";
 import type { Transaction } from "@/services/portfolio.service";
 import { useTurnkeyWallet, type WalletChain } from "@/hooks/use-turnkey-wallet";
 
@@ -78,10 +81,10 @@ interface WalletActivityResponse {
 
 export const walletActivityQueryKey = (address: string) => ["activity", "wallet", address] as const;
 
-const fetchWalletActivity = (address: string) =>
+export const fetchWalletActivity = (address: string) =>
   apiFetch<WalletActivityResponse>("/api/wallet/activity", { query: { walletAddress: address, limit: 50 } });
 
-const walletItemToTransaction = (item: WalletActivityItem): Transaction | null => {
+export const walletItemToTransaction = (item: WalletActivityItem): Transaction | null => {
   const timestamp = new Date(item.createdAt);
   if (item.kind === "vault_deposit" || item.kind === "vault_withdraw") {
     const amount = parseFloat(item.amount) || 0;
@@ -197,6 +200,9 @@ export const useActivityFeed = (priceOf: (symbol: string) => number = () => 0) =
     retry: 1
   });
 
+  // MoneyGram cash deposits/cash-outs: our DB rows, no SEP-10 (web use-mgi-transactions).
+  const mgiQuery = useMgiTransactions(!!stellarAddress);
+
   const walletQuery = useQuery({
     queryKey: walletActivityQueryKey(stellarAddress ?? "none"),
     enabled: !!stellarAddress,
@@ -217,8 +223,22 @@ export const useActivityFeed = (priceOf: (symbol: string) => number = () => 0) =
     retry: 1
   });
 
+  // Coinbase cash-outs: the on-chain Sent row whose hash matches a fill is a
+  // Sell (web relabel), status from Coinbase's order (30 s while pending).
+  const offrampQuery = useQuery({
+    queryKey: ["activity", "offramp", stellarAddress ?? "none"],
+    enabled: !!stellarAddress,
+    queryFn: async () => {
+      const [fills, txs] = await Promise.all([fetchFills(), fetchOfframpStatus().catch(() => [])]);
+      return { fills, txs };
+    },
+    staleTime: 20_000,
+    refetchInterval: (q) => (q.state.data?.txs.some((t) => t.status === "TRANSACTION_STATUS_STARTED") ? 30_000 : false),
+    retry: 1
+  });
+
   // Fixed-length memo key: the number of queries changes with the wallet.
-  const dataKey = queries.map((q) => q.dataUpdatedAt).join(",") + "|" + walletQuery.dataUpdatedAt + "|" + rampsQuery.dataUpdatedAt + "|" + pendingSends.length + "|" + cctpQuery.dataUpdatedAt + "|" + lifiStatusQuery.dataUpdatedAt;
+  const dataKey = queries.map((q) => q.dataUpdatedAt).join(",") + "|" + walletQuery.dataUpdatedAt + "|" + rampsQuery.dataUpdatedAt + "|" + pendingSends.length + "|" + cctpQuery.dataUpdatedAt + "|" + lifiStatusQuery.dataUpdatedAt + "|" + offrampQuery.dataUpdatedAt + "|" + mgiQuery.dataUpdatedAt;
   // Every hash the feeds know this render — a pending send it covers is retired.
   const known = useMemo(() => {
     const set = new Set<string>();
@@ -262,6 +282,20 @@ export const useActivityFeed = (priceOf: (symbol: string) => number = () => 0) =
         txHash: null,
         counterparty: r.provider === "coinbase" ? "Coinbase" : r.provider
       }));
+    const mgiRows: Transaction[] = (mgiQuery.data ?? [])
+      .filter((t) => t.status !== "incomplete") // never committed in MoneyGram's UI
+      .map((t) => ({
+        id: `mgi:${t.id}`,
+        type: t.kind === "deposit" ? "buy" : "sell",
+        asset: "USDC",
+        amount: parseFloat(t.amount ?? "0") || 0,
+        usdValue: parseFloat(t.amount ?? "0") || 0,
+        timestamp: new Date(t.createdAt),
+        status: PENDING_MGI_STATUSES.has(t.status) ? "pending" : FAILED_MGI_STATUSES.has(t.status) ? "failed" : "completed",
+        chain: "stellar",
+        txHash: null,
+        counterparty: "MoneyGram"
+      }));
     const walletRows = (walletQuery.data?.items ?? [])
       .map((item) => {
         const t = walletItemToTransaction(item);
@@ -296,17 +330,49 @@ export const useActivityFeed = (priceOf: (symbol: string) => number = () => 0) =
         } as Transaction;
       });
     cctpLegHashes.forEach((h) => known.add(h));
-    const rows: Transaction[] = [...pendingRows, ...rampRows, ...cctpRows, ...walletRows];
+    // Web isCctpDelivery: the destination-chain Receive delivered by LI.FI's
+    // bridge has no hash we signed → same asset, amount within 2%, and within
+    // −5…+60 min of the transfer's start is that swap's delivery leg.
+    const deliveries = (cctpQuery.data ?? [])
+      .filter((tr) => !!tr.dstAmount)
+      .map((tr) => ({ symbol: tr.dstAsset.toUpperCase(), amount: parseFloat(tr.dstAmount as string), start: Date.parse(tr.createdAt) }));
+    const isCctpDelivery = (item: ChainActivityItem) =>
+      item.type === "Receive" &&
+      deliveries.some((d) => d.symbol === item.token.symbol.toUpperCase() && Math.abs(d.amount - item.token.amount) <= Math.max(d.amount * 0.02, 1e-6) && item.timestamp >= d.start - 5 * 60_000 && item.timestamp <= d.start + 60 * 60_000);
+    const rows: Transaction[] = [...pendingRows, ...rampRows, ...mgiRows, ...cctpRows, ...walletRows];
+    const fillByHash = new Map<string, string>(); // txHash → providerTxnId
+    (offrampQuery.data?.fills ?? []).forEach((f) => f.txHash && fillByHash.set(f.txHash.toLowerCase(), f.providerTxnId));
+    const offrampStatusById = new Map((offrampQuery.data?.txs ?? []).map((t) => [t.transactionId ?? "", t.status]));
     addresses.forEach(({ chain }, i) => {
       const items = queries[i]?.data?.items ?? [];
       for (const item of items) {
         // The same hash as a savings/CCTP row is that action's raw chain leg — show once.
         if (item.txHash && (ownHashes.has(item.txHash) || cctpLegHashes.has(item.txHash.toLowerCase()))) continue;
-        rows.push(toTransaction(chain, item, priceOf));
+        if (isCctpDelivery(item)) continue;
+        const t = toTransaction(chain, item, priceOf);
+        const fillId = item.txHash ? fillByHash.get(item.txHash.toLowerCase()) : undefined;
+        if (fillId && t.type === "send") {
+          const verdict = terminalLabel(offrampStatusById.get(fillId));
+          rows.push({ ...t, type: "sell", counterparty: "Coinbase", status: verdict === "success" ? "completed" : verdict === "failed" ? "failed" : "pending" });
+        } else rows.push(t);
       }
     });
     const ts = (t: Transaction) => t.timestamp.getTime() || 0; // NaN-safe (web 2026-08-19)
-    return rows.sort((a, b) => ts(b) - ts(a));
+    // A Coinbase sell is tracked twice: the hand-off row (ramp/transfers,
+    // written before the user even reaches Coinbase) and, once we broadcast,
+    // the chain's own Sent row relabelled via the fill. The chain row is the
+    // record — hide the hand-off row when a matching relabelled row exists
+    // (same asset, amount within 2%, −5…+60 min). Web shows both (defect).
+    const sellFills = rows.filter((r) => r.type === "sell" && !!r.txHash && !r.id.startsWith("ramp:"));
+    const deduped = rows.filter(
+      (r) =>
+        !(
+          r.id.startsWith("ramp:") &&
+          r.type === "sell" &&
+          sellFills.some((f) => f.asset === r.asset && Math.abs(f.amount - r.amount) <= Math.max(r.amount * 0.02, 1e-9) && ts(f) >= ts(r) - 5 * 60_000 && ts(f) <= ts(r) + 60 * 60_000)
+        )
+    );
+    return deduped.sort((a, b) => ts(b) - ts(a));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [addresses, dataKey, priceOf]);
 
@@ -316,7 +382,7 @@ export const useActivityFeed = (priceOf: (symbol: string) => number = () => 0) =
   const isFetching = queries.some((q) => q.isFetching) || walletQuery.isFetching;
   const error = (queries.find((q) => q.error)?.error as Error | undefined) ?? null;
 
-  const refetch = () => Promise.all([...queries.map((q) => q.refetch()), walletQuery.refetch(), rampsQuery.refetch(), cctpQuery.refetch()]);
+  const refetch = () => Promise.all([...queries.map((q) => q.refetch()), walletQuery.refetch(), rampsQuery.refetch(), cctpQuery.refetch(), mgiQuery.refetch()]);
 
   return { transactions, isLoading, isFetching, error, refetch };
 };

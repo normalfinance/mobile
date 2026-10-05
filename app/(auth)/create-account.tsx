@@ -4,8 +4,14 @@ import React from "react";
 import { Alert } from "react-native";
 import { useRouter } from "expo-router";
 
+import { Linking } from "react-native";
+import { XStack, YStack } from "tamagui";
+import { Check } from "lucide-react-native";
+
 import { AuthScreen, Field, SwitchLine } from "@/components/auth/AuthScreen";
-import { PrimaryButton } from "@/components/home/primitives";
+import { PrimaryButton, UiText } from "@/components/home/primitives";
+import { LEGAL, parkMarketingOptIn } from "@/lib/auth/marketing";
+import { useColors } from "@/lib/theme/appearance";
 import { MIN_PASSWORD, createAccount, friendlyAuthError, looksLikeEmail, normalizeEmail } from "@/lib/auth/email-auth";
 
 export default function CreateAccountScreen() {
@@ -13,14 +19,27 @@ export default function CreateAccountScreen() {
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [confirm, setConfirm] = React.useState("");
+  const [tos, setTos] = React.useState(false);
+  const [updates, setUpdates] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
+  const c = useColors();
   const mismatch = confirm.length > 0 && confirm !== password;
-  const ready = looksLikeEmail(email) && password.length >= MIN_PASSWORD && confirm === password;
+  const ready = looksLikeEmail(email) && password.length >= MIN_PASSWORD && confirm === password && tos;
+
+  const checkbox = (checked: boolean, onToggle: () => void, label: React.ReactNode) => (
+    <XStack onPress={onToggle} alignItems='center' gap={10} paddingVertical={4} pressStyle={{ opacity: 0.6 }} accessibilityRole='checkbox' accessibilityState={{ checked }}>
+      <YStack width={22} height={22} borderRadius={6} borderWidth={1.5} borderColor={checked ? c.cta : c.borderStrong} backgroundColor={checked ? c.cta : "transparent"} alignItems='center' justifyContent='center'>
+        {checked ? <Check size={14} color={c.ctaText} strokeWidth={3} /> : null}
+      </YStack>
+      <YStack flex={1}>{label}</YStack>
+    </XStack>
+  );
 
   const submit = async () => {
     if (!ready || busy) return;
     setBusy(true);
     try {
+      if (updates) void parkMarketingOptIn(); // applied once the session exists
       const r = await createAccount(email, password);
       if (r === "cancelled") return;
       if (r === "ok") router.push({ pathname: "/(auth)/verify-code", params: { email: normalizeEmail(email), kind: "signup" } });
@@ -71,6 +90,15 @@ export default function CreateAccountScreen() {
         returnKeyType='go'
         hint={mismatch ? "Passwords don’t match" : undefined}
       />
+      {checkbox(tos, () => setTos((v) => !v), (
+        <UiText fontSize={13} color={c.ink2} lineHeight={18}>
+          I agree to the{" "}
+          <UiText fontSize={13} fontWeight='600' color={c.ink} onPress={() => void Linking.openURL(LEGAL.terms)}>Terms of Service</UiText>
+          {" "}and{" "}
+          <UiText fontSize={13} fontWeight='600' color={c.ink} onPress={() => void Linking.openURL(LEGAL.privacy)}>Privacy Policy</UiText>.
+        </UiText>
+      ))}
+      {checkbox(updates, () => setUpdates((v) => !v), <UiText fontSize={13} color={c.ink2}>Send me product updates (optional).</UiText>)}
       <PrimaryButton label={busy ? "Creating…" : "Create account"} onPress={submit} disabled={!ready} loading={busy} />
     </AuthScreen>
   );

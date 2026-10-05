@@ -193,7 +193,8 @@ export default function GetStartedScreen() {
             <YStack gap={10} paddingTop={8}>
               {!wallet ? <PrimaryButton label='Skip for now' onPress={skip} disabled={!!busy} /> : null}
               <UiText fontSize={12} color={c.faint} textAlign='center'>You can add any asset later from the Assets tab.</UiText>
-              <XStack justifyContent='center'>
+              <XStack justifyContent='center' gap={8}>
+                {!wallet ? <PillButton label='I already have a recovery phrase' onPress={() => router.push("/import-wallet")} /> : null}
                 <PillButton label='Sign out' onPress={() => void signOut()} />
               </XStack>
             </YStack>

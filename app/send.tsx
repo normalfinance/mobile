@@ -11,7 +11,7 @@ import * as Clipboard from "expo-clipboard";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { Input, XStack, YStack } from "tamagui";
-import { Check, ChevronLeft, ClipboardPaste, ScanLine, TriangleAlert, X } from "lucide-react-native";
+import { ArrowUpDown, Check, ChevronLeft, ClipboardPaste, ScanLine, TriangleAlert, X } from "lucide-react-native";
 
 import { AssetIcon } from "@/components/ui/AssetIcon";
 import { QrScanner } from "@/components/send/QrScanner";
@@ -25,6 +25,7 @@ import { GAS_RESERVE_ETH, sendEth, spendableEth } from "@/lib/send/evm";
 import { addPendingSend } from "@/lib/send/pending-sends";
 import { SEND_ASSETS, SEND_ORDER, parseChainQr, type SendSymbol } from "@/lib/send/registry";
 import { SOL_FEE, sendSol, solMaxSend } from "@/lib/send/solana";
+import { usePendingOutflow } from "@/lib/spendable";
 import { parseStellarQr } from "@/lib/stellar/qr";
 import { STELLAR_TX_FEE_XLM, fetchMemoRequirement, loadSource, sendStellar, spendableXlmForOutflow, type MemoRequirement } from "@/lib/stellar/send";
 import { useColors } from "@/lib/theme/appearance";
@@ -73,7 +74,12 @@ export default function SendScreen() {
   const [destination, setDestination] = React.useState("");
   const [memo, setMemo] = React.useState("");
   const [memoReq, setMemoReq] = React.useState<MemoRequirement | null>(null);
-  const [spendable, setSpendable] = React.useState<number | null>(null);
+  const [spendableRaw, setSpendable] = React.useState<number | null>(null);
+  // Web send-modal: type in USD or in the coin; the coin amount stays canonical.
+  const [fiat, setFiat] = React.useState(false);
+  const [usdText, setUsdText] = React.useState("");
+  // Web review step: "I have verified the address and amount" before signing.
+  const [verified, setVerified] = React.useState(false);
   const [feePreview, setFeePreview] = React.useState<string | null>(null);
   const [confirming, setConfirming] = React.useState(false);
   const [scanning, setScanning] = React.useState(false);
@@ -84,6 +90,22 @@ export default function SendScreen() {
 
   const asset = portfolioData.assets.find((a) => a.asset_code === symbol);
   const price = asset?.usdPrice ?? 0;
+  // #62: never offer money an in-flight send/swap is already moving.
+  const outflow = usePendingOutflow(meta.chain, symbol);
+  const spendable = spendableRaw === null ? null : Math.max(spendableRaw - outflow, 0);
+  const onAmountText = (v: string) => {
+    if (fiat) {
+      setUsdText(v);
+      const usd = Number(v.replace(",", "."));
+      setAmount(price > 0 && Number.isFinite(usd) && usd > 0 ? trim(usd / price, DECIMALS[symbol]) : "");
+    } else setAmount(v);
+  };
+  const toggleFiat = () => {
+    if (!price) return;
+    const n = Number(amount.replace(",", "."));
+    if (!fiat) setUsdText(Number.isFinite(n) && n > 0 ? (n * price).toFixed(2) : "");
+    setFiat((f) => !f);
+  };
   const balance = Number(asset?.balance ?? 0);
   const amountNum = Number(amount.replace(",", "."));
   const amountOk = Number.isFinite(amountNum) && amountNum > 0;
@@ -151,7 +173,9 @@ export default function SendScreen() {
   };
 
   const useMax = () => {
-    if (spendable !== null) setAmount(trim(spendable, DECIMALS[symbol]));
+    if (spendable === null) return;
+    setAmount(trim(spendable, DECIMALS[symbol]));
+    setUsdText(price ? (spendable * price).toFixed(2) : "");
   };
 
   const addChain = async () => {
@@ -170,6 +194,7 @@ export default function SendScreen() {
 
   // BTC: the confirm sheet shows the builder's real fee (same call, unsigned).
   const openConfirm = async () => {
+    setVerified(false);
     setFeePreview(null);
     setConfirming(true);
     if (symbol === "BTC") {
@@ -318,11 +343,19 @@ export default function SendScreen() {
               ) : (
                 <>
                   <XStack alignItems='center' gap={10}>
-                    <Input {...inputStyle} flex={1} height={56} fontFamily='$mono' fontSize={28} letterSpacing={tracking(28)} placeholder='0.00' keyboardType='decimal-pad' value={amount} onChangeText={setAmount} editable={!busy} />
+                    {fiat ? <Mono fontSize={28} color={c.muted} letterSpacing={tracking(28)}>$</Mono> : null}
+                    <Input {...inputStyle} flex={1} height={56} fontFamily='$mono' fontSize={28} letterSpacing={tracking(28)} placeholder='0.00' keyboardType='decimal-pad' value={fiat ? usdText : amount} onChangeText={onAmountText} editable={!busy} />
                     <PillButton label='Max' onPress={useMax} />
                   </XStack>
-                  <XStack justifyContent='space-between'>
-                    <UiText fontSize={12} color={c.muted}>{amountOk && price ? fCurrency(amountNum * price) : " "}</UiText>
+                  <XStack justifyContent='space-between' alignItems='center'>
+                    {price > 0 ? (
+                      <XStack onPress={toggleFiat} alignItems='center' gap={4} paddingVertical={2} pressStyle={{ opacity: 0.6 }} accessibilityRole='button' accessibilityLabel={fiat ? "Enter amount in coins" : "Enter amount in dollars"}>
+                        <ArrowUpDown size={12} color={c.muted} strokeWidth={2} />
+                        <Mono fontSize={12} color={c.muted}>{amountOk ? `≈ ${fiat ? `${fAssetQuantity(amountNum, symbol)} ${symbol}` : fCurrency(amountNum * price)}` : fiat ? `Enter in ${symbol}` : "Enter in USD"}</Mono>
+                      </XStack>
+                    ) : (
+                      <UiText fontSize={12} color={c.muted}> </UiText>
+                    )}
                     <Mono fontSize={12} color={spendable !== null && amountNum > spendable ? c.failed : c.muted}>
                       {spendable === null ? "…" : `${fAssetQuantity(spendable, symbol)} ${symbol} available`}
                     </Mono>
@@ -417,10 +450,16 @@ export default function SendScreen() {
                 <Mono fontSize={12}>{symbol === "BTC" ? feePreview ?? "estimating…" : feeText}</Mono>
               </XStack>
             </Card>
+            <XStack onPress={() => !busy && setVerified((v) => !v)} alignItems='center' gap={10} paddingVertical={4} accessibilityRole='checkbox' accessibilityState={{ checked: verified }}>
+              <YStack width={22} height={22} borderRadius={6} borderWidth={1.5} borderColor={verified ? c.ink : c.borderStrong} backgroundColor={verified ? c.ink : "transparent"} alignItems='center' justifyContent='center'>
+                {verified ? <Check size={14} color={c.ctaText} strokeWidth={3} /> : null}
+              </YStack>
+              <UiText fontSize={13} flex={1} lineHeight={18}>I have verified the address and amount.</UiText>
+            </XStack>
             <UiText fontSize={12} color={c.faint} textAlign='center'>
               {meta.name} transfers are final and can’t be reversed.
             </UiText>
-            <PrimaryButton label={step ? STEP_LABEL[step] : "Send with passkey"} onPress={send} loading={busy} disabled={symbol === "BTC" && !feePreview} />
+            <PrimaryButton label={step ? STEP_LABEL[step] : "Send with passkey"} onPress={send} loading={busy} disabled={!verified || (symbol === "BTC" && !feePreview)} />
           </YStack>
         </YStack>
       </Modal>

@@ -9,6 +9,9 @@ import React from "react";
 import { Alert } from "react-native";
 import { usePathname, useRouter } from "expo-router";
 
+import { useTurnkeyWallet } from "@/hooks/use-turnkey-wallet";
+import { applyParkedMarketingOptIn } from "@/lib/auth/marketing";
+import { applyReferral } from "@/lib/referral";
 import { onWalletProvisioned, walletNeedsBackup } from "@/lib/turnkey/provision";
 
 export function WalletEvents() {
@@ -16,6 +19,14 @@ export function WalletEvents() {
   const pathname = usePathname();
   const pathRef = React.useRef(pathname);
   pathRef.current = pathname;
+  React.useEffect(() => {
+    void applyParkedMarketingOptIn(); // ticked on Create account, before a session existed
+  }, []);
+  // Referral: applied once (idempotent) as soon as a Stellar address exists (web: only Stellar addresses are referral wallets).
+  const { wallet } = useTurnkeyWallet();
+  React.useEffect(() => {
+    if (wallet?.stellarAddress) void applyReferral(wallet.stellarAddress);
+  }, [wallet?.stellarAddress]);
   React.useEffect(() => {
     const off = onWalletProvisioned(async (e) => {
         if (pathRef.current.startsWith("/create-wallet")) return; // Get started shows /backup itself

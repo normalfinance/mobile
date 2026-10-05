@@ -21,6 +21,7 @@ import { provisionChain } from "@/lib/turnkey/provision";
 import { refreshAfterStellarAction } from "@/lib/data/after-action";
 import { addUsdcTrustline } from "@/lib/savings/engine";
 import { canPaySorobanFee, maxXlmForSorobanSwap, spendableXlmForOutflow } from "@/lib/stellar/send";
+import { usePendingOutflow } from "@/lib/spendable";
 import { QUOTE_DRIFT_TOLERANCE, QUOTE_MAX_AGE_MS, getSwapQuote, type SwapQuote, type SwapSymbol } from "@/lib/swap/soroswap";
 import { setPendingRun } from "@/lib/swap/run-store";
 import { useColors } from "@/lib/theme/appearance";
@@ -99,8 +100,9 @@ export function SoroswapPanel({ from, to, amount, setAmount, fromPill, toPill, o
   const price = (sym: SwapSymbol) => portfolioData.assets.find((a) => a.asset_code === sym)?.usdPrice ?? 0;
   // XLM's spendable already holds back the reserve, the classic fee and the
   // savings buffer (#67); the Soroban fee this swap pays comes off in MAX.
-  const spendableXlm = spendableXlmForOutflow(xlmBalance, subentries, hasActiveSavings);
-  const fromBalance = from === "XLM" ? spendableXlm : probe.data?.usdcBalance ?? Number(portfolioData.assets.find((a) => a.asset_code === "USDC")?.balance ?? 0);
+  const outflow = usePendingOutflow("stellar", from); // #62: in-flight sends/swaps
+  const spendableXlm = Math.max(spendableXlmForOutflow(xlmBalance, subentries, hasActiveSavings) - (from === "XLM" ? outflow : 0), 0);
+  const fromBalance = from === "XLM" ? spendableXlm : Math.max((probe.data?.usdcBalance ?? Number(portfolioData.assets.find((a) => a.asset_code === "USDC")?.balance ?? 0)) - outflow, 0);
   const insufficient = amountOk && amountNum > fromBalance + 1e-7;
   const xlmSpent = from === "XLM" ? amountNum : 0;
   const cannotPayFee = amountOk && accountExists === true && !canPaySorobanFee(xlmBalance, subentries, xlmSpent);

@@ -311,9 +311,10 @@ export const friendlyHorizonError = (err: unknown): string => {
     [/tx_bad_auth/, "The signature was rejected by the network."],
     [/tx_insufficient_balance/, "Not enough XLM to cover the fee and reserve."]
   ];
-  for (const [re, msg] of map) if (re.test(all)) return msg;
+  const text = err instanceof Error ? err.message : "";
+  for (const [re, msg] of map) if (re.test(all) || re.test(text)) return msg;
   if (all) return `The network rejected the transaction (${all}).`;
-  return err instanceof Error ? err.message : "The transaction failed.";
+  return text || "The transaction failed.";
 };
 
 // ---------------------------------------------------------------------------

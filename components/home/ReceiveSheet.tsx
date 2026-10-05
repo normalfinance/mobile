@@ -1,7 +1,9 @@
 // Receive modal, after web's receive-modal.tsx: dialog r22, QR panel r16 on the
-// input background, address box r12 in 12px mono, copy button r10. Chain-aware:
-// one pill per chain the wallet has an address for, with a per-chain warning —
-// funds sent on the wrong network are unrecoverable.
+// input background, address box r12 in 12px mono, copy button r10. Asset-aware:
+// one pill per asset (XLM · USDC · BTC · ETH · SOL; USDC = Stellar with the
+// activate → trustline gates), chains without an address set up on tap, a
+// per-chain warning — funds sent on the wrong network are unrecoverable — and
+// an incoming-payment watcher on every chain while the sheet is open.
 
 import React from "react";
 import { Alert, Modal } from "react-native";
@@ -12,6 +14,8 @@ import QRCode from "react-native-qrcode-svg";
 import * as Clipboard from "expo-clipboard";
 import { Check, Copy, TriangleAlert, X } from "lucide-react-native";
 
+import { incomingSats, useBtcAddressWatch } from "@/hooks/use-btc-address-watch";
+import { useIncomingWatch } from "@/hooks/use-incoming-watch";
 import { useStellarAccountProbe } from "@/hooks/use-savings";
 import { CHAIN_META, turnkeyWalletQueryKey, useTurnkeyWallet, type WalletAddress, type WalletChain } from "@/hooks/use-turnkey-wallet";
 import { refreshAfterStellarAction } from "@/lib/data/after-action";
@@ -25,7 +29,15 @@ import { provisionChain } from "@/lib/turnkey/provision";
 import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
 import { IconButton, Mono, PrimaryButton, SecondaryButton, UiText } from "./primitives";
 
-const ALL_CHAINS: WalletChain[] = ["stellar", "bitcoin", "ethereum", "solana"];
+type ReceiveAsset = "XLM" | "USDC" | "BTC" | "ETH" | "SOL";
+const ASSETS: { asset: ReceiveAsset; chain: WalletChain }[] = [
+  { asset: "XLM", chain: "stellar" },
+  { asset: "USDC", chain: "stellar" },
+  { asset: "BTC", chain: "bitcoin" },
+  { asset: "ETH", chain: "ethereum" },
+  { asset: "SOL", chain: "solana" }
+];
+const ASSET_FOR_CHAIN: Record<WalletChain, ReceiveAsset> = { stellar: "XLM", bitcoin: "BTC", ethereum: "ETH", solana: "SOL" };
 
 export const ReceiveSheet = ({
   open,
@@ -48,7 +60,8 @@ export const ReceiveSheet = ({
   const { user } = useSupabaseAuth();
   const { wallet, refetch: refetchWallet } = useTurnkeyWallet();
   const { ready: deviceReady } = useDeviceReady(wallet?.subOrgId);
-  const usdc = asset === "USDC";
+  const [picked, setPicked] = React.useState<ReceiveAsset | null>(null);
+  const usdc = picked === "USDC";
   const [chain, setChain] = React.useState<WalletChain | null>(null);
   const [copied, setCopied] = React.useState(false);
   const [settingUp, setSettingUp] = React.useState(false);
@@ -58,10 +71,12 @@ export const ReceiveSheet = ({
   // else Stellar. Kept while open, so a just-provisioned chain stays selected.
   React.useEffect(() => {
     if (!open) return;
-    setChain(usdc ? "stellar" : initialChain ?? addresses[0]?.chain ?? "stellar");
+    const startChain = asset === "USDC" ? "stellar" : initialChain ?? addresses[0]?.chain ?? "stellar";
+    setChain(startChain);
+    setPicked(asset === "USDC" ? "USDC" : ASSET_FOR_CHAIN[startChain]);
     setCopied(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, initialChain, usdc]);
+  }, [open, initialChain, asset]);
 
   // USDC on Stellar: the account must exist (funded with XLM) and carry the
   // USDC trustline before anyone sends USDC to it. Probed only while this
@@ -70,6 +85,13 @@ export const ReceiveSheet = ({
   const [watchProbe, setWatchProbe] = React.useState(true);
   const probe = useStellarAccountProbe(usdc && open ? stellarAddress : null, usdc && open && watchProbe);
   const usdcStep = usdc ? deriveSetupStep(probe.data ?? null) : null;
+  // Bitcoin: unconfirmed payments to this address show up here within seconds
+  // (mempool WebSocket + 20 s poll), only while the sheet is open on Bitcoin.
+  const btcAddress = addresses.find((a) => a.chain === "bitcoin")?.address ?? null;
+  const btcWatch = useBtcAddressWatch(btcAddress, open && chain === "bitcoin");
+  // Every other chain: balance-diff watcher (Stellar XLM + USDC, ETH, SOL).
+  const currentAddress = addresses.find((a) => a.chain === chain)?.address ?? null;
+  const incoming = useIncomingWatch(chain, currentAddress, open && chain !== "bitcoin");
   React.useEffect(() => {
     setWatchProbe(usdcStep !== "ready");
   }, [usdcStep]);
@@ -143,7 +165,7 @@ export const ReceiveSheet = ({
         >
           <XStack justifyContent='space-between' alignItems='center'>
             <UiText fontSize={16} fontWeight='600'>
-              {usdc ? "Receive USDC" : "Receive"}
+              {picked ? `Receive ${picked}` : "Receive"}
             </UiText>
             <IconButton onPress={onClose} label='Close'>
               <X size={20} color={c.muted} strokeWidth={2} />
@@ -152,14 +174,15 @@ export const ReceiveSheet = ({
 
           {(
             <>
-              {/* Chain pills — every chain; the ones without an address set up on tap (pill 12/600). USDC lives on Stellar only. */}
+              {/* Asset pills — every asset; chains without an address set up on tap (pill 12/600). USDC lives on Stellar only. */}
               <XStack gap={6} flexWrap='wrap'>
-                {(usdc ? (["stellar"] as WalletChain[]) : ALL_CHAINS).map((k) => {
-                  const selected = k === chain;
+                {ASSETS.map(({ asset: a, chain: k }) => {
+                  const selected = a === picked;
                   return (
                     <XStack
-                      key={k}
+                      key={a}
                       onPress={() => {
+                        setPicked(a);
                         setChain(k);
                         setCopied(false);
                       }}
@@ -186,7 +209,7 @@ export const ReceiveSheet = ({
                         fontWeight='600'
                         color={selected ? c.ctaText : c.ink}
                       >
-                        {CHAIN_META[k].name}
+                        {a}
                       </UiText>
                     </XStack>
                   );
@@ -266,6 +289,30 @@ export const ReceiveSheet = ({
                       </Mono>
                     </YStack>
                   </YStack>
+
+                  {chain === "bitcoin" && btcWatch.incomingTxs.length > 0 ? (
+                    <YStack gap={6} padding={12} borderRadius={radius.input} backgroundColor={c.chips.blue.bg}>
+                      {btcWatch.incomingTxs.map((tx) => (
+                        <XStack key={tx.txid} justifyContent='space-between' alignItems='center' gap={12}>
+                          <UiText fontSize={13} color={c.chips.blue.color} flex={1}>Incoming · {tx.status.confirmed ? "confirmed" : "confirming (~10 min)"}</UiText>
+                          <Mono fontSize={13} color={c.chips.blue.color}>+{(incomingSats(tx, current.address) / 1e8).toFixed(8).replace(/\.?0+$/, "")} BTC</Mono>
+                        </XStack>
+                      ))}
+                    </YStack>
+                  ) : chain === "bitcoin" ? (
+                    <UiText fontSize={12} color={c.faint} textAlign='center'>{btcWatch.isConnected ? "Watching the Bitcoin network — an incoming payment appears here within seconds." : "Connecting to the Bitcoin network…"}</UiText>
+                  ) : incoming.receipts.length > 0 ? (
+                    <YStack gap={6} padding={12} borderRadius={radius.input} backgroundColor={c.chips.green.bg}>
+                      {incoming.receipts.map((r) => (
+                        <XStack key={r.symbol} justifyContent='space-between' alignItems='center' gap={12}>
+                          <UiText fontSize={13} color={c.chips.green.color} flex={1}>Received · confirmed on {meta.name}</UiText>
+                          <Mono fontSize={13} color={c.chips.green.color}>+{r.amount.toFixed(r.symbol === "ETH" ? 6 : r.symbol === "SOL" ? 4 : 2).replace(/\.?0+$/, "")} {r.symbol}</Mono>
+                        </XStack>
+                      ))}
+                    </YStack>
+                  ) : (
+                    <UiText fontSize={12} color={c.faint} textAlign='center'>{incoming.watching ? `Watching ${meta.name} — a payment to this address shows here when it lands.` : `Connecting to ${meta.name}…`}</UiText>
+                  )}
 
                   <SecondaryButton
                     onPress={copy}

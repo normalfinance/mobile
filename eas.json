@@ -24,6 +24,19 @@
       "node": "20.19.4",
       "env": {
         "APP_VARIANT": "production"
+      },
+      "environment": "production",
+      "channel": "production"
+    },
+    "staging": {
+      "extends": "production",
+      "distribution": "store",
+      "channel": "staging",
+      "environment": "preview",
+      "autoIncrement": true,
+      "node": "20.19.4",
+      "env": {
+        "APP_VARIANT": "development"
       }
     }
   },
@@ -32,9 +45,11 @@
       "ios": {
         "appleTeamId": "FA938A596N"
       }
+    },
+    "staging": {
+      "ios": {
+        "appleTeamId": "FA938A596N"
+      }
     }
-  },
-  "env": {
-    "EAS_BUILD_SKIP_DEPENDENCY_INSTALL": "1"
   }
 }

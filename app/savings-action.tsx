@@ -34,7 +34,8 @@ import {
   positionAfterWithdraw,
   withdrawFromSavings,
   type DepositStep,
-  type WithdrawStep
+  type WithdrawStep,
+  addUsdcTrustline
 } from "@/lib/savings/engine";
 import { getSavingsDepositFee, getYieldCommission, getYieldCommissionRate } from "@/lib/savings/normal-fees";
 import { useColors } from "@/lib/theme/appearance";
@@ -109,6 +110,22 @@ export default function SavingsActionScreen() {
 
   const canRun = !!address && amountOk && !over && !busy && !!vault.data?.address;
 
+  // Web setNeedsTrustline → Add-trustline modal: one passkey, then the probe
+  // is re-read so the deposit gate opens without leaving the screen.
+  const addTrustline = async () => {
+    if (!wallet?.subOrgId || !address) return;
+    setBusy(true);
+    try {
+      await addUsdcTrustline({ subOrgId: wallet.subOrgId, address });
+      await probe.refetch();
+      Alert.alert("USDC trustline added", "Your account can hold USDC now. Try the deposit again.");
+    } catch (e) {
+      if (!isUserCancelledError(e)) Alert.alert("Couldn’t add the trustline", e instanceof Error ? e.message : describeTurnkeyError(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const run = async () => {
     if (!wallet?.subOrgId || !address || !vault.data?.address) return;
     setBusy(true);
@@ -154,6 +171,12 @@ export default function SavingsActionScreen() {
       if (isUserCancelledError(e)) {
         // Literally true with sign-both-first: no signature → nothing submitted.
         Alert.alert("Cancelled", "Nothing was submitted and nothing was charged.");
+      } else if (e instanceof Error && e.message.toLowerCase().includes("trustline")) {
+        // Web: a failure mentioning the trustline opens the Add-trustline modal.
+        Alert.alert("USDC trustline needed", "Your Stellar account can’t hold USDC yet. Add the USDC trustline (one passkey confirmation), then try again.", [
+          { text: "Not now", style: "cancel" },
+          { text: "Add USDC trustline", onPress: () => void addTrustline() }
+        ]);
       } else {
         Alert.alert(mode === "deposit" ? "Deposit failed" : "Withdrawal failed", e instanceof Error ? e.message : describeTurnkeyError(e));
       }

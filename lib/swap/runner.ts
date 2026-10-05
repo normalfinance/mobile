@@ -14,6 +14,9 @@ import { addPendingLifi, loadPendingLifi, markLifiRecorded, removePendingLifi, t
 import { trackLifiSwap, type LifiTrackedTx } from "@/lib/lifi/tracker";
 import { executeSoroswap } from "@/lib/swap/soroswap";
 import { describeTurnkeyError, isUserCancelledError } from "@/lib/turnkey/client";
+import { clearSwapOutflow, registerSwapOutflow } from "@/lib/spendable";
+import { friendlyHorizonError } from "@/lib/stellar/send";
+
 import { getRun, restoreRun, runBySourceTx, updateRun, type RunSpec } from "./run-store";
 
 export interface RunDeps {
@@ -34,6 +37,8 @@ export const startRun = async (id: string, deps: RunDeps): Promise<void> => {
   const stellarAddress = wallet.stellarAddress!;
   updateRun(id, { status: "running", stage: null, notice: undefined, failedStage: undefined, refundedStage: undefined, startedAt: Date.now(), flags: { autopilot: deps.autopilotHint(), refunding: false } });
   void queryClient.invalidateQueries({ queryKey: ["activity"] });
+  // #62: MAX elsewhere must not offer the money this run is about to move.
+  registerSwapOutflow(id, { chain: spec.kind === "soroswap" || spec.kind === "cctp-out" ? "stellar" : NATIVE_CHAIN[spec.from], symbol: spec.from, amount: spec.amount });
 
   try {
     if (spec.kind === "soroswap") {
@@ -165,9 +170,10 @@ export const startRun = async (id: string, deps: RunDeps): Promise<void> => {
         }
       });
     } else {
-      updateRun(id, { status: "error", failedStage: getRun(id)?.stage ?? undefined, notice: { text: e instanceof Error ? e.message : describeTurnkeyError(e), tone: "amber" } });
+      updateRun(id, { status: "error", failedStage: getRun(id)?.stage ?? undefined, notice: { text: spec.kind === "soroswap" ? friendlyHorizonError(e) : e instanceof Error ? e.message : describeTurnkeyError(e), tone: "amber" } });
     }
   } finally {
+    clearSwapOutflow(id);
     void queryClient.invalidateQueries({ queryKey: ["cctp", "in-flight"] });
     void queryClient.invalidateQueries({ queryKey: ["activity"] });
   }

@@ -6,7 +6,8 @@ import React from "react";
 import { Dimensions, ScrollView } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { XStack, YStack } from "tamagui";
-import { ArrowDown, ArrowUp, ChevronLeft, Inbox } from "lucide-react-native";
+import { ArrowDown, ArrowLeftRight, ArrowUp, ChevronLeft, Copy, Inbox, Banknote, PiggyBank, Plus } from "lucide-react-native";
+import * as Clipboard from "expo-clipboard";
 
 import { ActivityRow } from "@/components/home/ActivityRow";
 import { PriceChart } from "@/components/asset/PriceChart";
@@ -22,6 +23,7 @@ import {
   UiText
 } from "@/components/home/primitives";
 import { ReceiveSheet } from "@/components/home/ReceiveSheet";
+import { toTxParams } from "@/lib/activity/tx-params";
 import { AssetIcon } from "@/components/ui/AssetIcon";
 import {
   PERIOD_TO_RANGE,
@@ -35,7 +37,8 @@ import { SEND_ASSETS, type SendSymbol } from "@/lib/send/registry";
 import { provisionChain } from "@/lib/turnkey/provision";
 import { describeTurnkeyError, isUserCancelledError } from "@/lib/turnkey/client";
 import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
-import { turnkeyWalletQueryKey, useTurnkeyWallet, walletAddresses } from "@/hooks/use-turnkey-wallet";
+import { CHAIN_META, turnkeyWalletQueryKey, useTurnkeyWallet, walletAddresses } from "@/hooks/use-turnkey-wallet";
+import { MAINNET_USDC } from "@/lib/stellar/send";
 import { useColors } from "@/lib/theme/appearance";
 import { radius, space, tracking } from "@/lib/theme/tokens";
 import {
@@ -53,6 +56,9 @@ const ASSET_NAMES: Record<string, string> = {
   XLM: "Stellar Lumens",
   USDC: "USD Coin"
 };
+
+// Web asset-details-view.tsx token info rows (Network / Contract / Decimals).
+const TOKEN_DECIMALS: Record<string, number> = { BTC: 8, ETH: 18, SOL: 9, XLM: 7, USDC: 7 };
 
 const PERIODS: { key: PortfolioPeriod; label: string }[] = [
   { key: "1D", label: "1D" },
@@ -234,24 +240,75 @@ export default function AssetDetailScreen() {
                 <PrimaryButton label={addingChain ? "Adding…" : `Add ${meta.name} to my wallet`} onPress={addChain} loading={addingChain} />
               </YStack>
             ) : (
-              <XStack gap={8} marginTop={8} marginHorizontal={8}>
-                <YStack flex={1}>
-                  <SecondaryButton
-                    label='Receive'
-                    icon={<ArrowDown size={16} color={c.ink} strokeWidth={2} />}
-                    onPress={() => setReceiveOpen(true)}
-                  />
-                </YStack>
-                <YStack flex={1}>
-                  <SecondaryButton
-                    label='Send'
-                    icon={<ArrowUp size={16} color={c.ink} strokeWidth={2} />}
-                    onPress={() => router.push(`/send?symbol=${symbol}`)}
-                  />
-                </YStack>
-              </XStack>
+              <YStack gap={8} marginTop={8} marginHorizontal={8}>
+                {/* Web asset-details-view actions: send, receive, swap, save (USDC), buy, sell */}
+                <XStack gap={8}>
+                  <YStack flex={1}>
+                    <SecondaryButton label='Buy' icon={<Plus size={16} color={c.ink} strokeWidth={2} />} onPress={() => router.push({ pathname: "/buy", params: { asset: symbol } })} />
+                  </YStack>
+                  <YStack flex={1}>
+                    <SecondaryButton label='Sell' icon={<Banknote size={16} color={c.ink} strokeWidth={2} />} onPress={() => router.push({ pathname: "/sell", params: { asset: symbol } })} />
+                  </YStack>
+                  <YStack flex={1}>
+                    <SecondaryButton label='Swap' icon={<ArrowLeftRight size={16} color={c.ink} strokeWidth={2} />} onPress={() => router.push({ pathname: "/(tabs)/swap", params: { from: symbol, n: String(Date.now()) } })} />
+                  </YStack>
+                </XStack>
+                <XStack gap={8}>
+                  <YStack flex={1}>
+                    <SecondaryButton label='Receive' icon={<ArrowDown size={16} color={c.ink} strokeWidth={2} />} onPress={() => setReceiveOpen(true)} />
+                  </YStack>
+                  <YStack flex={1}>
+                    <SecondaryButton label='Send' icon={<ArrowUp size={16} color={c.ink} strokeWidth={2} />} onPress={() => router.push(`/send?symbol=${symbol}`)} />
+                  </YStack>
+                  {symbol === "USDC" ? (
+                    <YStack flex={1}>
+                      <SecondaryButton label='Save' icon={<PiggyBank size={16} color={c.ink} strokeWidth={2} />} onPress={() => router.push("/(tabs)/savings")} />
+                    </YStack>
+                  ) : null}
+                </XStack>
+              </YStack>
             )}
           </Card>
+
+          {/* Token info (web: Network / Contract / Decimals) */}
+          {meta ? (
+          <YStack gap={12}>
+            <UiText fontSize={14} fontWeight='500' color={c.ink2}>About {symbol}</UiText>
+            <Card paddingTop={4} paddingHorizontal={4} paddingBottom={4}>
+              <XStack paddingHorizontal={space.rowX} paddingVertical={space.rowY} justifyContent='space-between'>
+                <UiText fontSize={13.5} color={c.muted}>Network</UiText>
+                <UiText fontSize={13.5} fontWeight='500'>{CHAIN_META[meta.chain].name}</UiText>
+              </XStack>
+              {symbol === "USDC" ? (
+                <>
+                  <Divider />
+                  <XStack
+                    paddingHorizontal={space.rowX}
+                    paddingVertical={space.rowY}
+                    justifyContent='space-between'
+                    alignItems='center'
+                    gap={12}
+                    onPress={() => void Clipboard.setStringAsync(MAINNET_USDC.issuer).then(() => Alert.alert("Copied", "USDC issuer address copied."))}
+                    pressStyle={{ backgroundColor: c.pressTint }}
+                    accessibilityRole='button'
+                    accessibilityLabel='Copy USDC issuer address'
+                  >
+                    <UiText fontSize={13.5} color={c.muted}>Issuer</UiText>
+                    <XStack alignItems='center' gap={6} flexShrink={1}>
+                      <Mono fontSize={12} numberOfLines={1}>{`${MAINNET_USDC.issuer.slice(0, 6)}…${MAINNET_USDC.issuer.slice(-6)}`}</Mono>
+                      <Copy size={14} color={c.muted} strokeWidth={2} />
+                    </XStack>
+                  </XStack>
+                </>
+              ) : null}
+              <Divider />
+              <XStack paddingHorizontal={space.rowX} paddingVertical={space.rowY} justifyContent='space-between'>
+                <UiText fontSize={13.5} color={c.muted}>Decimals</UiText>
+                <Mono fontSize={13.5}>{TOKEN_DECIMALS[symbol] ?? "—"}</Mono>
+              </XStack>
+            </Card>
+          </YStack>
+          ) : null}
 
           {/* Activity for this asset */}
           <YStack gap={8}>
@@ -264,7 +321,7 @@ export default function AssetDetailScreen() {
                 title={`No ${symbol} activity yet`}
               />
             ) : (
-              assetTxs.map((tx) => <ActivityRow key={tx.id} tx={tx} />)
+              assetTxs.map((tx) => <ActivityRow key={tx.id} tx={tx} onPress={() => router.push({ pathname: "/tx", params: toTxParams(tx) })} />)
             )}
           </YStack>
         </YStack>

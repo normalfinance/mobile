@@ -36,7 +36,8 @@ import { useAppearance, useColors, type AppearanceMode } from "@/lib/theme/appea
 import { space } from "@/lib/theme/tokens";
 import { shortenAddress } from "@/lib/utils/number-format.utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bell, KeyRound, Zap } from "lucide-react-native";
+import { Bell, FileText, Import, KeyRound, LifeBuoy, Megaphone, Zap } from "lucide-react-native";
+import { LEGAL, getMarketingOptIn, setMarketingOptIn } from "@/lib/auth/marketing";
 import { Chip } from "@/components/home/primitives";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { autopilotAvailable, fetchAutopilotStatus, grantAutopilotConsent, revokeAutopilotConsent } from "@/lib/turnkey/autopilot";
@@ -147,7 +148,7 @@ export default function SettingsScreen() {
   };
 
   const signOut = () => {
-    Alert.alert("Sign out", "You can sign back in with the same email any time.", [
+    Alert.alert("Log out of this device?", "You can sign back in with the same email any time. Make sure your recovery phrase is written down — it is the only way to restore your wallet without this phone’s passkey.", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Sign out",
@@ -162,6 +163,25 @@ export default function SettingsScreen() {
   };
 
   const version = Constants.expoConfig?.version ?? "—";
+
+  // Product updates (web settings-general): GET then POST /api/marketing/opt-in.
+  const [marketing, setMarketing] = React.useState<boolean | null>(null);
+  const [marketingBusy, setMarketingBusy] = React.useState(false);
+  React.useEffect(() => {
+    void getMarketingOptIn().then((v) => setMarketing(v ?? false));
+  }, []);
+  const toggleMarketing = async () => {
+    if (marketing === null) return;
+    setMarketingBusy(true);
+    try {
+      await setMarketingOptIn(!marketing);
+      setMarketing(!marketing);
+    } catch (e) {
+      Alert.alert("Couldn’t update the preference", e instanceof Error ? e.message : "Please try again.");
+    } finally {
+      setMarketingBusy(false);
+    }
+  };
 
   return (
     <Screen>
@@ -178,6 +198,18 @@ export default function SettingsScreen() {
                 icon={<Mail size={16} color={c.ink} strokeWidth={1.8} />}
                 label='Email'
                 sub={user?.email ?? "—"}
+              />
+              <Divider />
+              <ListRow label='Account created' right={<Mono fontSize={12} color={c.muted}>{user?.created_at ? new Date(user.created_at).toLocaleDateString(undefined, { dateStyle: "medium" }) : "—"}</Mono>} />
+              <Divider />
+              <ListRow label='Sign-in method' right={<Mono fontSize={12} color={c.muted}>{(user?.app_metadata?.provider as string | undefined) ?? "email"}</Mono>} />
+              <Divider />
+              <ListRow
+                icon={<Megaphone size={16} color={c.ink} strokeWidth={1.8} />}
+                label='Product updates'
+                sub='New features and announcements by email'
+                right={<Chip tone={marketing === true ? "green" : "neutral"} label={marketing === null ? "…" : marketing ? "On" : "Off"} />}
+                onPress={marketingBusy || marketing === null ? undefined : () => void toggleMarketing()}
               />
             </Card>
           </YStack>
@@ -248,6 +280,17 @@ export default function SettingsScreen() {
                 sub='Reveal the 12 words that restore this wallet — one passkey confirmation'
                 onPress={() => router.push("/backup")}
               />
+              {!wallet?.walletId ? (
+                <>
+                  <Divider />
+                  <ListRow
+                    icon={<Import size={16} color={c.ink} strokeWidth={1.8} />}
+                    label='Import a wallet'
+                    sub='Restore an existing wallet from its 12- or 24-word recovery phrase'
+                    onPress={() => router.push("/import-wallet")}
+                  />
+                </>
+              ) : null}
               <Divider />
               <ListRow
                 icon={<ShieldCheck size={16} color={c.ink} strokeWidth={1.8} />}
@@ -300,6 +343,21 @@ export default function SettingsScreen() {
                   />
                 </React.Fragment>
               ))}
+            </Card>
+          </YStack>
+
+          <YStack gap={10}>
+            <UiText fontSize={13} color={c.muted}>
+              Legal & support
+            </UiText>
+            <Card>
+              <ListRow icon={<FileText size={16} color={c.ink} strokeWidth={1.8} />} label='Terms of Service' onPress={() => void Linking.openURL(LEGAL.terms)} />
+              <Divider />
+              <ListRow icon={<FileText size={16} color={c.ink} strokeWidth={1.8} />} label='Privacy Policy' onPress={() => void Linking.openURL(LEGAL.privacy)} />
+              <Divider />
+              <ListRow icon={<FileText size={16} color={c.ink} strokeWidth={1.8} />} label='Disclaimer' onPress={() => void Linking.openURL(LEGAL.disclaimer)} />
+              <Divider />
+              <ListRow icon={<LifeBuoy size={16} color={c.ink} strokeWidth={1.8} />} label='Help & support' sub='Contact the Normal team' onPress={() => void Linking.openURL(LEGAL.contact)} />
             </Card>
           </YStack>
 
