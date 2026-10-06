@@ -22,7 +22,6 @@ import { apiFetch } from "@/lib/api";
 import { accountProbeQueryKey } from "@/hooks/use-savings";
 import { chainActivityQueryKey, walletActivityQueryKey } from "@/hooks/use-activity-feed";
 import { portfolioQueryKey } from "@/hooks/use-backend-portfolio";
-import { getExternalWallet } from "@/lib/external-wallet/store";
 import type { PortfolioPayload } from "@/lib/types/portfolio.types";
 
 const SETTLE_DELAY_MS = 800; // web: let the ledger close before the first read
@@ -84,7 +83,7 @@ const refreshPortfolioFresh = async (queryClient: QueryClient, userId: string, e
       let got: PortfolioRead | null = null;
       try {
         got = await apiFetch<{ success: true } & PortfolioRead>("/api/wallet/portfolio", {
-          query: { network: "mainnet", refresh: 1, stellar: getExternalWallet()?.address } // same slot as the regular read
+          query: { network: "mainnet", refresh: 1 }
         });
       } catch {
         /* transient — a failed read proves nothing; retry below */

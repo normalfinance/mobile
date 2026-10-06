@@ -19,7 +19,6 @@ import { createPasskeyClient } from "./client";
 import { invalidateCredentials } from "./credentials";
 import { markDeviceReady } from "./device-ready";
 import { registerPasskey } from "./passkey";
-import { EXTERNAL_SUB_ORG, isExternalAddress } from "@/lib/external-wallet/store";
 
 export class WalletLimitError extends Error {
   readonly reset: number | null;
@@ -139,11 +138,6 @@ const createWalletInSubOrg = async (wallet: TurnkeyWallet, chain: WalletChain): 
  */
 export const provisionChain = async (p: { user: { id: string; email?: string | null } | null | undefined; wallet: TurnkeyWallet | null | undefined; chain: WalletChain }): Promise<TurnkeyWallet> => {
   if (!p.user) throw new Error("Sign in first.");
-  // The wallet hook overlays a connected external Stellar address; the Turnkey
-  // row underneath may have none (or not exist at all).
-  if (p.wallet && (p.wallet.subOrgId === EXTERNAL_SUB_ORG || isExternalAddress(p.wallet.stellarAddress))) {
-    p = { ...p, wallet: p.wallet.subOrgId === EXTERNAL_SUB_ORG ? null : { ...p.wallet, stellarAddress: null } };
-  }
   if (!p.wallet) {
     const w = await createFirstChain(p.user, p.chain);
     emitProvisioned({ kind: "created", chain: p.chain, subOrgId: w.subOrgId });

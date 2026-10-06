@@ -19,7 +19,6 @@ import { getRandomBytes } from "expo-crypto";
 
 import type { TurnkeyWallet } from "@/hooks/use-turnkey-wallet";
 import { createPasskeyClient, isNoPasskeyError, isUserCancelledError } from "./client";
-import { EXTERNAL_SUB_ORG, isExternalAddress } from "@/lib/external-wallet/store";
 import { markDeviceReady } from "./device-ready";
 
 export interface DeviceCheckResult {
@@ -30,7 +29,7 @@ export interface DeviceCheckResult {
 
 /** The first key this wallet has — the check can use any of them. */
 export const signingAddressOf = (wallet: TurnkeyWallet | null | undefined): string | null =>
-  (wallet?.stellarAddress && !isExternalAddress(wallet.stellarAddress) ? wallet.stellarAddress : null) ?? wallet?.ethereumAddress ?? wallet?.solanaAddress ?? wallet?.bitcoinAddress ?? null;
+  wallet?.stellarAddress ?? wallet?.ethereumAddress ?? wallet?.solanaAddress ?? wallet?.bitcoinAddress ?? null;
 
 const hexToBytes = (hex: string) => Uint8Array.from((hex.match(/.{2}/g) ?? []).map((b) => parseInt(b, 16)));
 const bytesToHex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
@@ -117,8 +116,6 @@ export const ensureDeviceReady = async (
   alreadyReady: boolean | null
 ): Promise<{ outcome: EnsureDeviceOutcome; error?: unknown }> => {
   if (alreadyReady) return { outcome: "ready" };
-  // External wallet (LOBSTR …): the wallet app proves itself when it signs.
-  if (subOrgId === EXTERNAL_SUB_ORG || isExternalAddress(address)) return { outcome: "ready" };
   try {
     const r = await verifyDevicePasskey(subOrgId, address);
     return r.ok ? { outcome: "ready" } : { outcome: "failed" };

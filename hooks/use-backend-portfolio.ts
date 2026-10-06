@@ -25,7 +25,6 @@ import type {
   PortfolioPeriod
 } from "@/services/portfolio.service";
 import { useActivityFeed } from "@/hooks/use-activity-feed";
-import { getExternalWallet, useExternalWallet } from "@/lib/external-wallet/store";
 
 // ---------------------------------------------------------------------------
 // GET /api/wallet/portfolio
@@ -36,18 +35,14 @@ type PortfolioResponse = { success: true } & PortfolioPayload & {
     retryAfterMs?: number;
   };
 
-// Keyed by the active Stellar wallet too: a connected external wallet
-// (LOBSTR …) is a different portfolio from the Normal wallet's.
 export const portfolioQueryKey = (userId: string | undefined) =>
-  ["backend-portfolio", userId ?? "anonymous", getExternalWallet()?.address ?? "normal"] as const;
+  ["backend-portfolio", userId ?? "anonymous"] as const;
 
 const fetchPortfolio = () =>
   apiFetch<PortfolioResponse>("/api/wallet/portfolio", {
     // One of the five routes that honour ?network= (Q1). Belt and braces with
-    // the cookie the API client always sends. `stellar` = web's external-wallet
-    // slot (route line 19): balances for that address; the Normal wallet's
-    // other chains come along as usual.
-    query: { network: "mainnet", stellar: getExternalWallet()?.address }
+    // the cookie the API client always sends.
+    query: { network: "mainnet" }
   });
 
 const ASSET_NAMES: Record<string, string> = {
@@ -193,7 +188,6 @@ const buildChart = (
 // ---------------------------------------------------------------------------
 
 export const useBackendPortfolio = () => {
-  useExternalWallet(); // re-render (new query key) when the Stellar wallet slot changes
   const { user } = useSupabaseAuth();
   const [selectedPeriod, setSelectedPeriod] = useState<PortfolioPeriod>("7D");
   const [selectedCategory, setSelectedCategory] = useState("all");

@@ -9,7 +9,6 @@ import { useRouter } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { XStack, YStack } from "tamagui";
 
-import { ExternalWalletNotice } from "@/components/swap/ExternalWalletNotice";
 import { Card, Mono, PillButton, PrimaryButton, UiText } from "@/components/home/primitives";
 import { AmountInput, ReceiveBox, SwapMiddle } from "@/components/swap/AmountInput";
 import { setPendingRun } from "@/lib/swap/run-store";
@@ -62,7 +61,7 @@ export function CctpInboundPanel({ from, amount, setAmount, fromPill, toPill, on
   const router = useRouter();
   const queryClient = useQueryClient();
   const { user } = useSupabaseAuth();
-  const { wallet, refetch: refetchWallet, externalStellar } = useTurnkeyWallet();
+  const { wallet, refetch: refetchWallet } = useTurnkeyWallet();
   const { portfolioData } = useBackendPortfolio();
   const probe = useStellarAccountProbe(wallet?.stellarAddress, false);
 
@@ -197,7 +196,6 @@ export function CctpInboundPanel({ from, amount, setAmount, fromPill, toPill, on
   else if (priceMoved) button = { label: "Price moved — press to continue", onPress: run };
   else button = { label: "Swap with passkey", onPress: run };
 
-  if (externalStellar) return <ExternalWalletNotice external={externalStellar} />;
   return (
     <YStack gap={20}>
       <Card padding={12} gap={0}>

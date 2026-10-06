@@ -18,7 +18,7 @@ import { Networks } from "@stellar/stellar-sdk";
 import * as WebBrowser from "expo-web-browser";
 
 import { ApiError, apiFetch } from "@/lib/api";
-import { signStellarXdr } from "@/lib/stellar/signer";
+import { signStellarXdrWithTurnkey } from "@/lib/turnkey/stellar-signer";
 
 // ─── Statuses (web lib/mgi/statuses.ts, verbatim) ────────────────────────────
 
@@ -113,7 +113,7 @@ export const getMgiAuthToken = async (account: string, subOrgId: string): Promis
   const cached = await readToken(account);
   if (cached) return cached;
   const ch = await apiFetch<{ transaction: string; network_passphrase?: string }>("/api/mgi/sep10/challenge", { query: { account } });
-  const signed = await signStellarXdr({ xdr: ch.transaction, subOrgId, stellarAddress: account, networkPassphrase: ch.network_passphrase || Networks.PUBLIC });
+  const signed = await signStellarXdrWithTurnkey({ xdr: ch.transaction, subOrgId, stellarAddress: account, networkPassphrase: ch.network_passphrase || Networks.PUBLIC });
   const res = await apiFetch<{ token?: string; access_token?: string }>("/api/mgi/sep10/complete", { body: { userSignedXDR: signed } });
   const token = res.token ?? res.access_token;
   if (!token) throw new Error("MoneyGram sign-in returned no token.");

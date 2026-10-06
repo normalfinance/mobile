@@ -30,7 +30,7 @@ Settings General/Accounts → referrals → MoneyGram → legal/support/geo-bloc
 | Onramp card "Need USDC? Deposit cash / Deposit crypto" | have (`OnrampCard`: Coinbase / Receive USDC) | — |
 | Optimistic position after action + 3/15/45s reads | have | — |
 | Fee-escrow sweeper copy for timeouts | have (`submitFeePair` copy) | — |
-| External/hybrid wallet pickers | have (Stellar wallet slot: Settings → Stellar wallet; LOBSTR / WalletConnect) | — |
+| External/hybrid wallet pickers | by design (Niko 2026-10-06: external wallets are not needed on mobile) | — |
 
 ## 2. Swap (inventory 2/5)
 
@@ -116,7 +116,7 @@ Contract (inventory 3/5): session → `pay.coinbase.com/v3/sell/input` (partnerU
 | Get-started asset-first, lazy chain setup, link-limit pre-check, provisioning ladder | have | — |
 | Backup gate mandatory | by design optional (Niko) | — |
 | Import an existing wallet (24-word, INIT_IMPORT_WALLET / IMPORT_WALLET) | have (`app/import-wallet.tsx`, `lib/turnkey/import.ts`; 12/24 words, local Stellar-address preview, offered only while the account has no wallet) | — |
-| Connect external wallets (Freighter, Lobstr, Ledger, WalletConnect) | have for LOBSTR + any WalletConnect Stellar wallet (`lib/external-wallet/*`, `app/connect-wallet.tsx`); Freighter/Albedo are browser extensions (no mobile equivalent); Ledger not built | — |
+| Connect external wallets (Freighter, Lobstr, Ledger, WalletConnect) | by design (Niko 2026-10-06: not needed on mobile; a LOBSTR/WalletConnect build was tried 2026-10-05 and removed — LOBSTR iOS does not surface pairing from a deep link) | — |
 
 ### Portfolio / Home
 | Web | Mobile | Action |

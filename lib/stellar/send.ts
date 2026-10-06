@@ -18,7 +18,7 @@ import {
 } from "@stellar/stellar-sdk";
 
 import { ApiError, apiFetch } from "@/lib/api";
-import { signStellarXdr } from "@/lib/stellar/signer";
+import { signStellarXdrWithTurnkey } from "@/lib/turnkey/stellar-signer";
 
 // ---------------------------------------------------------------------------
 // Constants (web: stellar-reserve.ts, send-plan.ts, use-send-token.ts)
@@ -398,7 +398,7 @@ export const sendStellar = async ({
   const unsignedXdr = builder.build().toXDR();
 
   onStep?.("signing");
-  const signedXdr = await signStellarXdr({
+  const signedXdr = await signStellarXdrWithTurnkey({
     xdr: unsignedXdr,
     subOrgId,
     stellarAddress: from,
