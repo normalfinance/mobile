@@ -96,14 +96,19 @@ export const getSwapQuote = async (from: SwapSymbol, to: SwapSymbol, amount: num
     mode: "strict-send"
   });
   if (!data.success) throw new Error(data.error || "Failed to get quote");
-  const embedded = !!data.embedded_fee;
+  // Web route (doc 95 wave 5): an unusable embedded fee comes back as '' and
+  // the client must treat the embedded path as unavailable — live 2026-10-08
+  // staging answers { feeBps: 50, feeAmount: "" }, which parsed as a 0 fee
+  // and stopped every XLM ⇄ USDC swap with "Swap fee was not computed".
+  const embeddedFeeStroops = data.embedded_fee?.feeAmount ?? "";
+  const embedded = /^\d+$/.test(embeddedFeeStroops) && Number(embeddedFeeStroops) > 0;
   return {
     from,
     to,
     amountIn: amount.toFixed(7),
     amountOut: fromStroops(data.amount_out),
     minAmountOut: fromStroops(data.min_amount_out),
-    fee: embedded ? fromStroops(data.embedded_fee?.feeAmount) : feeAmount.toFixed(7),
+    fee: embedded ? fromStroops(embeddedFeeStroops) : feeAmount.toFixed(7),
     path: data.path ?? [],
     embedded,
     fetchedAt: Date.now()
@@ -140,10 +145,12 @@ export const executeSoroswap = async ({ quote, subOrgId, address, onStage }: Exe
       });
     } catch (e) {
       // 409 embedded_unavailable = the known upstream defect → fee pair below.
-      const body = e instanceof ApiError ? (e.body as QuoteResponse | null) : null;
-      if (!(e instanceof ApiError && e.status === 409 && body?.embedded_unavailable)) throw e;
+      // Any other failure of the embedded build (the server's breaker may have
+      // built the GROSS amount without a fee and Soroswap rejected it) is not
+      // the end of the swap either: the fee pair re-quotes the NET amount.
+      if (!(e instanceof ApiError)) throw e;
     }
-    const oneSignature = !!build?.success && !!build.xdr && !!build.embedded_fee;
+    const oneSignature = !!build?.success && !!build.xdr && /^\d+$/.test(build.embedded_fee?.feeAmount ?? "") && Number(build.embedded_fee?.feeAmount) > 0;
     if (oneSignature && build?.xdr) {
       onStage?.("sign-swap");
       const signed = await signWithRetry({ xdr: build.xdr, subOrgId, stellarAddress: address });
@@ -180,12 +187,24 @@ export const executeSoroswap = async ({ quote, subOrgId, address, onStage }: Exe
   if (!Number.isFinite(feeAmount) || feeAmount <= 0) throw new Error("Swap fee was not computed — please refresh the quote");
   const net = gross - feeAmount;
 
-  const swapXdr = await buildRoute("/api/swap/quote", {
-    token_in_address: tokenIn,
-    token_out_address: tokenOut,
-    amount: toStroops(net),
-    sender: address
-  });
+  let swapXdr: string;
+  try {
+    swapXdr = await buildRoute("/api/swap/quote", {
+      token_in_address: tokenIn,
+      token_out_address: tokenOut,
+      amount: toStroops(net),
+      sender: address
+    });
+  } catch (e) {
+    // The route forwards Soroswap's own build status ("Swap build request
+    // failed (400)") — that is the aggregator's simulation refusing the
+    // transaction for THIS account, not a request-shape problem.
+    const msg = e instanceof Error ? e.message : String(e);
+    if (/build request failed|simulation|HostError/i.test(msg)) {
+      throw new Error(`Soroswap couldn’t build this swap for your account (${msg}). This usually means the balance can’t cover the amount plus the XLM reserve and the Soroban network fee — try a slightly smaller amount, or receive a little XLM first.`);
+    }
+    throw e;
+  }
   const feeXdr = await buildFeeXdr(address, feeAmount, swapXdr, quote.from);
 
   const client = await createPasskeyClient();
