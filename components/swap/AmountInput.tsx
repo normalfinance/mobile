@@ -14,22 +14,42 @@ import { useColors } from "@/lib/theme/appearance";
 import { radius, tracking } from "@/lib/theme/tokens";
 import { fCurrency, fNumber } from "@/lib/utils/number-format.utils";
 
-/** The converted value under an amount — tapping it flips the card between USD and coins. */
-const ConvertedLine = ({ text, onPress, muted }: { text: string; onPress?: () => void; muted?: boolean }) => {
+/**
+ * The currency switch: a white pill on the grey amount box — an ink badge
+ * with the ⇅ glyph, the converted value, a hairline, and the unit you would
+ * switch TO ("USD" / "XLM"). Reads as a control, not a caption (Niko
+ * 2026-10-08: the plain "≈ $x" line did not look tappable). Shared by the
+ * swap boxes and Send.
+ */
+export const CurrencyToggle = ({ converted, switchTo, onPress, muted }: { converted: string; switchTo: string; onPress?: () => void; muted?: boolean }) => {
   const c = useColors();
+  if (!onPress) return <Mono fontSize={12} color={muted ? c.faint : c.muted}>{converted}</Mono>;
   return (
     <XStack
       alignSelf='flex-start'
       alignItems='center'
-      gap={5}
+      height={30}
+      paddingLeft={4}
+      paddingRight={10}
+      gap={8}
+      borderRadius={15}
+      backgroundColor={c.surface}
+      borderWidth={1}
+      borderColor={c.border}
       onPress={onPress}
-      pressStyle={onPress ? { opacity: 0.5 } : undefined}
-      accessibilityRole={onPress ? "button" : undefined}
-      accessibilityLabel='Switch between US dollars and coins'
-      hitSlop={8}
+      pressStyle={{ backgroundColor: c.pressTint, borderColor: c.borderStrong }}
+      accessibilityRole='button'
+      accessibilityLabel={`Switch to entering the amount in ${switchTo}`}
+      hitSlop={6}
     >
-      {onPress ? <ArrowUpDown size={12} color={muted ? c.faint : c.muted} strokeWidth={2.2} /> : null}
-      <Mono fontSize={12} color={muted ? c.faint : c.muted}>{text}</Mono>
+      <XStack width={22} height={22} borderRadius={11} backgroundColor={c.ink} alignItems='center' justifyContent='center'>
+        <ArrowUpDown size={12} color={c.ctaText} strokeWidth={2.4} />
+      </XStack>
+      <Mono fontSize={12} color={muted ? c.muted : c.ink}>{converted}</Mono>
+      <YStack width={1} height={14} backgroundColor={c.border} />
+      <UiText fontSize={11} fontWeight='600' color={c.ink2} letterSpacing={0.3}>
+        {switchTo}
+      </UiText>
     </XStack>
   );
 };
@@ -139,7 +159,7 @@ export function AmountInput({
         </XStack>
         {pill}
       </XStack>
-      {secondary ? <ConvertedLine text={secondary} onPress={onToggleFiat} muted={amountNum <= 0} /> : null}
+      {secondary ? <CurrencyToggle converted={secondary} switchTo={fiatOn ? symbol : "USD"} onPress={onToggleFiat} muted={amountNum <= 0} /> : null}
       {note ? <Mono fontSize={11} color={c.faint}>{note}</Mono> : null}
     </YStack>
   );
@@ -189,7 +209,7 @@ export function ReceiveBox({
         )}
         {pill}
       </XStack>
-      {small ? <ConvertedLine text={small} onPress={onToggleFiat} muted={!has} /> : null}
+      {small ? <CurrencyToggle converted={small} switchTo={fiatOn ? symbol : "USD"} onPress={onToggleFiat} muted={!has} /> : null}
     </YStack>
   );
 }

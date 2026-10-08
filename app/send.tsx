@@ -11,7 +11,8 @@ import * as Clipboard from "expo-clipboard";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { Input, XStack, YStack } from "tamagui";
-import { ArrowUpDown, Check, ChevronLeft, ClipboardPaste, ScanLine, TriangleAlert, X } from "lucide-react-native";
+import { Check, ChevronLeft, ClipboardPaste, ScanLine, TriangleAlert, X } from "lucide-react-native";
+import { CurrencyToggle } from "@/components/swap/AmountInput";
 
 import { AssetIcon } from "@/components/ui/AssetIcon";
 import { QrScanner } from "@/components/send/QrScanner";
@@ -51,7 +52,18 @@ const ADDRESS_FIELD: Record<WalletChain, "stellarAddress" | "bitcoinAddress" | "
   solana: "solanaAddress"
 };
 const DECIMALS: Record<SendSymbol, number> = { XLM: 7, USDC: 7, BTC: 8, ETH: 18, SOL: 9 };
-const trim = (v: number, d: number) => v.toFixed(d).replace(/\.?0+$/, "");
+// Floor, never round: toFixed rounds half-up, so MAX could land a hair ABOVE
+// the spendable figure and trip "exceeds what you can send" (live 2026-10-08:
+// 6.14841969… XLM became 6.1484197). The 1e-3 nudge absorbs binary float
+// representation (6.1484197 × 1e7 = 61484196.99999…).
+// Spendable is a float difference (balance − reserve − fee); MAX writes it at
+// display precision. Compare with half a unit of the finest precision (1e-8)
+// so 6.1484197 is never "more than" 6.148419699999999 (live 2026-10-08).
+const EPS = 5e-8;
+const trim = (v: number, d: number) => {
+  const f = 10 ** d;
+  return (Math.floor(Number((v * f).toFixed(3))) / f).toFixed(d).replace(/\.?0+$/, "") || "0";
+};
 
 export default function SendScreen() {
   const c = useColors();
@@ -210,7 +222,7 @@ export default function SendScreen() {
   // A null spendable means the live read hasn't answered — never let the
   // user proceed on a number we don't have (the gas-reserve gap Niko hit).
   const cannotCoverGas = symbol === "ETH" && balance > 0 && balance <= GAS_RESERVE_ETH;
-  const canContinue = !!from && amountOk && destOk && !memoMissing && spendable !== null && amountNum <= spendable + 1e-12 && !cannotCoverGas;
+  const canContinue = !!from && amountOk && destOk && !memoMissing && spendable !== null && amountNum <= spendable + EPS && !cannotCoverGas;
 
   const send = async () => {
     if (!wallet?.subOrgId || !from) return;
@@ -347,24 +359,30 @@ export default function SendScreen() {
                     <Input {...inputStyle} flex={1} height={56} fontFamily='$mono' fontSize={28} letterSpacing={tracking(28)} placeholder='0.00' keyboardType='decimal-pad' value={fiat ? usdText : amount} onChangeText={onAmountText} editable={!busy} />
                     <PillButton label='Max' onPress={useMax} />
                   </XStack>
-                  <XStack justifyContent='space-between' alignItems='center'>
+                  <XStack justifyContent='space-between' alignItems='center' gap={10}>
                     {price > 0 ? (
-                      <XStack onPress={toggleFiat} alignItems='center' gap={4} paddingVertical={2} pressStyle={{ opacity: 0.6 }} accessibilityRole='button' accessibilityLabel={fiat ? "Enter amount in coins" : "Enter amount in dollars"}>
-                        <ArrowUpDown size={12} color={c.muted} strokeWidth={2} />
-                        <Mono fontSize={12} color={c.muted}>{amountOk ? `≈ ${fiat ? `${fAssetQuantity(amountNum, symbol)} ${symbol}` : fCurrency(amountNum * price)}` : fiat ? `Enter in ${symbol}` : "Enter in USD"}</Mono>
-                      </XStack>
+                      <CurrencyToggle
+                        converted={amountOk ? `≈ ${fiat ? `${fAssetQuantity(amountNum, symbol)} ${symbol}` : fCurrency(amountNum * price)}` : fiat ? `0 ${symbol}` : fCurrency(0)}
+                        switchTo={fiat ? symbol : "USD"}
+                        onPress={toggleFiat}
+                        muted={!amountOk}
+                      />
                     ) : (
                       <UiText fontSize={12} color={c.muted}> </UiText>
                     )}
-                    <Mono fontSize={12} color={spendable !== null && amountNum > spendable ? c.failed : c.muted}>
-                      {spendable === null ? "…" : `${fAssetQuantity(spendable, symbol)} ${symbol} available`}
-                    </Mono>
+                    {/* What you own, in coins and in dollars (Niko 2026-10-08). */}
+                    <YStack alignItems='flex-end' gap={1}>
+                      <Mono fontSize={12} color={spendable !== null && amountNum > spendable + EPS ? c.failed : c.muted}>
+                        {spendable === null ? "…" : `${fAssetQuantity(spendable, symbol)} ${symbol} available`}
+                      </Mono>
+                      {spendable !== null && price > 0 ? <Mono fontSize={11} color={c.faint}>≈ {fCurrency(spendable * price)}</Mono> : null}
+                    </YStack>
                   </XStack>
                   {cannotCoverGas ? (
                     <UiText fontSize={12} color={c.failed}>
                       Not enough ETH to pay gas — sending needs about {GAS_RESERVE_ETH} ETH on top of the amount.
                     </UiText>
-                  ) : spendable !== null && amountOk && amountNum > spendable ? (
+                  ) : spendable !== null && amountOk && amountNum > spendable + EPS ? (
                     <UiText fontSize={12} color={c.failed}>Amount exceeds what you can send after fees.</UiText>
                   ) : null}
                 </>
