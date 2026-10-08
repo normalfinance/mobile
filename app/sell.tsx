@@ -379,6 +379,9 @@ export default function SellScreen() {
               <UiText fontSize={11} color={c.faint} fontFamily='$mono'>You’ll finish the sale on Coinbase, then confirm the send here</UiText>
             </XStack>
             <SecondaryButton label='I already confirmed a sale on Coinbase' onPress={() => void findOrder()} borderRadius={radius.cta} />
+            {asset === "USDC" ? (
+              <SecondaryButton label='Cash out at a MoneyGram location' onPress={() => router.push("/cash-out")} borderRadius={radius.cta} disabled={busy} />
+            ) : null}
           </YStack>
         </YStack>
       </ScrollView>

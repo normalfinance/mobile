@@ -197,6 +197,10 @@ export default function TxDetailScreen() {
                   {mgi.externalTransactionId ? <XStack justifyContent='space-between'><UiText fontSize={13} color={c.muted}>Reference number</UiText><Mono fontSize={13} fontWeight='600'>{mgi.externalTransactionId}</Mono></XStack> : null}
                   <XStack justifyContent='space-between'><UiText fontSize={13} color={c.muted}>Updated</UiText><Mono fontSize={13}>{new Date(mgi.updatedAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}</Mono></XStack>
                   {mgi.kind === "deposit" && PENDING_MGI_STATUSES.has(mgi.status) ? <UiText fontSize={12} color={c.muted} lineHeight={17}>Drop off the cash at the MoneyGram location you selected — no code needed. Your USDC arrives shortly after paying.</UiText> : null}
+                  {mgi.kind === "withdrawal" && mgi.status === "pending_user_transfer_start" ? (
+                    <PrimaryButton label='Send the USDC to MoneyGram' onPress={() => router.push({ pathname: "/cash-out", params: { resume: mgi.id } })} />
+                  ) : null}
+                  {mgi.kind === "withdrawal" && PENDING_MGI_STATUSES.has(mgi.status) && mgi.status !== "pending_user_transfer_start" ? <UiText fontSize={12} color={c.muted} lineHeight={17}>MoneyGram has your USDC. Pick up the cash at the location you selected with the reference number above.</UiText> : null}
                 </>
               ) : (
                 <UiText fontSize={13} color={c.muted}>{mgiQ.isLoading ? "Loading MoneyGram status…" : "MoneyGram details unavailable."}</UiText>

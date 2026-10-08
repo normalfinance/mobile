@@ -42,6 +42,11 @@ export interface Sep24Transaction {
   external_transaction_id?: string;
   more_info_url?: string;
   message?: string;
+  /** SEP-24 withdrawal: where the user must send the USDC once committed. */
+  withdraw_anchor_account?: string;
+  withdraw_memo?: string;
+  withdraw_memo_type?: "text" | "id" | "hash";
+  stellar_transaction_id?: string;
 }
 
 /** In flight — the user (or MoneyGram) still has something to do. */
@@ -119,6 +124,20 @@ export const getMgiAuthToken = async (account: string, subOrgId: string): Promis
   if (!token) throw new Error("MoneyGram sign-in returned no token.");
   await writeToken(account, token);
   return token;
+};
+
+// ─── Cash-out (SEP-24 withdraw) ─────────────────────────────────────────────
+// POST mgi/sep24/withdraw { token, account, amount } → { url, id } (DB row).
+// Web opens MoneyGram's page and then only says "send USDC when prompted" —
+// the user has to make the payment by hand (inventory: "parked, incomplete").
+// Here, once MoneyGram reports pending_user_transfer_start, the transaction
+// carries withdraw_anchor_account / withdraw_memo and the app sends the USDC
+// itself with one passkey (lib/stellar/send.ts), then watches for completion.
+
+export const startMgiWithdraw = async (token: string, account: string, amount: number): Promise<{ url: string; id: string | null }> => {
+  const d = await apiFetch<{ url?: string; id?: string | null }>("/api/mgi/sep24/withdraw", { body: { token, account, amount } });
+  if (!d.url) throw new Error("MoneyGram is temporarily unavailable — please try again.");
+  return { url: d.url, id: d.id ?? null };
 };
 
 // ─── Deposit ─────────────────────────────────────────────────────────────────
