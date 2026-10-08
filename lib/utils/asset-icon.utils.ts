@@ -1,9 +1,10 @@
-// Token icons. Resolution lives in components/ui/AssetIcon.tsx: CDN first,
-// then a bundled file, then a coloured circle with the ticker. Only the two
-// Stellar assets ship a bundled fallback — the ~100 synthetic "nXXX" icons of
-// the discontinued synthetics product (256 MB of PNG/WebP, bundled into every
-// build) were removed 2026-10-05; the EAS upload had excluded that folder,
-// which broke release bundles with "Unable to resolve USDC.webp".
+// Token icons. Resolution lives in components/ui/AssetIcon.tsx: a bundled
+// file first (the five v1 assets ship in the app — the same WebP files the
+// CDN serves, ~400 KB total — so icons never depend on the network: a
+// tester's Home showed initials for BTC/ETH/SOL on 2026-10-08 when the CDN
+// did not answer), then the CDN for any other symbol, then a coloured circle
+// with the ticker. The ~100 synthetic "nXXX" icons of the discontinued
+// synthetics product were removed 2026-10-05.
 
 export interface AssetIconConfig {
   bgColor: string;
@@ -17,6 +18,9 @@ export interface AssetIconData {
 }
 
 export const cryptoIcons: Record<string, number> = {
+  BTC: require("@/assets/icons/crypto-icons/BTC.webp"),
+  ETH: require("@/assets/icons/crypto-icons/ETH.webp"),
+  SOL: require("@/assets/icons/crypto-icons/SOL.webp"),
   USDC: require("@/assets/icons/crypto-icons/USDC.webp"),
   XLM: require("@/assets/icons/crypto-icons/XLM.webp")
 };

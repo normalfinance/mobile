@@ -8,7 +8,6 @@ import { XStack, YStack } from "tamagui";
 
 import { useColors } from "@/lib/theme/appearance";
 import { space, tracking, typeScale as t } from "@/lib/theme/tokens";
-import { BRAND_ASSETS } from "@/lib/utils/cdn.utils";
 import { fCurrency, fNumber } from "@/lib/utils/number-format.utils";
 import { Mono, Pressable, UiText } from "./primitives";
 
@@ -34,7 +33,7 @@ export const SavingsRow = ({
     >
       <XStack alignItems='center' gap={space.rowGap}>
         <YStack width={36} height={36} borderRadius={18} overflow='hidden' backgroundColor={c.iconBg}>
-          <Image source={{ uri: BRAND_ASSETS.logoSinglePng() }} style={{ width: 36, height: 36 }} contentFit='cover' cachePolicy='memory-disk' />
+          <Image source={require("@/assets/images/logo-single.png")} style={{ width: 36, height: 36 }} contentFit='cover' />
         </YStack>
         <YStack>
           <UiText fontSize={t.assetName.size} fontWeight='600' letterSpacing={tracking(t.assetName.size)} lineHeight={18}>

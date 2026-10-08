@@ -18,9 +18,10 @@ export interface AssetIconProps {
   textColor?: string;
 }
 
-// Icon resolution order — identical output to the web app:
-//   1. CDN (cdn.normalapi.com/tokens/…), cached on disk by expo-image
-//   2. bundled local file, if we happen to ship one (XLM, USDC)
+// Icon resolution order (same files as the web app, different order):
+//   1. bundled local file — all five v1 assets ship in the app, so the icons
+//      render offline and on a tester's phone where the CDN did not answer
+//   2. CDN (cdn.normalapi.com/tokens/…) for any other symbol, cached on disk
 //   3. coloured circle with the ticker's initials
 export const AssetIcon: React.FC<AssetIconProps> = ({
   symbol,
@@ -40,8 +41,7 @@ export const AssetIcon: React.FC<AssetIconProps> = ({
     setCdnFailed(false);
   }, [cdnUri]);
 
-  const source =
-    cdnUri && !cdnFailed ? { uri: cdnUri } : localSource ?? null;
+  const source = localSource ?? (cdnUri && !cdnFailed ? { uri: cdnUri } : null);
 
   if (source) {
     return (

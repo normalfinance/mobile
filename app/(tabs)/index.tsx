@@ -33,7 +33,6 @@ import { useBackendPortfolio } from "@/hooks/use-backend-portfolio";
 import { useTurnkeyWallet, walletAddresses } from "@/hooks/use-turnkey-wallet";
 import { useColors } from "@/lib/theme/appearance";
 import { space, radius } from "@/lib/theme/tokens";
-import { BRAND_ASSETS } from "@/lib/utils/cdn.utils";
 import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
 
 export default function HomeScreen() {
@@ -135,7 +134,7 @@ export default function HomeScreen() {
                 backgroundColor={c.iconBg}
               >
                 <Image
-                  source={{ uri: BRAND_ASSETS.logoSinglePng() }}
+                  source={require("@/assets/images/logo-single.png")}
                   style={{ width: 44, height: 44 }}
                   contentFit='cover'
                   cachePolicy='memory-disk'

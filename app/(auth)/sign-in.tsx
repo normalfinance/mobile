@@ -15,7 +15,6 @@ import { Divider, PrimaryButton, UiText } from "@/components/home/primitives";
 import { friendlyAuthError, looksLikeEmail, normalizeEmail, sendSignInCode, signInWithPassword } from "@/lib/auth/email-auth";
 import { useAppearance, useColors } from "@/lib/theme/appearance";
 import { radius, tracking } from "@/lib/theme/tokens";
-import { BRAND_ASSETS } from "@/lib/utils/cdn.utils";
 import { signInWithApple, signInWithGoogle } from "@/services";
 
 const BUTTON_HEIGHT = 48;
@@ -97,7 +96,7 @@ export default function SignInScreen() {
     >
       <XStack justifyContent='center' marginTop={-8} marginBottom={4}>
         <YStack width={56} height={56} borderRadius={28} overflow='hidden' backgroundColor={c.iconBg}>
-          <Image source={{ uri: BRAND_ASSETS.logoSinglePng() }} style={{ width: 56, height: 56 }} contentFit='cover' cachePolicy='memory-disk' />
+          <Image source={require("@/assets/images/logo-single.png")} style={{ width: 56, height: 56 }} contentFit='cover' cachePolicy='memory-disk' />
         </YStack>
       </XStack>
 
