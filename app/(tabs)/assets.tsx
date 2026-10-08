@@ -10,6 +10,8 @@ import { useRouter } from "expo-router";
 import { XStack, YStack } from "tamagui";
 
 import { AssetRowSkeleton } from "@/components/home/AssetRow";
+import { ASSET_COLORS, AllocationChart } from "@/components/assets/AllocationChart";
+import { useSavingsPosition } from "@/hooks/use-savings";
 import { Card, Chip, Mono, Pressable, Screen, ScreenTitle, UiText } from "@/components/home/primitives";
 import { AssetIcon } from "@/components/ui/AssetIcon";
 import { useBackendPortfolio } from "@/hooks/use-backend-portfolio";
@@ -25,6 +27,12 @@ export default function AssetsScreen() {
   const { portfolioData, isLoading, refetch } = useBackendPortfolio();
   const { wallet } = useTurnkeyWallet();
   const [refreshing, setRefreshing] = React.useState(false);
+  // Allocation by USD value — held tokens plus the Normal Savings position.
+  const savings = useSavingsPosition(wallet?.stellarAddress);
+  const slices = [
+    ...portfolioData.assets.map((a) => ({ key: a.asset_code, label: a.asset_code, usd: a.usdValue, color: ASSET_COLORS[a.asset_code] ?? "#6B6B76" })),
+    { key: "SAVINGS", label: "Savings", usd: savings.value, color: ASSET_COLORS.SAVINGS }
+  ];
 
   const rows = SEND_ORDER.map((symbol) => {
     const meta = SEND_ASSETS[symbol];
@@ -55,6 +63,7 @@ export default function AssetsScreen() {
       >
         <YStack paddingHorizontal={space.gutter} paddingTop={8} gap={12}>
           <ScreenTitle title='Assets' />
+          {wallet ? <AllocationChart slices={slices} isLoading={isLoading || (!!wallet?.stellarAddress && savings.isLoading)} /> : null}
           <Card paddingVertical={4} paddingHorizontal={6}>
             {isLoading && !wallet ? (
               <>
