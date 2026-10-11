@@ -41,6 +41,7 @@ import {
 } from "@/lib/ramp/moneygram";
 import { addPendingSend } from "@/lib/send/pending-sends";
 import { sendStellar } from "@/lib/stellar/send";
+import { ProviderButton } from "@/components/ramp/ProviderButton";
 import { useColors } from "@/lib/theme/appearance";
 import { radius, space, tracking } from "@/lib/theme/tokens";
 import { describeTurnkeyError, isUserCancelledError } from "@/lib/turnkey/client";
@@ -379,7 +380,7 @@ export default function CashOutScreen() {
                   <UiText fontSize={13} color={c.muted} lineHeight={18}>2. Choose a pickup location on their page and confirm.</UiText>
                   <UiText fontSize={13} color={c.muted} lineHeight={18}>3. Back here, one passkey sends the USDC to MoneyGram. Collect the cash with your reference number and ID.</UiText>
                 </Card>
-                <PrimaryButton label={busy === "signin" ? "Signing in to MoneyGram…" : busy === "open" ? "Opening MoneyGram…" : "Continue with MoneyGram"} onPress={() => void start()} disabled={!amountOk || insufficient || !!busy} loading={busy === "signin" || busy === "open"} />
+                <ProviderButton provider='moneygram' label={busy === "signin" ? "Signing in to MoneyGram…" : busy === "open" ? "Opening MoneyGram…" : "Continue with MoneyGram"} onPress={() => void start()} disabled={!amountOk || insufficient || !!busy} loading={busy === "signin" || busy === "open"} />
               </>
             )}
           </YStack>

@@ -34,6 +34,7 @@ import {
 } from "@/lib/ramp/coinbase";
 import { useColors } from "@/lib/theme/appearance";
 import { StripeNotConfiguredError, createStripeOnrampSession } from "@/lib/ramp/stripe";
+import { ProviderButton } from "@/components/ramp/ProviderButton";
 import { radius, space, tracking } from "@/lib/theme/tokens";
 import { provisionChain } from "@/lib/turnkey/provision";
 import { describeTurnkeyError, isUserCancelledError } from "@/lib/turnkey/client";
@@ -257,17 +258,17 @@ export default function BuyScreen() {
             </Card>
           ) : (
             <YStack gap={10}>
-              <PrimaryButton label={busy ? "Opening Coinbase…" : "Continue with Coinbase"} onPress={buy} disabled={!address || !amountOk} loading={busy} />
+              <ProviderButton provider='coinbase' label={busy ? "Opening Coinbase…" : "Continue with Coinbase"} onPress={buy} disabled={!address || !amountOk} loading={busy} />
               <XStack alignItems='center' justifyContent='center' gap={6}>
                 <ExternalLink size={12} color={c.faint} strokeWidth={2} />
                 <UiText fontSize={11} color={c.faint} fontFamily='$mono'>Debit card, Apple Pay, Coinbase balance · delivered to your wallet</UiText>
               </XStack>
               {asset === "USDC" ? (
-                <SecondaryButton label='Deposit cash at a MoneyGram location' onPress={() => router.push("/deposit-cash")} disabled={busy} />
+                <ProviderButton provider='moneygram' label='Deposit cash at MoneyGram' onPress={() => router.push("/deposit-cash")} disabled={busy} />
               ) : null}
               {!stripeHidden ? (
                 <>
-                  <SecondaryButton label={stripeBusy ? "Opening Stripe…" : "Pay with Stripe"} onPress={() => void buyWithStripe()} disabled={busy || stripeBusy || !amountOk} />
+                  <ProviderButton provider='stripe' label={stripeBusy ? "Opening Stripe…" : "Pay with Stripe"} onPress={() => void buyWithStripe()} disabled={busy || stripeBusy || !amountOk} loading={stripeBusy} />
                   <UiText fontSize={11} color={c.faint} textAlign='center'>Card, ACH or Apple Pay — delivered to this wallet. US and EU.</UiText>
                 </>
               ) : null}

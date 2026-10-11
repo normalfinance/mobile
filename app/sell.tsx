@@ -20,6 +20,7 @@ import { useSavingsPosition, useStellarAccountProbe } from "@/hooks/use-savings"
 import { useTurnkeyWallet, type WalletChain } from "@/hooks/use-turnkey-wallet";
 import { refreshAfterStellarAction } from "@/lib/data/after-action";
 import { createCoinbaseSession } from "@/lib/ramp/coinbase";
+import { ProviderButton, type RampProvider } from "@/components/ramp/ProviderButton";
 import {
   SELL_ASSETS,
   SELL_RETURN_URL,
@@ -373,15 +374,15 @@ export default function SellScreen() {
   }
 
   // ---- amount half ------------------------------------------------------------
-  let button: { label: string; onPress?: () => void; disabled?: boolean; loading?: boolean };
+  let button: { label: string; onPress?: () => void; disabled?: boolean; loading?: boolean; provider?: RampProvider };
   if (!address) button = { label: `No ${meta.label} in your wallet`, disabled: true };
-  else if (!coinbaseOk && asset === "USDC") button = { label: "Cash out at a MoneyGram location", onPress: () => router.push("/cash-out") };
+  else if (!coinbaseOk && asset === "USDC") button = { label: "Cash out at MoneyGram", onPress: () => router.push("/cash-out"), provider: "moneygram" };
   else if (!coinbaseOk) button = { label: `Swap ${asset} to USDC first`, onPress: () => router.push({ pathname: "/(tabs)/swap", params: { from: asset, to: "USDC", n: String(Date.now()) } }) };
   else if (balance <= 0) button = { label: `No ${asset} to sell`, disabled: true };
   else if (!amountOk) button = { label: "Enter an amount", disabled: true };
   else if (overMax) button = { label: `Max is ${fNumber(max, { maximumFractionDigits: 6 })} ${asset}`, disabled: true };
-  else if (busy) button = { label: "Opening…", loading: true };
-  else button = { label: "Continue to Coinbase", onPress: () => void openCoinbase() };
+  else if (busy) button = { label: "Opening Coinbase…", loading: true, provider: "coinbase" };
+  else button = { label: "Continue to Coinbase", onPress: () => void openCoinbase(), provider: "coinbase" };
 
   return (
     <Screen>
@@ -428,7 +429,11 @@ export default function SellScreen() {
             </Card>
           ) : null}
           <YStack gap={8}>
-            <PrimaryButton label={button.label} onPress={button.onPress} disabled={button.disabled} loading={button.loading} />
+            {button.provider ? (
+              <ProviderButton provider={button.provider} label={button.label} onPress={button.onPress} disabled={button.disabled} loading={button.loading} />
+            ) : (
+              <PrimaryButton label={button.label} onPress={button.onPress} disabled={button.disabled} loading={button.loading} />
+            )}
             {coinbaseOk ? (
               <>
                 <XStack alignItems='center' justifyContent='center' gap={6}>

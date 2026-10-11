@@ -35,6 +35,7 @@ import {
   type Sep24Transaction
 } from "@/lib/ramp/moneygram";
 import { addUsdcTrustline, deriveSetupStep } from "@/lib/savings/engine";
+import { ProviderButton } from "@/components/ramp/ProviderButton";
 import { useColors } from "@/lib/theme/appearance";
 import { radius, space, tracking } from "@/lib/theme/tokens";
 import { describeTurnkeyError, isUserCancelledError } from "@/lib/turnkey/client";
@@ -289,7 +290,7 @@ export default function DepositCashScreen() {
                   <UiText fontSize={13} color={c.muted} lineHeight={18}>2. Choose a MoneyGram location on their page and confirm the deposit.</UiText>
                   <UiText fontSize={13} color={c.muted} lineHeight={18}>3. Drop off the cash there. USDC lands in your wallet shortly after.</UiText>
                 </Card>
-                <PrimaryButton label={busy === "signin" ? "Signing in to MoneyGram…" : busy === "open" ? "Opening MoneyGram…" : "Continue with MoneyGram"} onPress={() => void start()} disabled={!amountOk || !!busy} loading={busy === "signin" || busy === "open"} />
+                <ProviderButton provider='moneygram' label={busy === "signin" ? "Signing in to MoneyGram…" : busy === "open" ? "Opening MoneyGram…" : "Continue with MoneyGram"} onPress={() => void start()} disabled={!amountOk || !!busy} loading={busy === "signin" || busy === "open"} />
               </>
             )}
           </YStack>
