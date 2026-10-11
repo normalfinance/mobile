@@ -13,13 +13,15 @@
 // There is no pagination anywhere (Q21).
 
 import { useEffect, useMemo } from "react";
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { apiFetch } from "@/lib/api";
 import { fetchActiveRamps, type RampTransfer } from "@/lib/ramp/coinbase";
 import { fetchLifiStatuses, getLifiStatusOverride } from "@/lib/lifi/tracker";
 import { fetchFills, fetchOfframpStatus, terminalLabel } from "@/lib/ramp/offramp";
 import { reconcilePendingSends, usePendingSends } from "@/lib/send/pending-sends";
+import { reconcilePendingReceives, usePendingReceives } from "@/lib/activity/pending-receives";
+import type { QueryClient } from "@tanstack/react-query";
 import { fetchCctpTransfers, type CctpTransfer } from "@/lib/cctp/engine";
 import { useMgiTransactions } from "@/hooks/use-mgi";
 import { FAILED_MGI_STATUSES, PENDING_MGI_STATUSES } from "@/lib/ramp/moneygram";
@@ -135,11 +137,23 @@ const lifiRowStatus = (txHash: string, ageMs: number, statuses: Record<string, s
   return { status: ageMs > 6 * 3_600_000 ? "failed" : "pending", refunded: false };
 };
 
-const fetchChainActivity = (chain: WalletChain, address: string) =>
+const fetchChainActivity = (chain: WalletChain, address: string, refresh = false) =>
   apiFetch<ChainActivityResponse>(`/api/activity/${chain}`, {
     anonymous: true,
-    query: { address }
+    // refresh=1 bypasses the route's cache (45–300 s). Only for explicit user
+    // actions and sightings of incoming money — never on a timer (hard rule 9).
+    query: { address, ...(refresh ? { refresh: 1 } : {}) }
   });
+
+/** Re-read one chain's feed past the server cache and publish it to the feed. */
+export const refreshChainActivity = async (queryClient: QueryClient, chain: WalletChain, address: string): Promise<void> => {
+  try {
+    const data = await fetchChainActivity(chain, address, true);
+    queryClient.setQueryData(chainActivityQueryKey(chain, address), data);
+  } catch {
+    /* the regular read stands */
+  }
+};
 
 const toTransaction = (
   chain: WalletChain,
@@ -166,6 +180,7 @@ const toTransaction = (
 export const useActivityFeed = (priceOf: (symbol: string) => number = () => 0) => {
   const { addresses, isLoading: isWalletLoading } = useTurnkeyWallet();
   const pendingSends = usePendingSends();
+  const pendingReceives = usePendingReceives();
 
   const stellarAddress = addresses.find((a) => a.chain === "stellar")?.address ?? null;
 
@@ -238,7 +253,7 @@ export const useActivityFeed = (priceOf: (symbol: string) => number = () => 0) =
   });
 
   // Fixed-length memo key: the number of queries changes with the wallet.
-  const dataKey = queries.map((q) => q.dataUpdatedAt).join(",") + "|" + walletQuery.dataUpdatedAt + "|" + rampsQuery.dataUpdatedAt + "|" + pendingSends.length + "|" + cctpQuery.dataUpdatedAt + "|" + lifiStatusQuery.dataUpdatedAt + "|" + offrampQuery.dataUpdatedAt + "|" + mgiQuery.dataUpdatedAt;
+  const dataKey = queries.map((q) => q.dataUpdatedAt).join(",") + "|" + walletQuery.dataUpdatedAt + "|" + rampsQuery.dataUpdatedAt + "|" + pendingSends.length + "|" + cctpQuery.dataUpdatedAt + "|" + lifiStatusQuery.dataUpdatedAt + "|" + offrampQuery.dataUpdatedAt + "|" + mgiQuery.dataUpdatedAt + "|" + pendingReceives.length;
   // Every hash the feeds know this render — a pending send it covers is retired.
   const known = useMemo(() => {
     const set = new Set<string>();
@@ -252,6 +267,14 @@ export const useActivityFeed = (priceOf: (symbol: string) => number = () => 0) =
   // rendering a different component", live 2026-09-17 after a confirmed send).
   useEffect(() => {
     reconcilePendingSends(known);
+    // Sightings from the Receive sheet retire once a feed carries the receive.
+    const seen = addresses.flatMap(({ chain }, i) =>
+      (queries[i]?.data?.items ?? [])
+        .filter((it) => it.type === "Receive")
+        .map((it) => ({ chain, symbol: it.token.symbol, amount: it.token.amount, timestamp: it.timestamp, txHash: it.txHash }))
+    );
+    reconcilePendingReceives(seen);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [known]);
   const transactions = useMemo(() => {
     const pendingRows: Transaction[] = pendingSends
@@ -268,6 +291,18 @@ export const useActivityFeed = (priceOf: (symbol: string) => number = () => 0) =
         txHash: p.txHash,
         counterparty: p.destination
       }));
+    const pendingReceiveRows: Transaction[] = pendingReceives.map((p) => ({
+      id: p.id,
+      type: "receive",
+      asset: p.symbol,
+      amount: p.amount,
+      usdValue: p.amount * priceOf(p.symbol),
+      timestamp: new Date(p.seenAt),
+      status: "pending",
+      chain: p.chain,
+      txHash: p.txHash,
+      counterparty: "Incoming"
+    }));
     const rampRows: Transaction[] = (rampsQuery.data ?? [])
       .filter((r: RampTransfer) => !["arrived", "paid_out", "abandoned"].includes(r.status))
       .map((r) => ({
@@ -339,7 +374,7 @@ export const useActivityFeed = (priceOf: (symbol: string) => number = () => 0) =
     const isCctpDelivery = (item: ChainActivityItem) =>
       item.type === "Receive" &&
       deliveries.some((d) => d.symbol === item.token.symbol.toUpperCase() && Math.abs(d.amount - item.token.amount) <= Math.max(d.amount * 0.02, 1e-6) && item.timestamp >= d.start - 5 * 60_000 && item.timestamp <= d.start + 60 * 60_000);
-    const rows: Transaction[] = [...pendingRows, ...rampRows, ...mgiRows, ...cctpRows, ...walletRows];
+    const rows: Transaction[] = [...pendingRows, ...pendingReceiveRows, ...rampRows, ...mgiRows, ...cctpRows, ...walletRows];
     const fillByHash = new Map<string, string>(); // txHash → providerTxnId
     (offrampQuery.data?.fills ?? []).forEach((f) => f.txHash && fillByHash.set(f.txHash.toLowerCase(), f.providerTxnId));
     const offrampStatusById = new Map((offrampQuery.data?.txs ?? []).map((t) => [t.transactionId ?? "", t.status]));
@@ -382,7 +417,15 @@ export const useActivityFeed = (priceOf: (symbol: string) => number = () => 0) =
   const isFetching = queries.some((q) => q.isFetching) || walletQuery.isFetching;
   const error = (queries.find((q) => q.error)?.error as Error | undefined) ?? null;
 
-  const refetch = () => Promise.all([...queries.map((q) => q.refetch()), walletQuery.refetch(), rampsQuery.refetch(), cctpQuery.refetch(), mgiQuery.refetch()]);
+  const queryClient = useQueryClient();
+  const refetch = () =>
+    Promise.all([
+      ...addresses.map(({ chain, address }) => refreshChainActivity(queryClient, chain, address)),
+      walletQuery.refetch(),
+      rampsQuery.refetch(),
+      cctpQuery.refetch(),
+      mgiQuery.refetch()
+    ]);
 
   return { transactions, isLoading, isFetching, error, refetch };
 };

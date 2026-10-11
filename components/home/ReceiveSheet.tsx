@@ -16,6 +16,9 @@ import { Check, Copy, TriangleAlert, X } from "lucide-react-native";
 
 import { incomingSats, useBtcAddressWatch } from "@/hooks/use-btc-address-watch";
 import { useIncomingWatch } from "@/hooks/use-incoming-watch";
+import { refreshChainActivity } from "@/hooks/use-activity-feed";
+import { portfolioQueryKey } from "@/hooks/use-backend-portfolio";
+import { addPendingReceive } from "@/lib/activity/pending-receives";
 import { useStellarAccountProbe } from "@/hooks/use-savings";
 import { CHAIN_META, turnkeyWalletQueryKey, useTurnkeyWallet, type WalletAddress, type WalletChain } from "@/hooks/use-turnkey-wallet";
 import { refreshAfterStellarAction } from "@/lib/data/after-action";
@@ -92,6 +95,20 @@ export const ReceiveSheet = ({
   // Every other chain: balance-diff watcher (Stellar XLM + USDC, ETH, SOL).
   const currentAddress = addresses.find((a) => a.chain === chain)?.address ?? null;
   const incoming = useIncomingWatch(chain, currentAddress, open && chain !== "bitcoin");
+  // A sighting is money that HAS landed: show it as a pending Received row at
+  // once, re-read that chain's feed past the server cache, and refresh balances.
+  React.useEffect(() => {
+    if (!chain || !currentAddress) return;
+    const sightings = chain === "bitcoin"
+      ? btcWatch.incomingTxs.map((tx) => ({ symbol: "BTC", amount: incomingSats(tx, currentAddress) / 1e8, txHash: tx.txid as string | null }))
+      : incoming.receipts.map((r) => ({ symbol: r.symbol, amount: r.amount, txHash: null as string | null }));
+    if (!sightings.length) return;
+    sightings.forEach((s) => addPendingReceive({ chain, symbol: s.symbol, amount: s.amount, txHash: s.txHash }));
+    void refreshChainActivity(queryClient, chain, currentAddress);
+    if (chain === "stellar") refreshAfterStellarAction(queryClient, { userId: user?.id, stellarAddress: currentAddress });
+    else void queryClient.invalidateQueries({ queryKey: portfolioQueryKey(user?.id) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [incoming.receipts, btcWatch.incomingTxs, chain, currentAddress]);
   React.useEffect(() => {
     setWatchProbe(usdcStep !== "ready");
   }, [usdcStep]);
