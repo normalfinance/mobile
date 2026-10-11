@@ -33,7 +33,7 @@ import {
   type BuyAsset
 } from "@/lib/ramp/coinbase";
 import { useColors } from "@/lib/theme/appearance";
-import { createStripeURL } from "@/lib/ramp/stripe";
+import { StripeNotConfiguredError, createStripeOnrampSession } from "@/lib/ramp/stripe";
 import { radius, space, tracking } from "@/lib/theme/tokens";
 import { provisionChain } from "@/lib/turnkey/provision";
 import { describeTurnkeyError, isUserCancelledError } from "@/lib/turnkey/client";
@@ -90,6 +90,32 @@ export default function BuyScreen() {
       if (!isUserCancelledError(e)) Alert.alert("Couldn’t add the chain", describeTurnkeyError(e));
     } finally {
       setAddingChain(false);
+    }
+  };
+
+  // Stripe: server session with the wallet address locked (web 2026-10-09).
+  // Hidden once the server says it is not configured for this environment.
+  const [stripeHidden, setStripeHidden] = React.useState(false);
+  const [stripeBusy, setStripeBusy] = React.useState(false);
+  const buyWithStripe = async () => {
+    if (!address || !amountOk) return;
+    setStripeBusy(true);
+    try {
+      const { url, sessionId } = await createStripeOnrampSession({ address, asset, blockchain: meta.chain, amountUsd: amountNum });
+      const baseline = Number(portfolioData.assets.find((a) => a.asset_code === asset)?.balance ?? 0);
+      await recordOnrampHandoff({ asset, chain: meta.chain, walletAddress: address, amountUsd: amountNum, baselineBalance: baseline, provider: "stripe", providerRef: sessionId });
+      setHandedOff(true);
+      // No redirect comes back from Stripe's page; the in-flight row + balance watcher show arrival.
+      await WebBrowser.openBrowserAsync(url, { presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN });
+      void refreshAfterStellarAction(queryClient, { userId: user?.id, stellarAddress: wallet?.stellarAddress });
+      void queryClient.invalidateQueries({ queryKey: ["activity", "ramps"] });
+    } catch (e) {
+      if (e instanceof StripeNotConfiguredError) {
+        setStripeHidden(true);
+        Alert.alert("Stripe isn’t available here yet", "Use Coinbase or MoneyGram for now.");
+      } else Alert.alert("Couldn’t open Stripe", e instanceof Error ? e.message : "Please try again in a moment.");
+    } finally {
+      setStripeBusy(false);
     }
   };
 
@@ -239,8 +265,12 @@ export default function BuyScreen() {
               {asset === "USDC" ? (
                 <SecondaryButton label='Deposit cash at a MoneyGram location' onPress={() => router.push("/deposit-cash")} disabled={busy} />
               ) : null}
-              <SecondaryButton label='Pay with Stripe' onPress={() => void WebBrowser.openBrowserAsync(createStripeURL(amountNum, asset.toLowerCase(), meta.chain))} disabled={busy || !amountOk} />
-              <UiText fontSize={11} color={c.faint} textAlign='center'>Card, bank or Apple Pay — you enter your wallet address on Stripe’s page.</UiText>
+              {!stripeHidden ? (
+                <>
+                  <SecondaryButton label={stripeBusy ? "Opening Stripe…" : "Pay with Stripe"} onPress={() => void buyWithStripe()} disabled={busy || stripeBusy || !amountOk} />
+                  <UiText fontSize={11} color={c.faint} textAlign='center'>Card, ACH or Apple Pay — delivered to this wallet. US and EU.</UiText>
+                </>
+              ) : null}
             </YStack>
           )}
 

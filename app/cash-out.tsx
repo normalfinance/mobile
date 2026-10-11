@@ -10,6 +10,7 @@
 
 import React from "react";
 import { Alert, KeyboardAvoidingView, Platform, ScrollView } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as WebBrowser from "expo-web-browser";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
@@ -61,7 +62,14 @@ interface Committed {
   reference: string | null;
   /** Our USDC payment hash, once sent. */
   txHash: string | null;
+  /** amount_in as reported by MoneyGram (what the user must send), and its asset. */
+  anchorAmount: number | null;
+  anchorAsset: string | null;
 }
+
+// The payment hash per cash-out, kept on the phone (our DB row has no column
+// for it) so a resumed screen still shows what was sent.
+const HASH_KEY = (id: string) => `mgi_withdraw_tx_v1:${id}`;
 
 export default function CashOutScreen() {
   const c = useColors();
@@ -99,7 +107,9 @@ export default function CashOutScreen() {
       memo: tx.withdraw_memo ?? prev?.memo ?? null,
       memoType: tx.withdraw_memo_type ?? prev?.memoType ?? null,
       reference: tx.external_transaction_id ? String(tx.external_transaction_id) : prev?.reference ?? null,
-      txHash: tx.stellar_transaction_id ?? prev?.txHash ?? null
+      txHash: tx.stellar_transaction_id ?? prev?.txHash ?? null,
+      anchorAmount: tx.amount_in?.amount != null && Number.isFinite(Number(tx.amount_in.amount)) ? Number(tx.amount_in.amount) : prev?.anchorAmount ?? null,
+      anchorAsset: tx.amount_in?.asset ?? prev?.anchorAsset ?? null
     }));
 
   const gate = async (): Promise<boolean> => {
@@ -126,7 +136,11 @@ export default function CashOutScreen() {
     (async () => {
       try {
         const tx = await refreshMgiStatus(address, wallet.subOrgId, id);
-        if (!cancelled) applyTx(id, tx);
+        const storedHash = await AsyncStorage.getItem(HASH_KEY(id)).catch(() => null);
+        if (!cancelled) {
+          applyTx(id, tx);
+          if (storedHash) setCommitted((prev) => (prev && !prev.txHash ? { ...prev, txHash: storedHash } : prev));
+        }
       } catch (e) {
         if (!cancelled && !isUserCancelledError(e)) Alert.alert("Couldn’t load the cash-out", e instanceof Error ? e.message : describeTurnkeyError(e));
       } finally {
@@ -172,10 +186,23 @@ export default function CashOutScreen() {
     }
   };
 
-  // The payment MoneyGram asked for: exactly amount_in to the anchor account
-  // with its memo (memo-less sends to an anchor are lost — hard rule 12).
+  // The payment MoneyGram asked for: exactly amount_in (SEP-24: the anchor's
+  // fee comes OUT of it, never on top — web agent 2026-10-11) to the anchor
+  // account with its memo (memo-less sends to an anchor are lost — hard rule 12).
   const sendUsdc = async () => {
     if (!committed?.anchorAccount || !wallet?.subOrgId || !address) return;
+    if (FAILED_MGI_STATUSES.has(committed.status) || committed.status === "refunded") {
+      Alert.alert("Cash-out no longer active", "MoneyGram closed this cash-out, so nothing should be sent.");
+      return;
+    }
+    if (committed.anchorAsset && !/USDC/i.test(committed.anchorAsset)) {
+      Alert.alert("Unexpected asset", `MoneyGram asked for ${committed.anchorAsset}, not USDC. Open MoneyGram details or contact support before sending anything.`);
+      return;
+    }
+    if (committed.anchorAmount !== null && committed.anchorAmount > committed.amount * 1.01 + 0.01) {
+      Alert.alert("Amount mismatch", `MoneyGram asks for ${fNumber(committed.anchorAmount, { maximumFractionDigits: 7 })} USDC, more than the ${fNumber(committed.amount, { maximumFractionDigits: 7 })} you entered. Open MoneyGram details to review before sending.`);
+      return;
+    }
     if (committed.memoType === "hash") {
       Alert.alert("Unsupported memo", "MoneyGram asked for a hash memo, which this app can’t attach yet. Open MoneyGram details and send from another wallet, or contact support.");
       return;
@@ -187,10 +214,22 @@ export default function CashOutScreen() {
     setBusy("sending");
     try {
       if (!(await gate())) return;
-      const r = await sendStellar({ subOrgId: wallet.subOrgId, from: address, symbol: "USDC", amount: committed.amount, destination: committed.anchorAccount, memo: committed.memo, hasActiveSavings });
-      addPendingSend({ chain: "stellar", txHash: r.hash, symbol: "USDC", amount: String(committed.amount), destination: committed.anchorAccount });
-      setCommitted((prev) => (prev ? { ...prev, txHash: r.hash, status: "pending_anchor" } : prev));
-      await reportMgiStatus(committed.id, { status: "pending_anchor" });
+      const pay = committed.anchorAmount ?? committed.amount;
+      const r = await sendStellar({
+        subOrgId: wallet.subOrgId,
+        from: address,
+        symbol: "USDC",
+        amount: pay,
+        destination: committed.anchorAccount,
+        memo: committed.memo,
+        memoType: committed.memoType === "id" ? "id" : "text",
+        hasActiveSavings
+      });
+      void AsyncStorage.setItem(HASH_KEY(committed.id), r.hash).catch(() => undefined);
+      addPendingSend({ chain: "stellar", txHash: r.hash, symbol: "USDC", amount: String(pay), destination: committed.anchorAccount });
+      // SEP-24 "user sent, anchor confirming"; the next poll mirrors what MoneyGram reports.
+      setCommitted((prev) => (prev ? { ...prev, txHash: r.hash, status: "pending_user_transfer_complete" } : prev));
+      await reportMgiStatus(committed.id, { status: "pending_user_transfer_complete" });
       refreshAfterStellarAction(queryClient, { userId: user?.id, stellarAddress: address });
       void queryClient.invalidateQueries({ queryKey: ["activity"] });
     } catch (e) {
@@ -263,8 +302,10 @@ export default function CashOutScreen() {
                       ? "MoneyGram received your USDC. Collect the cash at the location you selected, with the reference number below and your ID."
                       : failed
                         ? `MoneyGram reports this cash-out as ${mgiStatusLabel(committed.status).toLowerCase()}. Nothing further will happen; start a new one if needed.`
-                        : needsPayment
-                          ? "MoneyGram reserved your cash-out. One passkey confirmation sends exactly the requested USDC to MoneyGram’s Stellar account with the memo they need."
+                        : needsPayment && !committed.anchorAccount
+                          ? "MoneyGram reserved your cash-out and is preparing the payment details. This refreshes by itself — the send button appears when they arrive."
+                          : needsPayment
+                            ? "MoneyGram reserved your cash-out. One passkey confirmation sends exactly the requested USDC to MoneyGram’s Stellar account with the memo they need."
                           : "Your USDC is on its way to MoneyGram. The cash becomes available for pickup shortly — you can close this screen; the cash-out stays in Activity."}
                   </UiText>
                 </Card>
@@ -299,7 +340,7 @@ export default function CashOutScreen() {
                 </Card>
                 <YStack gap={10}>
                   {needsPayment ? (
-                    <PrimaryButton label={busy === "sending" ? "Sending with passkey…" : `Send ${fNumber(committed.amount, { maximumFractionDigits: 7 })} USDC with passkey`} onPress={() => void sendUsdc()} loading={busy === "sending"} disabled={!committed.anchorAccount} />
+                    <PrimaryButton label={busy === "sending" ? "Sending with passkey…" : `Send ${fNumber(committed.anchorAmount ?? committed.amount, { maximumFractionDigits: 7 })} USDC with passkey`} onPress={() => void sendUsdc()} loading={busy === "sending"} disabled={!committed.anchorAccount} />
                   ) : null}
                   <SecondaryButton label='Open MoneyGram details' onPress={() => address && wallet?.subOrgId && void openMgiDetails(address, wallet.subOrgId, committed.id).catch((e) => Alert.alert("Couldn’t open MoneyGram", e instanceof Error ? e.message : "Please try again."))} />
                   <SecondaryButton label={refreshing ? "Refreshing…" : "Refresh status"} onPress={() => void refresh()} disabled={refreshing} />

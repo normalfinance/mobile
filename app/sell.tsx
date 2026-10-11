@@ -39,7 +39,12 @@ import {
   terminalLabel,
   xlmSellReserve,
   type OfframpTx,
-  type SellAsset
+  type SellAsset,
+  clearSellHandoff,
+  coinbaseCanSell,
+  readSellHandoff,
+  sellDeadline,
+  writeSellHandoff
 } from "@/lib/ramp/offramp";
 import { sendBtc } from "@/lib/send/bitcoin";
 import { sendEth } from "@/lib/send/evm";
@@ -108,6 +113,30 @@ export default function SellScreen() {
   const handoffAt = React.useRef<number | null>(null);
   const handoffAmount = React.useRef<number | null>(null);
   const rampRowId = React.useRef<string | null>(null);
+  // Web rule: Coinbase has no Stellar network — XLM and USDC-on-Stellar go
+  // through MoneyGram (USDC) or a swap/send instead.
+  const coinbaseOk = coinbaseCanSell(meta.chain, asset);
+  // Resume (Activity row / "I already confirmed"): the persisted hand-off marker
+  // decides which Coinbase order belongs to us, even after the app was killed.
+  React.useEffect(() => {
+    void readSellHandoff().then((h) => {
+      if (h && h.sym === asset && h.chain === meta.chain) {
+        handoffAt.current = h.at;
+        handoffAmount.current = h.amount;
+      }
+    });
+  }, [asset, meta.chain]);
+  // 30-minute send window from the order's creation (web countdown).
+  const [now, setNow] = React.useState(Date.now());
+  React.useEffect(() => {
+    if (!order) return;
+    const iv = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(iv);
+  }, [order]);
+  const deadline = order ? sellDeadline(order.createdAt) : null;
+  const msLeft = deadline !== null ? deadline - now : null;
+  const windowExpired = msLeft !== null && msLeft <= 0;
+  const countdown = msLeft !== null && msLeft > 0 ? `${Math.floor(msLeft / 60_000)}:${String(Math.floor((msLeft % 60_000) / 1000)).padStart(2, "0")}` : null;
 
   // --- step 2: open Coinbase -------------------------------------------------
   const openCoinbase = async () => {
@@ -120,6 +149,7 @@ export default function SellScreen() {
       const url = createCoinbaseSellURL({ sessionToken: token, partnerUserRef: user.id, asset, chain: meta.chain, amount: value, redirectUrl: SELL_RETURN_URL });
       handoffAt.current = Date.now();
       handoffAmount.current = value;
+      void writeSellHandoff({ at: handoffAt.current, sym: asset, chain: meta.chain, amount: value });
       // Single-use token: open exactly once. Ephemeral → no iOS consent alert.
       await WebBrowser.openAuthSessionAsync(url, SELL_RETURN_URL, { preferEphemeralSession: true });
       // Returned (or dismissed) — either way, look for the order Coinbase created.
@@ -161,6 +191,10 @@ export default function SellScreen() {
     if (!order?.transactionId || !order.toAddress || !order.amount || !wallet?.subOrgId || !address) return;
     const id = order.transactionId;
     const value = parseFloat(order.amount);
+    if (windowExpired) {
+      setNotice("Coinbase’s 30-minute window for this order has passed — don’t send to it. Start a new sale on Coinbase instead.");
+      return;
+    }
     setBusy(true);
     setNotice(null);
     try {
@@ -234,6 +268,7 @@ export default function SellScreen() {
       const t = terminalLabel(txs.find((x) => x.transactionId === id)?.status);
       if (t === "success") {
         setPhase("done");
+        void clearSellHandoff();
         void settleOfframpHandoff(rampRowId.current, "paid_out");
         void queryClient.invalidateQueries({ queryKey: ["activity"] });
         return;
@@ -300,7 +335,13 @@ export default function SellScreen() {
                     <UiText fontSize={13} color={c.chips.amber.color} lineHeight={19}>{notice}</UiText>
                   </YStack>
                 ) : null}
-                <PrimaryButton label={phase === "sending" ? "Sending…" : "Send with passkey"} onPress={() => void sendToCoinbase()} loading={busy} />
+                {countdown ? <Mono fontSize={12} color={msLeft !== null && msLeft < 5 * 60_000 ? c.failed : c.muted}>Send within {countdown}</Mono> : null}
+                {windowExpired ? (
+                  <YStack padding={12} borderRadius={radius.input} backgroundColor={c.chips.amber.bg}>
+                    <UiText fontSize={13} color={c.chips.amber.color} lineHeight={19}>Coinbase’s 30-minute window for this order has passed. Don’t send to it — start a new sale on Coinbase instead.</UiText>
+                  </YStack>
+                ) : null}
+                <PrimaryButton label={phase === "sending" ? "Sending…" : "Send with passkey"} onPress={() => void sendToCoinbase()} loading={busy} disabled={windowExpired} />
                 <SecondaryButton label='Cancel' onPress={() => router.back()} disabled={busy} borderRadius={radius.cta} />
               </Card>
             ) : null}
@@ -314,7 +355,9 @@ export default function SellScreen() {
                   {phase === "done"
                     ? "Coinbase confirmed the sale — your cash is on its way to your payout method."
                     : phase === "failed"
-                      ? "Coinbase reported the sale as failed or expired. If your crypto left the wallet, Coinbase support can trace it with the transaction below."
+                      ? txHash
+                        ? "Coinbase reported this sale as failed or expired after your crypto was sent. Nothing more should be sent — the crypto arrives as a balance in your Coinbase account; contact Coinbase support with the transaction below if it doesn’t."
+                        : "Coinbase reported the sale as failed or expired before anything was sent. Nothing left your wallet — start a new sale if you still want to cash out."
                       : phase === "slow"
                         ? "Coinbase hasn’t confirmed the payout yet. It usually completes within minutes — check Activity later; nothing else is needed from you."
                         : "Coinbase will pay out your cash once it confirms — you can close this."}
@@ -332,6 +375,8 @@ export default function SellScreen() {
   // ---- amount half ------------------------------------------------------------
   let button: { label: string; onPress?: () => void; disabled?: boolean; loading?: boolean };
   if (!address) button = { label: `No ${meta.label} in your wallet`, disabled: true };
+  else if (!coinbaseOk && asset === "USDC") button = { label: "Cash out at a MoneyGram location", onPress: () => router.push("/cash-out") };
+  else if (!coinbaseOk) button = { label: `Swap ${asset} to USDC first`, onPress: () => router.push({ pathname: "/(tabs)/swap", params: { from: asset, to: "USDC", n: String(Date.now()) } }) };
   else if (balance <= 0) button = { label: `No ${asset} to sell`, disabled: true };
   else if (!amountOk) button = { label: "Enter an amount", disabled: true };
   else if (overMax) button = { label: `Max is ${fNumber(max, { maximumFractionDigits: 6 })} ${asset}`, disabled: true };
@@ -372,16 +417,29 @@ export default function SellScreen() {
             </XStack>
           </Card>
 
+          {!coinbaseOk ? (
+            <Card padding={14} gap={8}>
+              <UiText fontSize={14} fontWeight='600'>{asset === "USDC" ? "USDC on Stellar cashes out through MoneyGram" : `Selling ${asset} to a bank account isn’t available yet`}</UiText>
+              <UiText fontSize={13} color={c.muted} lineHeight={18}>
+                {asset === "USDC"
+                  ? "Coinbase can’t receive USDC on the Stellar network. Pick up cash at a MoneyGram location instead, or send it to an exchange you already use."
+                  : "Coinbase can’t receive XLM. You can swap it to USDC and withdraw cash through MoneyGram, or send it to an exchange you already use."}
+              </UiText>
+            </Card>
+          ) : null}
           <YStack gap={8}>
             <PrimaryButton label={button.label} onPress={button.onPress} disabled={button.disabled} loading={button.loading} />
-            <XStack alignItems='center' justifyContent='center' gap={6}>
-              <ExternalLink size={12} color={c.faint} strokeWidth={2} />
-              <UiText fontSize={11} color={c.faint} fontFamily='$mono'>You’ll finish the sale on Coinbase, then confirm the send here</UiText>
-            </XStack>
-            <SecondaryButton label='I already confirmed a sale on Coinbase' onPress={() => void findOrder()} borderRadius={radius.cta} />
-            {asset === "USDC" ? (
-              <SecondaryButton label='Cash out at a MoneyGram location' onPress={() => router.push("/cash-out")} borderRadius={radius.cta} disabled={busy} />
-            ) : null}
+            {coinbaseOk ? (
+              <>
+                <XStack alignItems='center' justifyContent='center' gap={6}>
+                  <ExternalLink size={12} color={c.faint} strokeWidth={2} />
+                  <UiText fontSize={11} color={c.faint} fontFamily='$mono'>You’ll finish the sale on Coinbase, then confirm the send here</UiText>
+                </XStack>
+                <SecondaryButton label='I already confirmed a sale on Coinbase' onPress={() => void findOrder()} borderRadius={radius.cta} />
+              </>
+            ) : (
+              <SecondaryButton label={`Send ${asset} to an exchange`} onPress={() => router.push(`/send?symbol=${asset}`)} borderRadius={radius.cta} />
+            )}
           </YStack>
         </YStack>
       </ScrollView>

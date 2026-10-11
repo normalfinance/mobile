@@ -330,6 +330,8 @@ export interface SendStellarParams {
   amount: number;
   destination: string;
   memo?: string;
+  /** Force the memo kind (anchors state it: SEP-24 withdraw_memo_type); default = detect. */
+  memoType?: "text" | "id";
   hasActiveSavings?: boolean;
   onStep?: (step: SendStep) => void;
 }
@@ -341,6 +343,7 @@ export const sendStellar = async ({
   amount,
   destination,
   memo,
+  memoType,
   hasActiveSavings = false,
   onStep
 }: SendStellarParams): Promise<{ hash: string; plan: StellarSendPlan }> => {
@@ -390,7 +393,7 @@ export const sendStellar = async ({
     );
   }
   if (memo?.trim()) {
-    const type = detectMemoType(memo);
+    const type = memoType === "id" ? "MEMO_ID" : memoType === "text" ? "MEMO_TEXT" : detectMemoType(memo);
     if (type === "MEMO_ID") builder.addMemo(Memo.id(memo.trim()));
     else if (type === "MEMO_TEXT") builder.addMemo(Memo.text(memo.trim()));
     else throw new Error("Memo must be up to 28 characters, or a numeric id.");

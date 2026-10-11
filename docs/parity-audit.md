@@ -82,7 +82,7 @@ Settings General/Accounts → referrals → MoneyGram → legal/support/geo-bloc
 | USDC gates: no trustline → add trustline; unfunded account (web gap) | have (Buy XLM instead / Savings setup) | — |
 | "$5 XLM" activation shortcut | partial (Buy screen with XLM preselected) | — |
 | MoneyGram deposit (SEP-10/24, limits from `mgi/info`, status poll, banner) | have (`app/deposit-cash.tsx`, `lib/ramp/moneygram.ts`; commit learned by polling the proxy while MoneyGram’s page is open — the app has no postMessage; pending rows in Activity + tx detail with Refresh / Open MoneyGram) | — |
-| Stripe link | have (Buy → “Pay with Stripe”, static link) | — |
+| Stripe link | have (server session via `stripe/onramp-session`, wallet locked, tracked as a ramp row; hidden when the server says not configured) | — |
 
 ### Sell (Coinbase off-ramp) — **missing entirely → first build**
 Contract (inventory 3/5): session → `pay.coinbase.com/v3/sell/input` (partnerUserRef = uid, presetCryptoAmount 6dp, defaultNetwork/Asset, redirectUrl) → return → find the STARTED order (`coinbase/offramp-status`, fills) → claim fill → send Coinbase's amount to Coinbase's address (memo rules) → record fill with hash → poll to SUCCESS. Fix web's three defects: never re-send when a fill hash exists; timeout = "still processing", not success; prefer orders created after the hand-off. MoneyGram cash-out: parked (web incomplete).

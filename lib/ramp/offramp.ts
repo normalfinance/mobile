@@ -17,12 +17,50 @@
 // hash (double-send), a 5-minute timeout shown as success, and offering an
 // old abandoned STARTED order (we prefer orders created after the hand-off).
 
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { apiFetch } from "@/lib/api";
 import type { WalletChain } from "@/hooks/use-turnkey-wallet";
 import type { BuyAsset } from "./coinbase";
 
 export type SellAsset = BuyAsset;
 export const SELL_RETURN_URL = "normalapp://sell";
+
+/** Web lib/coinbase-offramp-rules.ts, verified live 2026-10-09 against
+ *  GET /onramp/v1/sell/options: Coinbase sells BTC, ETH, SOL and USDC on
+ *  Base/Ethereum/Solana — NO Stellar network at all, so XLM and USDC-on-Stellar
+ *  can never complete (Coinbase cannot match the deposit). */
+export const coinbaseCanSell = (chain: WalletChain, symbol: string): boolean =>
+  chain === "stellar" ? false : chain === "bitcoin" ? symbol === "BTC" : chain === "ethereum" ? symbol === "ETH" || symbol === "USDC" : chain === "solana" ? symbol === "SOL" || symbol === "USDC" : false;
+
+/** Coinbase gives 30 minutes from the order's creation to send the crypto (web). */
+export const SELL_SEND_WINDOW_MS = 30 * 60_000;
+export const sellDeadline = (createdAt: string | null | undefined): number | null => {
+  const n = Date.parse(createdAt ?? "");
+  return Number.isFinite(n) ? n + SELL_SEND_WINDOW_MS : null;
+};
+
+// Hand-off marker (web offramp-dialog): written when Coinbase opens, read by
+// the matcher so only orders created for THIS hand-off are accepted; cleared
+// on SUCCESS. Persisted so a killed app still matches the right order.
+export interface SellHandoff {
+  at: number;
+  sym: SellAsset;
+  chain: WalletChain;
+  amount: number;
+}
+const HANDOFF_KEY = "sell_handoff_v1";
+export const writeSellHandoff = (h: SellHandoff) => AsyncStorage.setItem(HANDOFF_KEY, JSON.stringify(h)).catch(() => undefined);
+export const readSellHandoff = async (): Promise<SellHandoff | null> => {
+  try {
+    const raw = await AsyncStorage.getItem(HANDOFF_KEY);
+    const h = raw ? (JSON.parse(raw) as SellHandoff) : null;
+    // A marker older than a day is noise, not a hand-off.
+    return h && Date.now() - h.at < 24 * 3_600_000 ? h : null;
+  } catch {
+    return null;
+  }
+};
+export const clearSellHandoff = () => AsyncStorage.removeItem(HANDOFF_KEY).catch(() => undefined);
 
 export const SELL_ASSETS: { asset: SellAsset; chain: WalletChain; label: string }[] = [
   { asset: "USDC", chain: "stellar", label: "USDC on Stellar" },
@@ -142,10 +180,11 @@ export const recordFill = (providerTxnId: string, txHash: string) => apiFetch("/
 export const releaseFill = (providerTxnId: string) => apiFetch("/api/offramp/fills", { method: "DELETE", body: { providerTxnId } }).catch(() => undefined);
 
 /**
- * The sell to fulfil (web rules + "created after the hand-off" preference):
- * STARTED, toAddress + amount present, asset and currency = symbol, amount ≤
- * balance, no txHash, no fill. Newest first; orders created before `since`
- * are considered only if nothing newer qualifies.
+ * The sell to fulfil (web coinbase-offramp-modal, hardened 2026-10-09):
+ * STARTED, toAddress + amount present, asset and currency = symbol, no fill.
+ * With a hand-off marker: ONLY orders created at or after marker − 2 min
+ * (clock skew); undated orders are rejected. Without a marker: fall back to
+ * balance/age filters. A STARTED order we already sent for → confirming.
  */
 export const pickPendingSell = (txs: OfframpTx[], fills: OfframpFill[], o: { asset: SellAsset; balance: number; since: number | null; handedOff?: number | null }): { tx: OfframpTx; alreadyFilled: boolean } | null => {
   const filled = new Map(fills.map((f) => [f.providerTxnId, f.txHash]));
@@ -155,19 +194,23 @@ export const pickPendingSell = (txs: OfframpTx[], fills: OfframpFill[], o: { ass
     const n = Date.parse(t.createdAt ?? "");
     return Number.isFinite(n) ? n : 0;
   };
-  const candidates = txs
+  const started = txs
     .filter((t) => t.status === "TRANSACTION_STATUS_STARTED" && !!t.transactionId && !!t.toAddress && !!t.amount && t.asset === o.asset && t.currency === o.asset)
-    .filter((t) => (parseFloat(t.amount ?? "0") || 0) <= o.balance + 1e-9)
     .sort((a, b) => ts(b) - ts(a));
   // A STARTED order we already sent for → go straight to confirming.
-  const sentAlready = candidates.find((t) => t.transactionId && filled.get(t.transactionId));
+  const sentAlready = started.find((t) => t.transactionId && filled.get(t.transactionId));
   if (sentAlready) return { tx: sentAlready, alreadyFilled: true };
-  const open = candidates.filter((t) => !t.txHash && !filled.has(t.transactionId!));
+  const open = started.filter((t) => !t.txHash && !filled.has(t.transactionId!));
   if (!open.length) return null;
-  // Prefer: created after the hand-off (2 min clock skew) → same amount we handed off → newest.
-  const fresh = o.since ? open.filter((t) => ts(t) >= o.since - 120_000) : [];
-  const sameAmount = o.handedOff ? open.filter((t) => Math.abs((parseFloat(t.amount ?? "0") || 0) - o.handedOff!) < 1e-6) : [];
-  return { tx: fresh[0] ?? sameAmount[0] ?? open[0], alreadyFilled: false };
+  if (o.since) {
+    // Marker present: strictly the orders this hand-off produced.
+    const fresh = open.filter((t) => ts(t) > 0 && ts(t) >= o.since! - 120_000);
+    const sameAmount = o.handedOff ? fresh.filter((t) => Math.abs((parseFloat(t.amount ?? "0") || 0) - o.handedOff!) < 1e-6) : [];
+    return fresh.length ? { tx: sameAmount[0] ?? fresh[0], alreadyFilled: false } : null;
+  }
+  // No marker (resume from Activity): balance filter, newest first.
+  const affordable = open.filter((t) => (parseFloat(t.amount ?? "0") || 0) <= o.balance + 1e-9);
+  return affordable.length ? { tx: affordable[0], alreadyFilled: false } : null;
 };
 
 export const terminalLabel = (status: string | null | undefined): "success" | "failed" | null =>

@@ -6,7 +6,12 @@
 //   - discontinued Normal tokens (nXXX) lived under tokens/normal/*.svg
 // All five v1 assets verified live on the CDN on 2026-09-11.
 
-const CDN_BASE = (process.env.EXPO_PUBLIC_CDN_URL ?? "").replace(/\/+$/, "");
+// 2026-10-09: cdn.normalapi.com dropped out of DNS for hours and every image
+// on web broke; the files live in R2 and web now serves them from its own
+// origin at /cdn/<same path>. Default there; an env value still wins. The five
+// core token icons and the logo are bundled in the app regardless.
+const CDN_DEFAULT = "https://www.normalfinance.io/cdn";
+const CDN_BASE = (process.env.EXPO_PUBLIC_CDN_URL || CDN_DEFAULT).replace(/\/+$/, "").replace(/^https?:\/\/cdn\.normalapi\.com$/, CDN_DEFAULT);
 
 export const cdn = (path: string): string => {
   const p = path.replace(/^\/+/, "");

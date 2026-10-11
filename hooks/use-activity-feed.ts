@@ -280,7 +280,7 @@ export const useActivityFeed = (priceOf: (symbol: string) => number = () => 0) =
         status: r.status === "failed" ? "failed" : "pending",
         chain: r.chain,
         txHash: null,
-        counterparty: r.provider === "coinbase" ? "Coinbase" : r.provider
+        counterparty: r.provider === "coinbase" ? "Coinbase" : r.provider === "stripe" ? "Stripe" : r.provider
       }));
     const mgiRows: Transaction[] = (mgiQuery.data ?? [])
       .filter((t) => t.status !== "incomplete") // never committed in MoneyGram's UI

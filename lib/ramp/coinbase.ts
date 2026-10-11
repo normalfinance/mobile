@@ -85,12 +85,16 @@ export const recordOnrampHandoff = async (params: {
   walletAddress: string;
   amountUsd: number;
   baselineBalance: number | null;
+  /** 'coinbase' (default) or 'stripe'; Stripe rows carry the session id as providerRef for the webhook. */
+  provider?: "coinbase" | "stripe";
+  providerRef?: string;
 }): Promise<string | null> => {
   try {
     const data = await apiFetch<{ success: boolean; id?: string }>("/api/ramp/transfers", {
       body: {
         direction: "onramp",
-        provider: "coinbase",
+        provider: params.provider ?? "coinbase",
+        ...(params.providerRef ? { providerRef: params.providerRef } : {}),
         asset: params.asset,
         chain: params.chain,
         walletAddress: params.walletAddress,
