@@ -36,7 +36,7 @@ import { useAppearance, useColors, type AppearanceMode } from "@/lib/theme/appea
 import { space } from "@/lib/theme/tokens";
 import { shortenAddress } from "@/lib/utils/number-format.utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bell, FileText, Import, KeyRound, LifeBuoy, Megaphone, Zap } from "lucide-react-native";
+import { Bell, FileText, Import, KeyRound, LifeBuoy, Megaphone, Trash2, Zap } from "lucide-react-native";
 import { LEGAL, getMarketingOptIn, setMarketingOptIn } from "@/lib/auth/marketing";
 import { Chip } from "@/components/home/primitives";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -210,6 +210,14 @@ export default function SettingsScreen() {
                 sub='New features and announcements by email'
                 right={<Chip tone={marketing === true ? "green" : "neutral"} label={marketing === null ? "…" : marketing ? "On" : "Off"} />}
                 onPress={marketingBusy || marketing === null ? undefined : () => void toggleMarketing()}
+              />
+              <Divider />
+              {/* App Store guideline 5.1.1(v): account deletion must be reachable in-app. */}
+              <ListRow
+                icon={<Trash2 size={16} color={c.failed} strokeWidth={1.8} />}
+                label='Delete account'
+                sub='Removes your Normal account and data; your crypto stays on-chain'
+                onPress={() => router.push("/delete-account")}
               />
             </Card>
           </YStack>

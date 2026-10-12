@@ -95,6 +95,7 @@ function ThemedApp() {
           <Stack.Screen name='buy' />
           <Stack.Screen name='deposit-cash' />
           <Stack.Screen name='cash-out' />
+          <Stack.Screen name='delete-account' />
           <Stack.Screen name='import-wallet' />
           <Stack.Screen name='sell' />
           <Stack.Screen name='tx' />
