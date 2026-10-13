@@ -52,6 +52,10 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ios: {
     ...config.ios,
     bundleIdentifier: BUNDLE_ID,
+    // Standard encryption only (HTTPS, platform passkeys, standard signing
+    // curves) — exempt under Apple's export rules; answers the App Store
+    // Connect compliance question at upload time.
+    config: { usesNonExemptEncryption: false },
     appleTeamId: APPLE_TEAM_ID,
     associatedDomains: [`webcredentials:${PASSKEY_RP_ID}`],
     // Sign in with Apple entitlement (App Store guideline 4.8: required when
