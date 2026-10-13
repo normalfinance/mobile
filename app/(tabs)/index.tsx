@@ -6,7 +6,7 @@
 import React from "react";
 import { Alert, RefreshControl, ScrollView } from "react-native";
 import { Image } from "expo-image";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { XStack, YStack } from "tamagui";
 import { Inbox, Settings, Wallet } from "lucide-react-native";
 
@@ -15,7 +15,10 @@ import { AssetRow, AssetRowSkeleton } from "@/components/home/AssetRow";
 import { BalanceCard, type HomeAction } from "@/components/home/BalanceCard";
 import { toTxParams } from "@/lib/activity/tx-params";
 import { SavingsRow } from "@/components/home/SavingsRow";
-import { useSavingsPosition, useVaultInfo } from "@/hooks/use-savings";
+import { UsdcSetupRow } from "@/components/home/UsdcSetupRow";
+import { useSavingsPosition, useStellarAccountProbe, useVaultInfo } from "@/hooks/use-savings";
+import { deriveSetupStep } from "@/lib/savings/engine";
+import { offerUsdcSetup, type ReceiveAssetChoice } from "@/lib/stellar/usdc-setup";
 import { BackupCard } from "@/components/home/BackupCard";
 import { DeviceSetupCard } from "@/components/home/DeviceSetupCard";
 import { signingAddressOf } from "@/lib/turnkey/device-check";
@@ -30,7 +33,7 @@ import {
 } from "@/components/home/primitives";
 import { ReceiveSheet } from "@/components/home/ReceiveSheet";
 import { useBackendPortfolio } from "@/hooks/use-backend-portfolio";
-import { useTurnkeyWallet, walletAddresses } from "@/hooks/use-turnkey-wallet";
+import { useTurnkeyWallet, walletAddresses, type WalletChain } from "@/hooks/use-turnkey-wallet";
 import { useColors } from "@/lib/theme/appearance";
 import { space, radius } from "@/lib/theme/tokens";
 import { useSupabaseAuth } from "@/providers/supabase-auth-provider";
@@ -74,6 +77,32 @@ export default function HomeScreen() {
     filter === "all" ? true : filter === "swaps" ? tx.type === "swap" : filter === "savings" ? tx.type === "savings_deposit" || tx.type === "savings_withdraw" : ["send", "receive", "buy", "sell"].includes(tx.type)
   );
   const [receiveOpen, setReceiveOpen] = React.useState(false);
+  const [receiveChain, setReceiveChain] = React.useState<WalletChain | undefined>(undefined);
+  const [receiveAsset, setReceiveAsset] = React.useState<string | undefined>(undefined);
+  const openReceive = React.useCallback((asset?: ReceiveAssetChoice | string, chain?: WalletChain) => {
+    setReceiveAsset(asset || undefined);
+    setReceiveChain(chain ?? (asset === "XLM" || asset === "USDC" ? "stellar" : undefined));
+    setReceiveOpen(true);
+  }, []);
+  // Hand-offs from /backup (Get started) and WalletEvents arrive as params —
+  // receive=<chain>&asset=…, usdcOffer=1 to continue to USDC once the sheet
+  // closes. Consumed once, then cleared so a re-render cannot replay them.
+  const params = useLocalSearchParams<{ receive?: string; asset?: string; usdcOffer?: string }>();
+  const pendingUsdcOffer = React.useRef(false);
+  React.useEffect(() => {
+    if (!params.receive) return;
+    pendingUsdcOffer.current = params.usdcOffer === "1";
+    openReceive(params.asset, params.receive as WalletChain);
+    router.setParams({ receive: "", asset: "", usdcOffer: "" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.receive, params.asset, params.usdcOffer]);
+  // USDC on Stellar exists only once the trustline does: one Horizon read per
+  // Home visit (no interval; after-action and sightings invalidate it).
+  const probe = useStellarAccountProbe(wallet?.stellarAddress, false);
+  const stellarStep = deriveSetupStep(probe.data ?? null);
+  const usdcAsset = portfolioData.assets.find((a) => a.asset_code === "USDC");
+  const usdcReady = stellarStep === "ready" || probe.isError || Number(usdcAsset?.balance ?? 0) > 0;
+  const buyXlm = React.useCallback(() => router.push({ pathname: "/buy", params: { asset: "XLM" } }), [router]);
   const [refreshing, setRefreshing] = React.useState(false);
 
   const onRefresh = React.useCallback(async () => {
@@ -90,7 +119,7 @@ export default function HomeScreen() {
   const handleAction = React.useCallback(
     (action: HomeAction) => {
       if (action === "receive") {
-        setReceiveOpen(true);
+        openReceive();
       } else if (action === "send") {
         router.push("/send");
       } else if (action === "swap") {
@@ -101,7 +130,7 @@ export default function HomeScreen() {
         router.push("/buy");
       }
     },
-    [router]
+    [router, openReceive]
   );
 
   // Every asset whose chain the wallet has an address for — including $0.00
@@ -109,8 +138,11 @@ export default function HomeScreen() {
   // instead of "Nothing here yet" (Niko 2026-10-13). Chains that are not set
   // up stay hidden (the aggregator always emits five rows); the empty state
   // is only for an account with no addresses at all.
+  // USDC hides until the Stellar account carries the trustline (a $0 USDC row
+  // before that implies the wallet can receive USDC — it cannot); the
+  // UsdcSetupRow below takes its place (Niko 2026-10-13).
   const heldAssets = portfolioData.assets
-    .filter((a) => !!a.address)
+    .filter((a) => !!a.address && (a.asset_code !== "USDC" || usdcReady))
     .sort((a, b) => b.usdValue - a.usdValue || a.asset_code.localeCompare(b.asset_code)); // by USD value, then name
   const email = user?.email ?? "";
   const displayName = email ? email.split("@")[0] : "Your wallet";
@@ -200,7 +232,7 @@ export default function HomeScreen() {
                           action={
                             <XStack gap={8}>
                               <PillButton label='Buy' onPress={() => router.push("/buy")} />
-                              <PillButton label='Receive' onPress={() => setReceiveOpen(true)} />
+                              <PillButton label='Receive' onPress={() => openReceive()} />
                             </XStack>
                           }
                         />
@@ -235,6 +267,9 @@ export default function HomeScreen() {
                                 <AssetRow key={asset.asset_code} asset={asset} onPress={() => router.push(`/asset/${asset.asset_code.toLowerCase()}`)} />
                               ))
                           : null}
+                        {showAssets && wallet?.stellarAddress && !usdcReady && stellarStep ? (
+                          <UsdcSetupRow step={stellarStep} onPress={() => openReceive("USDC")} />
+                        ) : null}
                         {showSavings ? (
                           <SavingsRow value={savings.value} apy={vault.data?.apy ?? null} onPress={() => router.push("/(tabs)/savings")} />
                         ) : null}
@@ -306,7 +341,18 @@ export default function HomeScreen() {
       <ReceiveSheet
         open={receiveOpen}
         addresses={addresses}
-        onClose={() => setReceiveOpen(false)}
+        initialChain={receiveChain}
+        asset={receiveAsset}
+        onClose={() => {
+          setReceiveOpen(false);
+          void probe.refetch();
+          if (pendingUsdcOffer.current && wallet?.stellarAddress) {
+            pendingUsdcOffer.current = false;
+            const address = wallet.stellarAddress;
+            // Let the sheet finish dismissing; an alert during the transition is dropped by iOS.
+            setTimeout(() => void offerUsdcSetup({ address, openReceive: (a) => openReceive(a), buyXlm }), 500);
+          }
+        }}
       />
     </Screen>
   );

@@ -20,6 +20,7 @@ import { Card, Divider, IconBox, IconButton, Mono, PillButton, PrimaryButton, Sc
 import { useBackendPortfolio } from "@/hooks/use-backend-portfolio";
 import { useSavingsPosition } from "@/hooks/use-savings";
 import { turnkeyWalletQueryKey, useTurnkeyWallet, type WalletChain } from "@/hooks/use-turnkey-wallet";
+import { assetNetworkLine } from "@/lib/assets/names";
 import { refreshAfterStellarAction } from "@/lib/data/after-action";
 import { btcBuild, btcMaxSend, sendBtc } from "@/lib/send/bitcoin";
 import { GAS_RESERVE_ETH, sendEth, spendableEth } from "@/lib/send/evm";
@@ -344,6 +345,7 @@ export default function SendScreen() {
                   );
                 })}
               </XStack>
+              <UiText fontSize={12} color={c.muted}>{assetNetworkLine(symbol)}{symbol === "USDC" ? " — the recipient needs a Stellar address with a USDC trustline." : ""}</UiText>
 
               {!from ? (
                 <YStack gap={10} paddingTop={4}>

@@ -15,8 +15,7 @@ import { XStack, YStack } from "tamagui";
 import { Check, ChevronLeft, Eye, Fingerprint, TriangleAlert } from "lucide-react-native";
 
 import { Card, IconBox, IconButton, Mono, PrimaryButton, Screen, SecondaryButton, UiText } from "@/components/home/primitives";
-import { ReceiveSheet } from "@/components/home/ReceiveSheet";
-import { CHAIN_META, useTurnkeyWallet, walletAddresses, type WalletChain } from "@/hooks/use-turnkey-wallet";
+import { CHAIN_META, useTurnkeyWallet, walletAddresses } from "@/hooks/use-turnkey-wallet";
 import { useColors } from "@/lib/theme/appearance";
 import { radius, space, tracking } from "@/lib/theme/tokens";
 import { describeTurnkeyError, isUserCancelledError } from "@/lib/turnkey/client";
@@ -35,7 +34,6 @@ export default function BackupScreen() {
   const [words, setWords] = React.useState<string[] | null>(null);
   const [revealing, setRevealing] = React.useState(false);
   const [confirmed, setConfirmed] = React.useState(false);
-  const [receiveOpen, setReceiveOpen] = React.useState(false);
 
   // The phrase never outlives this screen.
   React.useEffect(() => () => setWords(null), []);
@@ -60,7 +58,13 @@ export default function BackupScreen() {
       router.replace("/(tabs)");
       router.push({ pathname: "/buy", params: { asset: params.asset ?? "USDC" } });
     } else if (params.next === "receive") {
-      setReceiveOpen(true);
+      // Leave this screen first (live 2026-10-13: the sheet used to open on
+      // top of it, so "Remind me later" looked like it did nothing). Home
+      // opens the Receive sheet from the params and, after it closes, offers
+      // the USDC trustline when the new chain is Stellar (hard rule 9: resume
+      // intent travels in route params).
+      const chain = params.chain ?? "stellar";
+      router.replace({ pathname: "/(tabs)", params: { receive: chain, asset: params.asset ?? "", usdcOffer: chain === "stellar" && params.asset === "XLM" ? "1" : "" } });
     } else if (router.canGoBack()) router.back();
     else router.replace("/(tabs)");
   };
@@ -155,17 +159,6 @@ export default function BackupScreen() {
           </YStack>
         </YStack>
       </ScrollView>
-
-      <ReceiveSheet
-        open={receiveOpen}
-        addresses={addresses}
-        initialChain={(params.chain as WalletChain | undefined) ?? addresses[0]?.chain}
-        asset={params.asset}
-        onClose={() => {
-          setReceiveOpen(false);
-          router.replace("/(tabs)");
-        }}
-      />
     </Screen>
   );
 }

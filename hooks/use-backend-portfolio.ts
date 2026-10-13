@@ -10,6 +10,7 @@
 // so the screen only swaps the hook.
 
 import { useMemo, useState } from "react";
+import { assetDisplayName } from "@/lib/assets/names";
 import { useQueries, useQuery } from "@tanstack/react-query";
 
 import { apiFetch } from "@/lib/api";
@@ -45,13 +46,6 @@ const fetchPortfolio = () =>
     query: { network: "mainnet" }
   });
 
-const ASSET_NAMES: Record<string, string> = {
-  BTC: "Bitcoin",
-  ETH: "Ethereum",
-  SOL: "Solana",
-  XLM: "Stellar Lumens",
-  USDC: "USD Coin"
-};
 
 const toNumber = (value: string | number | null | undefined): number => {
   if (value === null || value === undefined) return 0;
@@ -66,7 +60,7 @@ const toAssetWithPrice = (asset: PortfolioAsset): AssetWithPrice => ({
   // DisplayAsset is Stellar-shaped; only XLM is "native", everything else is a
   // credit asset from the Stellar point of view. Nothing downstream branches on it.
   asset_type: asset.symbol === "XLM" ? "native" : "credit_alphanum4",
-  display_name: ASSET_NAMES[asset.symbol] ?? asset.symbol,
+  display_name: assetDisplayName(asset.symbol),
   usdValue: toNumber(asset.usdValue),
   usdPrice: toNumber(asset.price),
   priceChange24h: asset.change24h ?? undefined,

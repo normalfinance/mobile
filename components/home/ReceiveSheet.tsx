@@ -84,10 +84,14 @@ export const ReceiveSheet = ({
   // USDC on Stellar: the account must exist (funded with XLM) and carry the
   // USDC trustline before anyone sends USDC to it. Probed only while this
   // sheet is open for USDC and the step isn't done.
+  // The XLM view reads the same probe (no interval) so it can offer the USDC
+  // trustline the moment the account is active (Niko 2026-10-13); after an
+  // XLM sighting refreshAfterStellarAction invalidates it.
   const stellarAddress = addresses.find((a) => a.chain === "stellar")?.address ?? null;
   const [watchProbe, setWatchProbe] = React.useState(true);
-  const probe = useStellarAccountProbe(usdc && open ? stellarAddress : null, usdc && open && watchProbe);
-  const usdcStep = usdc ? deriveSetupStep(probe.data ?? null) : null;
+  const probe = useStellarAccountProbe(open && chain === "stellar" ? stellarAddress : null, usdc && open && watchProbe);
+  const stellarStep = deriveSetupStep(probe.data ?? null);
+  const usdcStep = usdc ? stellarStep : null;
   // Bitcoin: unconfirmed payments to this address show up here within seconds
   // (mempool WebSocket + 20 s poll), only while the sheet is open on Bitcoin.
   const btcAddress = addresses.find((a) => a.chain === "bitcoin")?.address ?? null;
@@ -226,7 +230,7 @@ export const ReceiveSheet = ({
                         fontWeight='600'
                         color={selected ? c.ctaText : c.ink}
                       >
-                        {a}
+                        {a === "USDC" ? "USDC · Stellar" : a}
                       </UiText>
                     </XStack>
                   );
@@ -252,10 +256,11 @@ export const ReceiveSheet = ({
                       <XStack alignItems='flex-start' gap={8} padding={12} borderRadius={radius.input} backgroundColor={c.chips.amber.bg}>
                         <TriangleAlert size={16} color={c.chips.amber.color} strokeWidth={2} />
                         <UiText fontSize={13} color={c.chips.amber.color} flex={1} lineHeight={18}>
-                          Don’t send USDC yet — it would be rejected. Your Stellar account needs a little XLM first: receive about 3 XLM to the address below (1 activates it, 0.5 is reserved for the USDC trustline, the rest pays fees). It activates by itself when the XLM lands.
+                          Don’t send USDC yet — it would be rejected, so there is no USDC address to show. Your Stellar account needs a little XLM first: receive about 3 XLM (1 activates it, 0.5 is reserved for the USDC trustline, the rest pays fees). It activates by itself when the XLM lands.
                         </UiText>
                       </XStack>
-                      <PrimaryButton label='Buy XLM with a card' onPress={() => { onClose(); router.push({ pathname: "/buy", params: { asset: "XLM" } }); }} />
+                      <PrimaryButton label='Receive XLM instead' onPress={() => { setPicked("XLM"); setChain("stellar"); setCopied(false); }} />
+                      <SecondaryButton label='Buy XLM with a card' onPress={() => { onClose(); router.push({ pathname: "/buy", params: { asset: "XLM" } }); }} />
                     </>
                   ) : (
                     <>
@@ -268,7 +273,7 @@ export const ReceiveSheet = ({
                 </YStack>
               ) : null}
 
-              {current && meta && (!usdc || usdcStep === "activate" || usdcStep === "ready") ? (
+              {current && meta && (!usdc || usdcStep === "ready") ? (
                 <>
                   <XStack
                     alignItems='flex-start'
@@ -279,7 +284,7 @@ export const ReceiveSheet = ({
                   >
                     <TriangleAlert size={16} color={c.chips.amber.color} strokeWidth={2} />
                     <UiText fontSize={13} color={c.chips.amber.color} flex={1} lineHeight={18}>
-                      {usdc && usdcStep === "activate" ? "Send XLM only to this address for now." : usdc ? "Send USDC on the Stellar network only — not Ethereum, Solana or Base USDC." : `${meta.warning} Anything else will be lost.`}
+                      {usdc ? "Send USDC on the Stellar network only — not Ethereum, Solana or Base USDC." : `${meta.warning} Anything else will be lost.`}
                     </UiText>
                   </XStack>
 
@@ -294,7 +299,7 @@ export const ReceiveSheet = ({
 
                   <YStack gap={6}>
                     <UiText fontSize={12} color={c.muted}>
-                      {usdc ? (usdcStep === "ready" ? "Stellar address · USDC trustline ready" : "Stellar address · XLM to activate") : `${meta.name} address · ${meta.assets}`}
+                      {usdc ? "Stellar address · USDC trustline ready" : `${meta.name} address · ${meta.assets}`}
                     </UiText>
                     <YStack
                       padding={12}
@@ -306,6 +311,15 @@ export const ReceiveSheet = ({
                       </Mono>
                     </YStack>
                   </YStack>
+
+                  {picked === "XLM" && stellarStep === "trustline" ? (
+                    <YStack gap={10} padding={12} borderRadius={radius.input} backgroundColor={c.chips.amber.bg}>
+                      <UiText fontSize={13} color={c.chips.amber.color} lineHeight={18}>
+                        Your Stellar account is active. Add the USDC trustline so this wallet can hold USDC on Stellar — one passkey confirmation, a tiny network fee.
+                      </UiText>
+                      <PrimaryButton label={addingTrustline ? "Confirm with your passkey…" : "Add USDC trustline"} onPress={() => void addTrustline()} loading={addingTrustline} />
+                    </YStack>
+                  ) : null}
 
                   {chain === "bitcoin" && btcWatch.incomingTxs.length > 0 ? (
                     <YStack gap={6} padding={12} borderRadius={radius.input} backgroundColor={c.chips.blue.bg}>

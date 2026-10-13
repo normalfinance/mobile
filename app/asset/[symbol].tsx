@@ -48,14 +48,8 @@ import {
   fPercent
 } from "@/lib/utils/number-format.utils";
 import type { PortfolioPeriod } from "@/services/portfolio.service";
+import { assetDisplayName } from "@/lib/assets/names";
 
-const ASSET_NAMES: Record<string, string> = {
-  BTC: "Bitcoin",
-  ETH: "Ethereum",
-  SOL: "Solana",
-  XLM: "Stellar Lumens",
-  USDC: "USD Coin"
-};
 
 // Web asset-details-view.tsx token info rows (Network / Contract / Decimals).
 const TOKEN_DECIMALS: Record<string, number> = { BTC: 8, ETH: 18, SOL: 9, XLM: 7, USDC: 7 };
@@ -130,7 +124,7 @@ export default function AssetDetailScreen() {
             <AssetIcon symbol={symbol} size={36} fontSize='$3' />
             <YStack>
               <UiText fontSize={15} fontWeight='600'>
-                {ASSET_NAMES[symbol] ?? symbol}
+                {assetDisplayName(symbol)}
               </UiText>
               <UiText fontSize={12} color={c.muted}>
                 {symbol}
