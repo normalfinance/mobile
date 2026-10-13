@@ -27,14 +27,22 @@ export function WalletEvents() {
   React.useEffect(() => {
     if (wallet?.stellarAddress) void applyReferral(wallet.stellarAddress);
   }, [wallet?.stellarAddress]);
+  // One offer per wallet per app session: provisioning can emit twice for one
+  // ceremony (create + first-chain import), and the second alert used to
+  // reappear on top of the recovery-phrase screen after the user tapped
+  // "Show recovery phrase" (live 2026-10-13).
+  const offered = React.useRef(new Set<string>());
   React.useEffect(() => {
     const off = onWalletProvisioned(async (e) => {
         if (pathRef.current.startsWith("/create-wallet")) return; // Get started shows /backup itself
+        if (offered.current.has(e.subOrgId)) return;
+        offered.current.add(e.subOrgId);
         if (!(await walletNeedsBackup(e.subOrgId))) return;
         // The passkey sheet is still dismissing when this fires; an alert
         // presented during that transition is silently dropped by iOS
         // (live 2026-10-03: no offer after adding Stellar from the asset page).
         await new Promise((r) => setTimeout(r, 900));
+        if (pathRef.current.startsWith("/backup")) return; // already looking at it
         const chainName = e.chain.charAt(0).toUpperCase() + e.chain.slice(1);
         Alert.alert(
           e.kind === "created" ? "Back up your new wallet?" : `${chainName} added — back up your wallet?`,

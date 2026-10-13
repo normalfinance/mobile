@@ -30,9 +30,11 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files
+# local env files — .env.production is pushed with `eas env:push`, never committed
 .env*.local
 .env
+.env.*
+!.env.example
 
 # typescript
 *.tsbuildinfo

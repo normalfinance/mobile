@@ -427,3 +427,69 @@ export const isStellarKeypairAddress = (s: string) => {
     return false;
   }
 };
+
+
+// ---------------------------------------------------------------------------
+// Close the Stellar account (account deletion, Niko 2026-10-13): the network
+// reserve (1 XLM + 0.5 per trustline) can never be sent by a payment — only
+// an ACCOUNT_MERGE releases it, and a merge needs every sub-entry gone first.
+// So: USDC balance must be 0, the USDC trustline is dropped in the same
+// transaction, then the account merges into the destination, which receives
+// ALL remaining XLM. The destination must already exist. Irreversible: the
+// address stops existing until someone funds it again.
+// ---------------------------------------------------------------------------
+
+export const closeStellarAccount = async ({
+  subOrgId,
+  from,
+  destination,
+  onStep
+}: {
+  subOrgId: string;
+  from: string;
+  destination: string;
+  onStep?: (step: SendStep) => void;
+}): Promise<{ hash: string; sentXlm: number }> => {
+  if (!isValidStellarAddress(destination)) throw new Error("Enter a valid Stellar address (starts with G).");
+  if (destination === from) throw new Error("Choose a different address — this one is being closed.");
+  onStep?.("checking");
+  const dest = await probeDestination(destination, "XLM");
+  if (!dest.exists) throw new Error("That address isn’t active on Stellar yet. Closing an account can only send to an existing one.");
+  const source = await loadSource(from);
+  if ((source.usdcBalance ?? 0) > 0) throw new Error(`Send your ${source.usdcBalance} USDC out first — an account can’t close while it holds USDC.`);
+  // Anything other than the USDC trustline (offers, data, other assets) blocks a merge.
+  const otherEntries = source.subentryCount - (source.usdcBalance !== null ? 1 : 0);
+  if (otherEntries > 0) throw new Error("This account has extra trustlines or offers that must be removed before it can be closed.");
+  // Stellar validates the fee against the CURRENT reserve before applying any
+  // operation, so an account holding exactly its reserve cannot pay the fee
+  // to close itself (tx_insufficient_balance, live 2026-10-13 after the user
+  // had sent the spendable XLM out first). It needs the closing fee on top.
+  const ops = source.usdcBalance !== null ? 2 : 1;
+  const feeXlm = (Number(STELLAR_TX_FEE_STROOPS) * ops) / 10_000_000;
+  const needed = stellarMinReserve(source.subentryCount) + feeXlm;
+  if (source.xlmBalance < needed - 1e-7) {
+    const short = Math.max(needed - source.xlmBalance, 0.0001);
+    throw new Error(
+      `Your account holds only its locked reserve (${source.xlmBalance.toFixed(4)} XLM), and Stellar still charges a ${feeXlm.toFixed(5)} XLM fee to close it. Receive at least ${short.toFixed(4)} XLM to this address from any wallet, then close it — everything, reserve included, is sent on.`
+    );
+  }
+  onStep?.("building");
+  const builder = new TransactionBuilder(source.account, {
+    fee: STELLAR_TX_FEE_STROOPS,
+    timebounds: { minTime: 0, maxTime: Math.floor(Date.now() / 1000) + 2 * 60 },
+    networkPassphrase: Networks.PUBLIC
+  });
+  if (source.usdcBalance !== null) builder.addOperation(Operation.changeTrust({ asset: new Asset(MAINNET_USDC.code, MAINNET_USDC.issuer), limit: "0" }));
+  builder.addOperation(Operation.accountMerge({ destination }));
+  const unsignedXdr = builder.build().toXDR();
+  onStep?.("signing");
+  const signedXdr = await signStellarXdrWithTurnkey({ xdr: unsignedXdr, subOrgId, stellarAddress: from, networkPassphrase: Networks.PUBLIC });
+  onStep?.("submitting");
+  try {
+    const tx = TransactionBuilder.fromXDR(signedXdr, Networks.PUBLIC);
+    const result = await horizon().submitTransaction(tx);
+    return { hash: result.hash, sentXlm: source.xlmBalance };
+  } catch (e) {
+    throw new Error(friendlyHorizonError(e));
+  }
+};

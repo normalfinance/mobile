@@ -18,7 +18,6 @@ import { Card, Divider, IconBox, PillButton, PrimaryButton, Screen, UiText } fro
 import { ReceiveSheet } from "@/components/home/ReceiveSheet";
 import { AssetIcon } from "@/components/ui/AssetIcon";
 import { turnkeyWalletQueryKey, useTurnkeyWallet, walletAddresses, type WalletChain } from "@/hooks/use-turnkey-wallet";
-import { supabase } from "@/lib/supabase";
 import { hasSkippedOnboarding, skipOnboarding } from "@/lib/onboarding";
 import { useColors } from "@/lib/theme/appearance";
 import { radius, space, tracking } from "@/lib/theme/tokens";
@@ -39,7 +38,7 @@ export default function GetStartedScreen() {
   const c = useColors();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { user } = useSupabaseAuth();
+  const { user, signOut: signOutEverywhere } = useSupabaseAuth();
   const { wallet, status, refetch } = useTurnkeyWallet();
   const [picked, setPicked] = React.useState<(typeof ASSETS)[number] | null>(null);
   const [busy, setBusy] = React.useState<"buy" | "receive" | null>(null);
@@ -101,8 +100,7 @@ export default function GetStartedScreen() {
   };
 
   const signOut = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) Alert.alert("Sign out failed", error.message);
+    await signOutEverywhere();
   };
 
   const action = (icon: React.ReactNode, title: string, sub: string, onPress: () => void, loading: boolean) => (

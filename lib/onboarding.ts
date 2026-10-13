@@ -10,3 +10,7 @@ export const skipOnboarding = () => {
   skipped = true;
 };
 export const hasSkippedOnboarding = () => skipped;
+/** On sign-out: the next account must see Get started again. */
+export const resetOnboarding = () => {
+  skipped = false;
+};

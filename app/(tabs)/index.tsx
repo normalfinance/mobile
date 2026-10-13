@@ -104,12 +104,14 @@ export default function HomeScreen() {
     [router]
   );
 
-  // Like the web drawer (account-drawer.tsx allTokens): only assets actually
-  // held. The aggregator always emits five rows; without this a new user sees
-  // five phantom "$0.00" lines instead of the empty state.
+  // Every asset whose chain the wallet has an address for — including $0.00
+  // rows, so a freshly created Stellar wallet shows XLM and USDC at zero
+  // instead of "Nothing here yet" (Niko 2026-10-13). Chains that are not set
+  // up stay hidden (the aggregator always emits five rows); the empty state
+  // is only for an account with no addresses at all.
   const heldAssets = portfolioData.assets
-    .filter((a) => !!a.address && Number(a.balance) > 0)
-    .sort((a, b) => b.usdValue - a.usdValue); // web tokens-tab: by USD value, largest first
+    .filter((a) => !!a.address)
+    .sort((a, b) => b.usdValue - a.usdValue || a.asset_code.localeCompare(b.asset_code)); // by USD value, then name
   const email = user?.email ?? "";
   const displayName = email ? email.split("@")[0] : "Your wallet";
 

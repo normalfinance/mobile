@@ -228,7 +228,11 @@ export default function SavingsScreen() {
               icon={<PiggyBank size={24} color={c.ink} strokeWidth={1.8} />}
               title='Savings runs on Stellar'
               body='Add Stellar to your wallet to start saving — one passkey confirmation, no seed phrase.'
-              action={<PrimaryButton label={addingStellar ? "Confirm with your passkey…" : "Add Stellar to your wallet"} onPress={() => void addStellar()} loading={addingStellar} />}
+              action={
+                <YStack alignSelf='stretch'>
+                  <PrimaryButton label={addingStellar ? "Confirm with your passkey…" : "Add Stellar to your wallet"} onPress={() => void addStellar()} loading={addingStellar} />
+                </YStack>
+              }
             />
           ) : null}
           {address && step && step !== "ready" ? (

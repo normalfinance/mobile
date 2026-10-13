@@ -8,7 +8,12 @@
 //     409 { code:'IN_FLIGHT', counts:{cctp, ramp, moneygram} } never overridable
 //     409 { code:'FUNDS_PRESENT', balances:[{symbol, chain, balance}], unreadable }
 //                                 overridable with override:true
-//     503 { code:'UNAVAILABLE', unreadable? }   a balance could not be read / backend down
+//     503 { code:'UNAVAILABLE', unreadable? }   a balance could not be read / backend down /
+//                                 service-role key missing (checked BEFORE any row is touched
+//                                 since 2026-10-13; older deploys purged rows first)
+//     503 { code:'AUTH_DELETE_FAILED', deleted, anonymised }  rows purged, Supabase login
+//                                 survived (3 retries failed) — retry: the route is
+//                                 idempotent, a wallet-less user passes every gate
 // Deleted: users + referrals, push devices, fills, linked wallets, enrolments,
 // wallet seeds + wallets rows, the Supabase auth user (last). Anonymised: CCTP,
 // ramp and MoneyGram rows. Untouched: the Turnkey sub-org and passkeys.
@@ -27,7 +32,8 @@ export type DeleteBlock =
   | { code: "EXPORT_REQUIRED"; wallets: string[]; message: string }
   | { code: "IN_FLIGHT"; counts: { cctp?: number; ramp?: number; moneygram?: number }; message: string }
   | { code: "FUNDS_PRESENT"; balances: FundsBalance[]; unreadable: string[]; message: string }
-  | { code: "UNAVAILABLE"; unreadable: string[]; message: string };
+  | { code: "UNAVAILABLE"; unreadable: string[]; message: string }
+  | { code: "AUTH_DELETE_FAILED"; message: string };
 
 export class AccountDeleteBlockedError extends Error {
   constructor(public readonly block: DeleteBlock) {
@@ -49,6 +55,8 @@ const toBlock = (e: unknown): AccountDeleteBlockedError | null => {
       return new AccountDeleteBlockedError({ code: "FUNDS_PRESENT", balances: b.balances ?? [], unreadable: b.unreadable ?? [], message });
     case "UNAVAILABLE":
       return new AccountDeleteBlockedError({ code: "UNAVAILABLE", unreadable: b.unreadable ?? [], message });
+    case "AUTH_DELETE_FAILED":
+      return new AccountDeleteBlockedError({ code: "AUTH_DELETE_FAILED", message });
     default:
       return null;
   }
@@ -65,11 +73,24 @@ const call = async (body: Record<string, unknown>) => {
 /** Runs every gate, deletes nothing. Resolves when all gates pass. */
 export const checkAccountDeletion = (opts: { override?: boolean } = {}) => call({ dryRun: true, ...(opts.override ? { override: true } : {}) });
 
+/** True when the auth user no longer exists server-side (deletion went through). */
+export const accountGone = async (): Promise<boolean> => {
+  const { data, error } = await supabase.auth.getUser();
+  return !!error || !data?.user;
+};
+
 export const deleteAccount = async (opts: { override?: boolean } = {}): Promise<void> => {
   await unregisterPushToken().catch(() => undefined);
-  await call(opts.override ? { override: true } : {});
-  // The auth user was deleted last server-side; the JWT is already invalid.
-  await supabase.auth.signOut({ scope: "local" }).catch(() => undefined);
+  try {
+    await call(opts.override ? { override: true } : {});
+  } catch (e) {
+    // The server deletes the auth user LAST; if the row is gone the deletion
+    // succeeded whatever the response looked like (live 2026-10-13: the app
+    // stayed signed in with an empty wallet after a successful delete).
+    if (e instanceof AccountDeleteBlockedError || !(await accountGone())) throw e;
+  }
+  // The caller signs out through the auth provider (lib/auth/session.ts), which
+  // clears the phone whatever the server answers and resets app state.
 };
 
 /** Every seed the account holds — each must be exported before deletion. */

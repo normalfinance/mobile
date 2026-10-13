@@ -23,6 +23,7 @@ import { AppearanceProvider, useAppearance } from "@/lib/theme/appearance";
 import { CaptchaProvider } from "@/lib/auth/captcha";
 import { configureNotifications, listenForNotificationTaps } from "@/lib/notifications";
 import { SessionExpiredBanner } from "@/components/auth/SessionExpiredBanner";
+import { registerQueryClient } from "@/lib/auth/session";
 import { startReferralCapture } from "@/lib/referral";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
@@ -42,6 +43,7 @@ const queryClient = new QueryClient({
     }
   }
 });
+registerQueryClient(queryClient);
 
 // Refetch-on-focus for React Native: TanStack's default listener watches the
 // browser window; here "focus" means the app came back to the foreground.

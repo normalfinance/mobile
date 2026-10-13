@@ -30,7 +30,6 @@ import {
   UiText
 } from "@/components/home/primitives";
 import { CHAIN_META, useTurnkeyWallet, type WalletChain } from "@/hooks/use-turnkey-wallet";
-import { supabase } from "@/lib/supabase";
 import { getNotificationPermission, requestNotificationPermission, unregisterPushToken, type NotificationPermission } from "@/lib/notifications";
 import { useAppearance, useColors, type AppearanceMode } from "@/lib/theme/appearance";
 import { space } from "@/lib/theme/tokens";
@@ -65,7 +64,7 @@ export default function SettingsScreen() {
     }
     setNotif(await requestNotificationPermission());
   };
-  const { user } = useSupabaseAuth();
+  const { user, signOut: signOutEverywhere } = useSupabaseAuth();
   const { addresses, wallet } = useTurnkeyWallet();
   const router = useRouter();
   const [testing, setTesting] = React.useState(false);
@@ -155,8 +154,7 @@ export default function SettingsScreen() {
         style: "destructive",
         onPress: async () => {
           await unregisterPushToken();
-          const { error } = await supabase.auth.signOut();
-          if (error) Alert.alert("Sign out failed", error.message);
+          await signOutEverywhere(); // never fails to clear this phone (lib/auth/session.ts)
         }
       }
     ]);

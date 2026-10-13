@@ -10,6 +10,8 @@ import {
 import type { Session, User } from "@supabase/supabase-js";
 
 import { supabase, type SupabaseClient } from "@/lib/supabase";
+import { onSessionExpired } from "@/lib/api";
+import { clearLocalSession } from "@/lib/auth/session";
 
 let cachedSession: Session | null = null;
 let cachedUser: User | null = null;
@@ -78,10 +80,26 @@ export const SupabaseAuthProvider = ({
   }, []);
 
   const handleSignOut = useCallback(async () => {
-    await supabase.auth.signOut();
+    // State first, so the gates redirect on the very next render; the client
+    // cleanup (server logout, storage) follows and must not hold the UI.
     setSession(null);
     setCachedAuthState(null);
+    await clearLocalSession();
   }, []);
+
+  // A 401 that survives a refresh (lib/api.ts) means the token is dead. If
+  // the server no longer knows the user — deleted account, revoked session —
+  // sign out here and now instead of leaving a banner over a dead app.
+  useEffect(
+    () =>
+      onSessionExpired(() => {
+        void (async () => {
+          const { data, error } = await supabase.auth.getUser();
+          if (error || !data?.user) await handleSignOut();
+        })();
+      }),
+    [handleSignOut]
+  );
 
   const value = useMemo<SupabaseAuthContextValue>(
     () => ({
