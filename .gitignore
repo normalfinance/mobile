@@ -89,3 +89,6 @@ yarn-error.*
 
 # Local signing material (never committed): the per-machine Android debug keystore
 /credentials/
+
+# Google Play service-account key (eas submit) — lives one level above the repo, never committed
+play-service-account*.json
